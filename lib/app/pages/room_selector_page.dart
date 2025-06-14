@@ -122,24 +122,30 @@ class _RoomSelectorPageState extends State<RoomSelectorPage> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Jadwal Reservasi',
-                      style: Theme.of(context).textTheme.titleMedium,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Jadwal Reservasi',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          Text('Tanggal: ${_dateFormatter.format(_startDate)}'),
+                          Text(
+                            'Waktu: ${TimeOfDay.fromDateTime(_startDate).format(context)} - ${TimeOfDay.fromDateTime(_endDate).format(context)}',
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Text('Tanggal: ${_dateFormatter.format(_startDate)}'),
-                    Text(
-                      'Waktu: ${TimeOfDay.fromDateTime(_startDate).format(context)} - ${TimeOfDay.fromDateTime(_endDate).format(context)}',
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
           Expanded(child: _buildRoomList()),
