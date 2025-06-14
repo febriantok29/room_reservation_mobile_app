@@ -12,26 +12,15 @@ class NavigationHandler {
 
   /// Handle unauthorized access (token expired)
   static Future<void> handleUnauthorized() async {
-    // Prevent multiple simultaneous redirects
     if (_isHandlingUnauthorized) {
-      debugPrint(
-        '🔄 NavigationHandler: Already handling unauthorized state, ignoring duplicate call',
-      );
       return;
     }
 
     _isHandlingUnauthorized = true;
 
     try {
-      debugPrint(
-        '🚪 NavigationHandler: Handling unauthorized access, redirecting to login page',
-      );
-
       final context = navigatorKey.currentContext;
       if (context == null) {
-        debugPrint(
-          '⚠️ NavigationHandler: No valid BuildContext found for navigation',
-        );
         return;
       }
 
@@ -39,19 +28,13 @@ class NavigationHandler {
       // Note: logout should have already been called by the caller, but we'll ensure it here
       final authService = await AuthService.getInstance();
       if (authService.isLoggedIn()) {
-        debugPrint('🔑 NavigationHandler: Logging out user');
         await authService.logout();
       }
 
       if (!context.mounted) {
-        debugPrint(
-          '⚠️ NavigationHandler: Context is no longer mounted after logout',
-        );
         return;
       }
 
-      // Reset navigation stack dan pindah ke login page
-      debugPrint('➡️ NavigationHandler: Navigating to login page');
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginPage()),
         (route) => false,
