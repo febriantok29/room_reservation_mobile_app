@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:room_reservation_mobile_app/app/models/meta_data_response.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/reservation_create_page.dart';
-import 'package:room_reservation_mobile_app/features/reservation/data/repositories/reservation_repository.dart';
+import 'package:room_reservation_mobile_app/app/repositories/reservation_repository.dart';
 
 class ReservationListPage extends StatefulWidget {
   const ReservationListPage({super.key});
