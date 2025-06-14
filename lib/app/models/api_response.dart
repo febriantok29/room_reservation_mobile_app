@@ -12,13 +12,19 @@ class ApiResponse<T> {
     Map<String, dynamic> json,
     T Function(dynamic)? fromJsonT,
   ) {
+    T data;
+
+    if (json['data'] == null) {
+      data = null as T;
+    } else if (fromJsonT != null) {
+      data = fromJsonT(json['data']);
+    } else {
+      data = json['data'] as T;
+    }
+
     return ApiResponse<T>(
       message: json['message'] ?? '',
-      data: json['data'] == null
-          ? null
-          : fromJsonT != null
-          ? fromJsonT(json['data'])
-          : json['data'],
+      data: data,
       metaData: json['metaData'] != null
           ? MetaDataResponse.fromJson(json['metaData'])
           : null,
