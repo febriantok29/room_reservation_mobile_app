@@ -18,12 +18,14 @@ class RoomService {
   /// Mendapatkan semua ruangan
   Future<List<Room>> getAllRoom() async {
     final builder = await ApiClient.create('Room.getAll');
-    final List<dynamic> response = await builder.get<List<dynamic>>(
-      fromJson: (json) => json as List<dynamic>,
+    final response = await builder.get<List<Room>>(
+      fromJson: (json) => (json as List)
+          .map((item) => Room.fromJson(item as Map<String, dynamic>))
+          .toList(),
       errorMessage: 'Gagal memuat data ruangan',
     );
 
-    return response.map(Room.fromJson).toList();
+    return response.data ?? [];
   }
 
   /// Mendapatkan ruangan berdasarkan ID
@@ -35,16 +37,25 @@ class RoomService {
     final builder = await ApiClient.create('Room.getById');
     builder.addParameter('id', id);
 
-    return await builder.get<Room>(
-      fromJson: (json) => Room.fromJson(json as Map<String, dynamic>),
+    final response = await builder.get<Room>(
+      fromJson: Room.fromJson,
       errorMessage: 'Gagal memuat detail ruangan',
     );
+
+    final data = response.data;
+
+    if (data == null) {
+      throw NotFoundException('Ruangan dengan ID $id tidak ditemukan');
+    }
+
+    return data;
   }
 
   /// Mendapatkan ruangan yang tersedia pada rentang waktu tertentu
   Future<ApiResponse<List<Room>>> getRawAvailableRoom({
     required DateTime start,
     required DateTime end,
+    int page = 1,
     int? limit,
   }) async {
     // Validasi format waktu
@@ -85,7 +96,9 @@ class RoomService {
         builder.addQuery('limit', '$limit');
       }
 
-      return builder.rawGet<List<Room>>(
+      builder.addQuery('page', '$page');
+
+      return builder.get<List<Room>>(
         fromJson: (json) => (json as List)
             .map((item) => Room.fromJson(item as Map<String, dynamic>))
             .toList(),
@@ -105,13 +118,13 @@ class RoomService {
     final builder = await ApiClient.create('Room.getAll');
     builder.addQuery('search', keyword.trim());
 
-    final List<dynamic> response = await builder.get<List<dynamic>>(
-      fromJson: (json) => json as List<dynamic>,
+    final response = await builder.get<List<Room>>(
+      fromJson: (json) => (json as List)
+          .map((item) => Room.fromJson(item as Map<String, dynamic>))
+          .toList(),
       errorMessage: 'Gagal mencari ruangan',
     );
 
-    return response
-        .map((json) => Room.fromJson(json as Map<String, dynamic>))
-        .toList();
+    return response.data ?? [];
   }
 }

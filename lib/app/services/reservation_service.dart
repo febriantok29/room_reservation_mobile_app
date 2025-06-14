@@ -28,27 +28,11 @@ class ReservationService {
       ..addQuery('page', page.toString())
       ..addQuery('limit', limit.toString());
 
-    return await builder.rawGet<List<Reservation>>(
-      fromJson: (json) {
-        if (json is! List) {
-          return [];
-        }
-
-        return json
-            .map((item) => Reservation.fromJson(item as Map<String, dynamic>))
-            .toList();
-      },
+    return await builder.get<List<Reservation>>(
+      fromJson: (json) => (json as List)
+          .map((item) => Reservation.fromJson(item as Map<String, dynamic>))
+          .toList(),
     );
-  }
-
-  /// Mendapatkan daftar reservasi user yang sedang login
-  ///
-  /// Alias untuk [getAllReservations] untuk konsistensi penamaan
-  Future<ApiResponse<List<Reservation>>> getUserReservations({
-    int page = 1,
-    int limit = 10,
-  }) async {
-    return await getAllReservations(page: page, limit: limit);
   }
 
   /// Mendapatkan reservasi berdasarkan ID
@@ -60,10 +44,18 @@ class ReservationService {
     final builder = await ApiClient.create('Reservation.getById');
     builder.addParameter('id', id);
 
-    return await builder.get<Reservation>(
-      fromJson: (json) => Reservation.fromJson(json as Map<String, dynamic>),
+    final response = await builder.get<Reservation>(
+      fromJson: Reservation.fromJson,
       errorMessage: 'Gagal memuat detail reservasi',
     );
+
+    final data = response.data;
+
+    if (data == null) {
+      throw NotFoundException('Reservasi dengan ID $id tidak ditemukan');
+    }
+
+    return data;
   }
 
   /// Membuat reservasi baru
@@ -81,11 +73,19 @@ class ReservationService {
 
     final builder = await ApiClient.create('Reservation.create');
 
-    return await builder.post<Reservation>(
+    final response = await builder.post<Reservation>(
       body: reservationData,
       fromJson: Reservation.fromJson,
       errorMessage: 'Gagal membuat reservasi',
     );
+
+    final data = response.data;
+
+    if (data == null) {
+      throw NotFoundException('Reservasi tidak ditemukan setelah dibuat');
+    }
+
+    return data;
   }
 
   /// Update reservasi (hanya untuk reservasi sendiri yang belum disetujui)
@@ -103,11 +103,21 @@ class ReservationService {
     final builder = await ApiClient.create('Reservation.update');
     builder.addParameter('id', reservationData.reservationId);
 
-    return await builder.put<Reservation>(
+    final response = await builder.put<Reservation>(
       body: reservationData,
       fromJson: Reservation.fromJson,
       errorMessage: 'Gagal mengupdate reservasi',
     );
+
+    final data = response.data;
+
+    if (data == null) {
+      throw NotFoundException(
+        'Reservasi dengan ID ${reservationData.reservationId} tidak ditemukan',
+      );
+    }
+
+    return data;
   }
 
   /// Membatalkan reservasi
@@ -123,7 +133,7 @@ class ReservationService {
       errorMessage: 'Gagal membatalkan reservasi',
     );
 
-    return response != null;
+    return response.data != null;
   }
 
   /// Mendapatkan reservasi berdasarkan status
@@ -138,14 +148,14 @@ class ReservationService {
     final builder = await ApiClient.create('Reservation.getAll');
     builder.addQuery('status', status.toLowerCase());
 
-    final List<dynamic> response = await builder.get<List<dynamic>>(
-      fromJson: (json) => json as List<dynamic>,
+    final response = await builder.get<List<Reservation>>(
+      fromJson: (json) => (json as List)
+          .map((item) => Reservation.fromJson(item as Map<String, dynamic>))
+          .toList(),
       errorMessage: 'Gagal memuat reservasi berdasarkan status',
     );
 
-    return response
-        .map((json) => Reservation.fromJson(json as Map<String, dynamic>))
-        .toList();
+    return response.data ?? [];
   }
 
   /// Mendapatkan reservasi berdasarkan rentang tanggal
@@ -163,14 +173,14 @@ class ReservationService {
     builder.addQuery('startDate', startDate.toIso8601String());
     builder.addQuery('endDate', endDate.toIso8601String());
 
-    final List<dynamic> response = await builder.get<List<dynamic>>(
-      fromJson: (json) => json as List<dynamic>,
+    final response = await builder.get<List<Reservation>>(
+      fromJson: (json) => (json as List)
+          .map((item) => Reservation.fromJson(item as Map<String, dynamic>))
+          .toList(),
       errorMessage: 'Gagal memuat reservasi berdasarkan tanggal',
     );
 
-    return response
-        .map((json) => Reservation.fromJson(json as Map<String, dynamic>))
-        .toList();
+    return response.data ?? [];
   }
 
   /// Mendapatkan reservasi untuk ruangan tertentu
@@ -182,14 +192,14 @@ class ReservationService {
     final builder = await ApiClient.create('Reservation.getAll');
     builder.addQuery('roomId', roomId);
 
-    final List<dynamic> response = await builder.get<List<dynamic>>(
-      fromJson: (json) => json as List<dynamic>,
+    final response = await builder.get<List<Reservation>>(
+      fromJson: (json) => (json as List)
+          .map((item) => Reservation.fromJson(item as Map<String, dynamic>))
+          .toList(),
       errorMessage: 'Gagal memuat reservasi ruangan',
     );
 
-    return response
-        .map((json) => Reservation.fromJson(json as Map<String, dynamic>))
-        .toList();
+    return response.data ?? [];
   }
 
   /// Approve reservasi (hanya untuk admin)
@@ -209,11 +219,19 @@ class ReservationService {
     final builder = await ApiClient.create('Reservation.update');
     builder.addParameter('id', id);
 
-    return await builder.patch<Reservation>(
+    final response = await builder.patch<Reservation>(
       body: body,
-      fromJson: (json) => Reservation.fromJson(json as Map<String, dynamic>),
+      fromJson: Reservation.fromJson,
       errorMessage: 'Gagal menyetujui reservasi',
     );
+
+    final data = response.data;
+
+    if (data == null) {
+      throw NotFoundException('Reservasi dengan ID $id tidak ditemukan');
+    }
+
+    return data;
   }
 
   /// Reject reservasi (hanya untuk admin)
@@ -233,11 +251,19 @@ class ReservationService {
     final builder = await ApiClient.create('Reservation.update');
     builder.addParameter('id', id);
 
-    return await builder.patch<Reservation>(
+    final response = await builder.patch<Reservation>(
       body: body,
-      fromJson: (json) => Reservation.fromJson(json as Map<String, dynamic>),
+      fromJson: Reservation.fromJson,
       errorMessage: 'Gagal menolak reservasi',
     );
+
+    final data = response.data;
+
+    if (data == null) {
+      throw NotFoundException('Reservasi dengan ID $id tidak ditemukan');
+    }
+
+    return data;
   }
 
   /// Validasi waktu reservasi

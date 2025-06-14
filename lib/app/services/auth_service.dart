@@ -168,12 +168,18 @@ class AuthService {
         requiresAuth: false,
       );
 
-      if (response.accessToken == null || response.refreshToken == null) {
+      final data = response.data;
+
+      if (data == null) {
+        throw ValidationException('User tidak ditemukan atau password salah');
+      }
+
+      if (data.accessToken == null || data.refreshToken == null) {
         throw ValidationException('Token tidak valid dari server');
       }
 
-      await saveLoginData(response);
-      return response;
+      await saveLoginData(data);
+      return data;
     } catch (e) {
       _updateAuthStatus('Login gagal', e);
       rethrow;
@@ -203,7 +209,6 @@ class AuthService {
       final userData = jsonDecode(userDataString) as Map<String, dynamic>;
       return Profile.fromJson(userData);
     } catch (e) {
-      debugPrint('Error parsing user data: ${e.toString()}');
       return null;
     }
   }
@@ -223,7 +228,6 @@ class AuthService {
         expiry.subtract(Duration(seconds: _tokenExpiryTolerance)),
       );
     } catch (e) {
-      debugPrint('Error checking refresh token expiry: ${e.toString()}');
       return true;
     }
   }
@@ -244,7 +248,6 @@ class AuthService {
       }
       return true;
     } catch (e) {
-      debugPrint('Error checking access token expiry: ${e.toString()}');
       return true;
     }
   }
@@ -326,11 +329,16 @@ class AuthService {
         errorMessage: 'Gagal mengambil data user',
       );
 
+      final data = response.data;
+
+      if (data == null) {
+        throw ValidationException('Data user tidak ditemukan');
+      }
+
       // Update cache
-      await _prefs.setString(_userDataKey, jsonEncode(response.toJson()));
-      return response;
+      await _prefs.setString(_userDataKey, jsonEncode(data.toJson()));
+      return data;
     } catch (e) {
-      debugPrint('Error getting current user: ${e.toString()}');
       // Return cached data jika gagal fetch
       return getUserData();
     }
@@ -352,7 +360,6 @@ class AuthService {
   Future<bool> refreshTokenIfNeeded() async {
     // Jangan refresh jika refresh token expired
     if (isRefreshTokenExpired()) {
-      debugPrint('🔄 refreshTokenIfNeeded: Refresh token sudah kadaluarsa');
       _updateAuthStatus('Refresh token kadaluarsa');
       return false;
     }
@@ -360,9 +367,6 @@ class AuthService {
     try {
       // Jika sudah ada proses refresh yang berjalan, tunggu hasilnya
       if (_isRefreshing && _refreshCompleter != null) {
-        debugPrint(
-          '⏳ refreshTokenIfNeeded: Menunggu refresh token yang sedang berjalan',
-        );
         _updateAuthStatus('Menunggu refresh token yang sedang berjalan');
         return await _refreshCompleter!.future;
       }
@@ -372,7 +376,6 @@ class AuthService {
       _refreshCompleter =
           Completer<bool>(); // Create new completer for this operation
       _updateAuthStatus('Memperbarui token');
-      debugPrint('🔄 refreshTokenIfNeeded: Memulai refresh token baru');
       _refreshFuture = _doRefreshToken();
 
       final response = await _refreshFuture;
@@ -384,18 +387,13 @@ class AuthService {
       }
 
       if (isSuccess) {
-        debugPrint('✅ refreshTokenIfNeeded: Token berhasil diperbarui');
         _updateAuthStatus('Token berhasil diperbarui');
       } else {
-        debugPrint('❌ refreshTokenIfNeeded: Gagal memperbarui token');
         _updateAuthStatus('Gagal memperbarui token');
       }
 
       return isSuccess;
     } catch (e) {
-      debugPrint(
-        '⚠️ refreshTokenIfNeeded: Error saat memperbarui token: ${e.toString()}',
-      );
       _updateAuthStatus('Error saat memperbarui token', e);
 
       if (_refreshCompleter != null && !_refreshCompleter!.isCompleted) {
@@ -424,18 +422,23 @@ class AuthService {
         errorMessage: 'Gagal refresh token',
       );
 
-      if (response.accessToken == null || response.refreshToken == null) {
+      final data = response.data;
+
+      if (data == null) {
+        throw ValidationException('Gagal mendapatkan data refresh token');
+      }
+
+      if (data.accessToken == null || data.refreshToken == null) {
         throw ValidationException('Token tidak valid dari server');
       }
 
       // Store the new token data before returning
-      await saveRefreshTokenData(response);
+      await saveRefreshTokenData(data);
       await Future.delayed(
         const Duration(milliseconds: 100),
       ); // Ensure token is saved
-      return response;
+      return data;
     } catch (e) {
-      debugPrint('Error refreshing token: ${e.toString()}');
       return null;
     }
   }
@@ -444,7 +447,6 @@ class AuthService {
   Future<bool> ensureValidToken() async {
     // Check if user is logged in
     if (!isLoggedIn()) {
-      debugPrint('🔒 ensureValidToken: User tidak login');
       _updateAuthStatus('User tidak login');
       return false;
     }
@@ -452,18 +454,11 @@ class AuthService {
     try {
       // If token will expire soon or is already expired, refresh it
       if (isAccessTokenExpired() || _isTokenNearExpiry()) {
-        debugPrint(
-          '⏰ ensureValidToken: Token expired atau akan expired segera, perlu refresh',
-        );
-
         // Try to refresh token
         final refreshSuccess = await refreshTokenIfNeeded();
 
         // If refresh failed and refresh token is expired, we need to logout
         if (!refreshSuccess && isRefreshTokenExpired()) {
-          debugPrint(
-            '🚪 ensureValidToken: Refresh gagal dan refresh token expired, logout dan redirect',
-          );
           await logout();
           return false;
         }
@@ -471,13 +466,8 @@ class AuthService {
         return refreshSuccess;
       }
 
-      debugPrint('✓ ensureValidToken: Token masih valid');
       return true;
     } catch (e) {
-      debugPrint(
-        '❌ ensureValidToken: Error memvalidasi token: ${e.toString()}',
-      );
-
       // If there's an error, we should return false to be safe
       return false;
     }
@@ -494,7 +484,6 @@ class AuthService {
       // Check if token expires in less than 10 minutes
       return expiry.difference(now).inMinutes <= 10;
     } catch (e) {
-      debugPrint('Error checking token expiry: ${e.toString()}');
       return true;
     }
   }
