@@ -173,7 +173,7 @@ class ApiClient {
   // ------------------
 
   /// Melakukan GET request dengan error handling
-  Future<T> get<T>({
+  Future<ApiResponse<T>> get<T>({
     T Function(dynamic)? fromJson,
     String? errorMessage,
     bool requiresAuth = true,
@@ -181,19 +181,18 @@ class ApiClient {
     Map<String, String>? headers,
   }) async {
     return _handleRequest<T>(
-      request: () => rawGet<T>(
-        fromJson: fromJson,
+      fromJson: fromJson,
+      request: () => rawGet(
         requiresAuth: requiresAuth,
         timeout: timeout,
         headers: headers,
+        errorMessage: errorMessage,
       ),
-      errorMessage: errorMessage,
-      requiresAuth: requiresAuth,
     );
   }
 
   /// Melakukan POST request dengan error handling
-  Future<T> post<T>({
+  Future<ApiResponse<T>> post<T>({
     dynamic body,
     T Function(dynamic)? fromJson,
     String? errorMessage,
@@ -202,20 +201,19 @@ class ApiClient {
     Map<String, String>? headers,
   }) async {
     return _handleRequest<T>(
-      request: () => rawPost<T>(
+      fromJson: fromJson,
+      request: () => rawPost(
         body: body,
-        fromJson: fromJson,
         requiresAuth: requiresAuth,
         timeout: timeout,
         headers: headers,
+        errorMessage: errorMessage,
       ),
-      errorMessage: errorMessage,
-      requiresAuth: requiresAuth,
     );
   }
 
   /// Melakukan PUT request dengan error handling
-  Future<T> put<T>({
+  Future<ApiResponse<T>> put<T>({
     dynamic body,
     T Function(dynamic)? fromJson,
     String? errorMessage,
@@ -224,20 +222,19 @@ class ApiClient {
     Map<String, String>? headers,
   }) async {
     return _handleRequest<T>(
-      request: () => rawPut<T>(
+      fromJson: fromJson,
+      request: () => rawPut(
         body: body,
-        fromJson: fromJson,
         requiresAuth: requiresAuth,
         timeout: timeout,
         headers: headers,
+        errorMessage: errorMessage,
       ),
-      errorMessage: errorMessage,
-      requiresAuth: requiresAuth,
     );
   }
 
   /// Melakukan PATCH request dengan error handling
-  Future<T> patch<T>({
+  Future<ApiResponse<T>> patch<T>({
     dynamic body,
     T Function(dynamic)? fromJson,
     String? errorMessage,
@@ -246,20 +243,20 @@ class ApiClient {
     Map<String, String>? headers,
   }) async {
     return _handleRequest<T>(
-      request: () => rawPatch<T>(
+      fromJson: fromJson,
+
+      request: () => rawPatch(
         body: body,
-        fromJson: fromJson,
         requiresAuth: requiresAuth,
         timeout: timeout,
         headers: headers,
+        errorMessage: errorMessage,
       ),
-      errorMessage: errorMessage,
-      requiresAuth: requiresAuth,
     );
   }
 
   /// Melakukan DELETE request dengan error handling
-  Future<T> delete<T>({
+  Future<ApiResponse<T>> delete<T>({
     T Function(dynamic)? fromJson,
     String? errorMessage,
     bool requiresAuth = true,
@@ -267,36 +264,47 @@ class ApiClient {
     Map<String, String>? headers,
   }) async {
     return _handleRequest<T>(
-      request: () => rawDelete<T>(
-        fromJson: fromJson,
+      fromJson: fromJson,
+      request: () => rawDelete(
         requiresAuth: requiresAuth,
         timeout: timeout,
         headers: headers,
+        errorMessage: errorMessage,
       ),
-      errorMessage: errorMessage,
-      requiresAuth: requiresAuth,
     );
   }
 
   /// Melakukan POST request multipart untuk upload file
-  Future<T> postMultipart<T>({
+  Future<T?> postMultipart<T>({
     required Map<String, dynamic> fields,
     T Function(dynamic)? fromJson,
     String? errorMessage,
     bool requiresAuth = true,
     Duration? timeout,
   }) async {
-    return _handleRequest<T>(
-      request: () => rawPost<T>(
-        body: fields,
-        fromJson: fromJson,
-        requiresAuth: requiresAuth,
-        timeout: timeout,
-        headers: {'Content-Type': _contentTypeMultipart},
-      ),
-      errorMessage: errorMessage,
+    final response = await rawPost(
+      body: fields,
       requiresAuth: requiresAuth,
+      timeout: timeout,
+      errorMessage: errorMessage,
+      headers: {'Content-Type': _contentTypeMultipart},
     );
+
+    if (response == null) {
+      return null;
+    }
+
+    if (fromJson != null) {
+      final decodedResponse = json.decode(response);
+
+      return fromJson(decodedResponse);
+    }
+
+    if (response is T) {
+      return response;
+    }
+
+    throw ParseException('Response tidak sesuai dengan tipe yang diharapkan');
   }
 
   // ------------------
@@ -304,87 +312,87 @@ class ApiClient {
   // ------------------
 
   /// Raw GET request implementation
-  Future<ApiResponse<T>> rawGet<T>({
-    T Function(dynamic)? fromJson,
+  Future<dynamic> rawGet({
     bool requiresAuth = true,
     Duration? timeout,
     Map<String, String>? headers,
+    String? errorMessage,
   }) async {
-    return _makeRequest<T>(
+    return _makeRequest(
       method: 'GET',
-      fromJson: fromJson,
       requiresAuth: requiresAuth,
       timeout: timeout,
       additionalHeaders: headers,
+      errorMessage: errorMessage,
     );
   }
 
   /// Raw POST request implementation
-  Future<ApiResponse<T>> rawPost<T>({
+  Future<dynamic> rawPost({
     dynamic body,
-    T Function(dynamic)? fromJson,
     bool requiresAuth = true,
     Duration? timeout,
+    String? errorMessage,
     Map<String, String>? headers,
   }) async {
-    return _makeRequest<T>(
+    return _makeRequest(
       method: 'POST',
       body: body,
-      fromJson: fromJson,
       requiresAuth: requiresAuth,
       timeout: timeout,
+      errorMessage: errorMessage,
       additionalHeaders: headers,
     );
   }
 
   /// Raw PUT request implementation
-  Future<ApiResponse<T>> rawPut<T>({
+  Future<dynamic> rawPut({
     dynamic body,
-    T Function(dynamic)? fromJson,
     bool requiresAuth = true,
     Duration? timeout,
+    String? errorMessage,
     Map<String, String>? headers,
   }) async {
-    return _makeRequest<T>(
+    return _makeRequest(
       method: 'PUT',
       body: body,
-      fromJson: fromJson,
       requiresAuth: requiresAuth,
       timeout: timeout,
+      errorMessage: errorMessage,
       additionalHeaders: headers,
     );
   }
 
   /// Raw PATCH request implementation
-  Future<ApiResponse<T>> rawPatch<T>({
+  Future<dynamic> rawPatch({
     dynamic body,
-    T Function(dynamic)? fromJson,
     bool requiresAuth = true,
     Duration? timeout,
+    String? errorMessage,
     Map<String, String>? headers,
   }) async {
-    return _makeRequest<T>(
+    return _makeRequest(
       method: 'PATCH',
       body: body,
-      fromJson: fromJson,
       requiresAuth: requiresAuth,
       timeout: timeout,
+      errorMessage: errorMessage,
       additionalHeaders: headers,
     );
   }
 
   /// Raw DELETE request implementation
-  Future<ApiResponse<T>> rawDelete<T>({
-    T Function(dynamic)? fromJson,
+  Future<dynamic> rawDelete({
     bool requiresAuth = true,
     Duration? timeout,
+    String? errorMessage,
     Map<String, String>? headers,
   }) async {
-    return _makeRequest<T>(
+    return _makeRequest(
       method: 'DELETE',
-      fromJson: fromJson,
       requiresAuth: requiresAuth,
       timeout: timeout,
+      errorMessage: errorMessage,
       additionalHeaders: headers,
     );
   }
@@ -401,27 +409,20 @@ class ApiClient {
     // Add response interceptor to handle token expired
     addResponseInterceptor((response, method, url) async {
       if (response.statusCode == 401) {
-        debugPrint('🔐 Interceptor: Received 401 Unauthorized from $url');
-
         try {
           // Cek apakah refresh token masih valid
           if (!_authService.isRefreshTokenExpired()) {
-            debugPrint('🔄 Interceptor: Attempting to refresh token...');
             final refreshSuccess = await _authService.refreshTokenIfNeeded();
 
             // Jika refresh gagal, arahkan ke login
             if (!refreshSuccess) {
               throw ('❌ Interceptor: Token refresh failed, navigating to login page');
-            } else {
-              debugPrint('✅ Interceptor: Token successfully refreshed');
             }
           } else {
             // Refresh token sudah expired, langsung logout
             throw ('⏰ Interceptor: Refresh token expired, logging out');
           }
-        } catch (e) {
-          debugPrint('$e');
-
+        } catch (_) {
           await _authService.logout();
           NavigationHandler.handleUnauthorized();
         }
@@ -520,79 +521,58 @@ class ApiClient {
     return response;
   }
 
-  /// Melakukan HTTP request dengan handling yang konsisten
-  Future<ApiResponse<T>> _makeRequest<T>({
+  Future<dynamic> _makeRequest({
     required String method,
     dynamic body,
-    T Function(dynamic)? fromJson,
     bool requiresAuth = true,
     Duration? timeout,
     Map<String, String>? additionalHeaders,
+    String? errorMessage,
   }) async {
     final url = buildUrl();
     final requestTimeout = timeout ?? const Duration(seconds: 30);
     final uri = Uri.parse(url);
 
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
+    final headers = <String, String>{};
 
-    // Add custom headers if provided
-    if (additionalHeaders != null) {
+    if (body != null && body is Map<String, dynamic>) {
+      headers.addAll({
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      });
+    }
+
+    if (additionalHeaders != null && additionalHeaders.isNotEmpty) {
       headers.addAll(additionalHeaders);
     }
 
-    // Add authorization header if required
     if (requiresAuth) {
       try {
-        // Ensure token validity before adding to headers
-        // This triggers the token refresh if needed
         final isValid = await _authService.ensureValidToken();
 
         if (!isValid) {
-          debugPrint(
-            '🚫 _makeRequest: Token not valid, cannot proceed with request',
-          );
-
-          // Check if we should attempt navigation to login
           if (_authService.isRefreshTokenExpired()) {
-            debugPrint(
-              '🔄 _makeRequest: Refresh token expired, handling unauthorized',
-            );
-
             await _authService.logout();
             NavigationHandler.handleUnauthorized();
           }
 
           throw UnauthorizedException(
-            'Token tidak valid dan tidak dapat diperbarui',
+            'Akses ditolak, silakan login kembali dan coba lagi',
           );
         }
 
         final token = _authService.getAccessToken();
-        if (token != null) {
-          headers['Authorization'] = 'Bearer $token';
-        } else {
-          debugPrint(
-            '🔑 _makeRequest: No token found after ensureValidToken returned true',
-          );
-          throw UnauthorizedException('Token tidak ditemukan');
+        if (token == null) {
+          throw UnauthorizedException('Akses ditolak, silakan login kembali');
         }
-      } catch (e) {
-        debugPrint(
-          '⚠️ _makeRequest: Error ensuring valid token: ${e.toString()}',
-        );
 
+        headers['Authorization'] = 'Bearer $token';
+      } catch (e) {
         if (e is UnauthorizedException) {
-          // Let it propagate
           rethrow;
         }
 
-        // For other errors, wrap in UnauthorizedException
-        throw UnauthorizedException(
-          'Gagal memverifikasi token: ${e.toString()}',
-        );
+        throw UnauthorizedException('Gagal memeriksa akses: $e');
       }
     }
 
@@ -608,91 +588,51 @@ class ApiClient {
         body: body,
       );
 
-      // Log response for debug
       _logResponse(response, uri);
 
-      return _handleResponse<T>(response, fromJson);
+      return _handleResponse(response, errorMessage);
     } on SocketException {
       throw NetworkException('Tidak dapat terhubung ke server');
     } on HttpException catch (e) {
       throw NetworkException('Terjadi kesalahan jaringan: ${e.message}');
     } on FormatException {
       throw ParseException('Response tidak valid dari server');
-    } catch (e) {
-      throw ServerException('Terjadi kesalahan: ${e.toString()}');
+    } catch (_) {
+      rethrow;
     }
   }
 
   /// Handle HTTP response dan convert ke ApiResponse
-  Future<ApiResponse<T>> _handleResponse<T>(
+  Future<dynamic> _handleResponse(
     http.Response response,
-    T Function(dynamic)? fromJson,
+    String? errorMessage,
   ) async {
     final statusCode = response.statusCode;
-    final contentType = response.headers['content-type'] ?? '';
+    final rawResponseBody = response.body;
 
-    // Handle different response types
-    if (contentType.contains('application/json')) {
-      // Handle JSON response
-      // Handle JSON response
-      Map<String, dynamic> responseData;
-      try {
-        responseData = json.decode(response.body) as Map<String, dynamic>;
-      } catch (e) {
-        if (statusCode >= 200 && statusCode < 300) {
-          return ApiResponse<T>(data: null, message: 'Request berhasil');
-        }
-
-        throw ParseException(
-          'Response tidak valid dari server: ${e.toString()}',
-        );
-      }
-
-      // Handle success responses (200-299)
-      if (statusCode >= 200 && statusCode < 300) {
-        try {
-          return ApiResponse<T>.fromJson(responseData, fromJson);
-        } catch (e) {
-          throw ParseException('Gagal mengurai response data: ${e.toString()}');
-        }
-      }
-
-      // Handle error responses
-      try {
-        final message =
-            responseData['message'] ?? 'Terjadi kesalahan pada server';
-
-        _throwAppropriateError(statusCode, message);
-      } catch (e) {
-        // Fallback to basic error handling if ApiErrorResponse parsing fails
-        final message =
-            responseData['message'] ?? 'Terjadi kesalahan pada server';
-        _throwAppropriateError(statusCode, message);
-      }
-    } else if (contentType.contains('text/plain')) {
-      // Handle plain text response
-      if (statusCode >= 200 && statusCode < 300) {
-        return ApiResponse<T>(
-          data: response.body as T,
-          message: 'Request berhasil',
-        );
-      }
-      _throwAppropriateError(statusCode, response.body);
-    } else {
-      // Handle binary or other response types
-      if (statusCode >= 200 && statusCode < 300) {
-        return ApiResponse<T>(
-          data: response.bodyBytes as T,
-          message: 'Request berhasil',
-        );
-      }
-      _throwAppropriateError(
-        statusCode,
-        'Terjadi kesalahan dengan tipe konten: $contentType',
-      );
+    if (statusCode < 400) {
+      return rawResponseBody;
     }
 
-    throw ServerException('Unexpected response handling path');
+    errorMessage ??=
+        'Terjadi kesalahan saat memproses permintaan, silakan coba lagi, atau hubungi administrator jika masalah berlanjut';
+
+    Map<String, dynamic>? responseBody;
+
+    try {
+      responseBody = json.decode(rawResponseBody);
+    } catch (_) {}
+
+    errorMessage =
+        responseBody?['message'] ??
+        responseBody?['error'] ??
+        responseBody?['errorMessage'] ??
+        response.reasonPhrase ??
+        'Maaf, permintaan tidak dapat diproses';
+
+    _throwAppropriateError(statusCode, '$errorMessage');
+
+    throw ServerException('Maaf, permintaan tidak dapat diproses');
   }
 
   /// Throws appropriate error based on status code
@@ -701,10 +641,6 @@ class ApiClient {
       case 400:
         throw ValidationException(message);
       case 401:
-        // Token handling is managed by the response interceptor
-        // This will be called if the interceptor didn't handle it or for direct error handling
-        debugPrint('🔒 _throwAppropriateError: Handling 401 Unauthorized');
-
         // Throw the exception before navigation to properly terminate the current request
         // Navigation will be handled separately by the interceptor
         throw UnauthorizedException(message);
@@ -775,79 +711,28 @@ class ApiClient {
   }
 
   /// Wrapper untuk request dengan error handling
-  Future<T> _handleRequest<T>({
-    required Future<ApiResponse<T>> Function() request,
-    String? errorMessage,
-    bool requiresAuth = true,
+  Future<ApiResponse<T>> _handleRequest<T>({
+    required Future<dynamic> Function() request,
+    T Function(dynamic)? fromJson,
   }) async {
+    final response = await request();
+
+    Map<String, dynamic>? responseBody;
+
     try {
-      // Validasi dan refresh token secara proaktif
-      if (requiresAuth) {
-        // Menggunakan ensureValidToken yang lebih robust
-        final isValid = await _authService.ensureValidToken();
-
-        if (!isValid) {
-          debugPrint('⚠️ _handleRequest: Token validation failed');
-
-          // If refresh token is expired, navigate to login
-          if (_authService.isRefreshTokenExpired()) {
-            debugPrint(
-              '🚪 _handleRequest: Refresh token expired, navigating to login page',
-            );
-            await _authService.logout();
-            NavigationHandler.handleUnauthorized();
-          }
-
-          throw UnauthorizedException(
-            'Token tidak valid dan tidak dapat diperbarui',
-          );
-        }
-
-        debugPrint('✅ _handleRequest: Token validation successful');
+      responseBody = json.decode(response);
+    } catch (_) {
+      if (response is! T) {
+        throw ParseException('Maaf, format yang diterima tidak sesuai');
       }
 
-      // Eksekusi request
-      final response = await request();
-
-      // Handle null response
-      if (response.data == null) {
-        if (errorMessage != null) {
-          debugPrint('⚠️ _handleRequest: Response data is null: $errorMessage');
-        } else {
-          debugPrint('⚠️ _handleRequest: Response data is null');
-        }
-        throw ServerException(errorMessage ?? 'Data response kosong');
-      }
-
-      return response.data as T;
-    } on UnauthorizedException catch (e) {
-      debugPrint(
-        '🔒 _handleRequest: Caught UnauthorizedException: ${e.message}',
-      );
-
-      // Check if we should navigate to login page
-      // Only navigate if we're not already in the process of refreshing
-      if (!_authService.currentStatus.name.contains('refresh')) {
-        await _authService.logout();
-        NavigationHandler.handleUnauthorized();
-      }
-
-      rethrow;
-    } on ValidationException {
-      rethrow;
-    } on NotFoundException {
-      rethrow;
-    } on ConflictException {
-      rethrow;
-    } on RateLimitException {
-      rethrow;
-    } on ApiException {
-      rethrow;
-    } catch (e) {
-      debugPrint('❌ _handleRequest: Unexpected error: ${e.toString()}');
-      throw ServerException(
-        '${errorMessage ?? 'Terjadi kesalahan'}: ${e.toString()}',
-      );
+      return ApiResponse<T>(data: response, message: 'Request berhasil');
     }
+
+    if (responseBody == null || responseBody.isEmpty) {
+      throw ParseException('Maaf, format yang diterima tidak sesuai');
+    }
+
+    return ApiResponse<T>.fromJson(responseBody, fromJson);
   }
 }
