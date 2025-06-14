@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/models/api_response.dart';
+import 'package:intl/intl.dart';
 import 'package:room_reservation_mobile_app/app/models/request/reservation_create_request.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
+import 'package:room_reservation_mobile_app/app/pages/room_selector_page.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
-import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 
 class ReservationCreatePage extends StatefulWidget {
   const ReservationCreatePage({super.key});
@@ -16,6 +16,9 @@ class _ReservationCreatePageState extends State<ReservationCreatePage> {
   final _service = ReservationService.getInstance();
   final _formKey = GlobalKey<FormState>();
 
+  // Create datetime formater for "Jumat, 15 Sep 2023"
+  final _dateFormatter = DateFormat('EEEE, dd MMM yyyy', 'id_ID');
+
   final _now = DateTime.now();
   late DateTime _startDate = DateTime(
     _now.year,
@@ -25,28 +28,27 @@ class _ReservationCreatePageState extends State<ReservationCreatePage> {
   );
   late DateTime _endDate = _startDate.add(const Duration(hours: 1));
 
-  final _roomService = RoomService.getInstance();
-  late Future<ApiResponse<List<Room>>> _availableRooms;
   final _request = ReservationCreateRequest();
 
-  void _updateAvailableRooms() {
-    setState(() {
-      _availableRooms = _roomService.getRawAvailableRoom(
-        start: _startDate,
-        end: _endDate,
-      );
-    });
-  }
+  // Selected room
+  Room? _selectedRoom;
 
-  @override
-  void initState() {
-    super.initState();
-    _updateAvailableRooms();
-  }
+  // Method to navigate to room selector page
+  Future<void> _selectRoom() async {
+    final selectedRoom = await Navigator.push<Room>(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            RoomSelectorPage(startDate: _startDate, endDate: _endDate),
+      ),
+    );
 
-  @override
-  void dispose() {
-    super.dispose();
+    if (selectedRoom != null) {
+      setState(() {
+        _selectedRoom = selectedRoom;
+        _request.roomId = selectedRoom.id;
+      });
+    }
   }
 
   Future<void> _selectDateRange() async {
@@ -72,8 +74,10 @@ class _ReservationCreatePageState extends State<ReservationCreatePage> {
           _endDate.hour,
           _endDate.minute,
         );
+
+        _request.startTime = _startDate;
+        _request.endTime = _endDate;
       });
-      _updateAvailableRooms();
     }
   }
 
@@ -109,13 +113,23 @@ class _ReservationCreatePageState extends State<ReservationCreatePage> {
             endTime.hour,
             endTime.minute,
           );
+
+          _request.startTime = _startDate;
+          _request.endTime = _endDate;
         });
-        _updateAvailableRooms();
       }
     }
   }
 
   Future<void> _submit() async {
+    // Check if room is selected
+    if (_selectedRoom == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Silakan pilih ruangan terlebih dahulu')),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     _formKey.currentState!.save();
@@ -152,7 +166,7 @@ class _ReservationCreatePageState extends State<ReservationCreatePage> {
               child: ListTile(
                 title: const Text('Tanggal'),
                 subtitle: Text(
-                  '${_startDate.toLocal().toString().split(' ')[0]} - ${_endDate.toLocal().toString().split(' ')[0]}',
+                  '${_dateFormatter.format(_startDate)} - ${_dateFormatter.format(_endDate)}',
                 ),
                 trailing: const Icon(Icons.calendar_today),
                 onTap: _selectDateRange,
@@ -170,67 +184,16 @@ class _ReservationCreatePageState extends State<ReservationCreatePage> {
               ),
             ),
             const SizedBox(height: 8),
-            FutureBuilder<ApiResponse<List<Room>>>(
-              future: _availableRooms,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text('Error: ${snapshot.error}'),
-                    ),
-                  );
-                }
-
-                if (!snapshot.hasData) {
-                  return const Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                  );
-                }
-
-                final rooms = snapshot.data!.data ?? [];
-
-                if (rooms.isEmpty) {
-                  return const Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Text('Tidak ada ruangan yang tersedia'),
-                    ),
-                  );
-                }
-
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(
-                        labelText: 'Ruangan',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: rooms.map((room) {
-                        return DropdownMenuItem(
-                          value: room.id,
-                          child: Text(room.name ?? 'Unknown Room'),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _request.roomId = value;
-                        });
-                      },
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Silakan pilih ruangan';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                );
-              },
+            // Room selection card
+            Card(
+              child: ListTile(
+                title: const Text('Ruangan'),
+                subtitle: _selectedRoom != null
+                    ? Text(_selectedRoom!.name ?? 'Unknown Room')
+                    : const Text('Pilih ruangan'),
+                trailing: const Icon(Icons.meeting_room),
+                onTap: _selectRoom,
+              ),
             ),
             const SizedBox(height: 8),
             Card(
@@ -253,6 +216,7 @@ class _ReservationCreatePageState extends State<ReservationCreatePage> {
                     _request.purpose = value;
                     _request.startTime = _startDate;
                     _request.endTime = _endDate;
+                    // Room ID is already set when room is selected
                   },
                 ),
               ),
