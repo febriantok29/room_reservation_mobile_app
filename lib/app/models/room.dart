@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Room {
   String? id;
   String? name;
@@ -54,5 +56,41 @@ class Room {
     final textColor = 'FFFFFF';
 
     return 'https://placehold.co/600x400/$backgroundColor/$textColor/png?text=${Uri.encodeComponent(name ?? 'Room')}&font=roboto';
+  }
+
+  /// Create a Room instance from a Firestore document
+  factory Room.fromFirestore(Map<String, dynamic> data, String documentId) {
+    return Room(
+      id: documentId,
+      name: data['name'],
+      capacity: data['capacity'],
+      location: data['location'],
+      description: data['description'],
+      isMaintenance: data['isMaintenance'] ?? false,
+      createdBy: data['createdBy'],
+      updatedBy: data['updatedBy'],
+      deletedBy: data['deletedBy'],
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
+      deletedAt: (data['deletedAt'] as Timestamp?)?.toDate(),
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    final map = <String, dynamic>{};
+
+    if (name != null) map['name'] = name;
+    if (capacity != null) map['capacity'] = capacity;
+    if (location != null) map['location'] = location;
+    if (description != null) map['description'] = description;
+    map['isMaintenance'] = isMaintenance ?? false;
+    if (createdBy != null) map['createdBy'] = createdBy;
+    if (updatedBy != null) map['updatedBy'] = updatedBy;
+    if (deletedBy != null) map['deletedBy'] = deletedBy;
+    if (createdAt != null) map['createdAt'] = Timestamp.fromDate(createdAt!);
+    if (updatedAt != null) map['updatedAt'] = Timestamp.fromDate(updatedAt!);
+    if (deletedAt != null) map['deletedAt'] = Timestamp.fromDate(deletedAt!);
+
+    return map;
   }
 }
