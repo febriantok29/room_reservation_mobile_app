@@ -15,6 +15,7 @@ import 'package:room_reservation_mobile_app/app/models/refresh_token_response.da
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Status autentikasi pengguna
+@Deprecated('Use `FirebaseAuthService` instead')
 enum AuthStatus {
   /// Pengguna belum terautentikasi
   unauthenticated,
@@ -30,6 +31,7 @@ enum AuthStatus {
 }
 
 /// Event untuk perubahan status autentikasi
+@Deprecated('Use `FirebaseAuthService` instead')
 class AuthStateChange {
   final AuthStatus status;
   final String? message;
@@ -39,6 +41,7 @@ class AuthStateChange {
 }
 
 /// Service untuk menangani autentikasi pengguna
+@Deprecated('Use `FirebaseAuthService` instead')
 class AuthService {
   /// Toleransi waktu sebelum token benar-benar expired (dalam detik)
   static const int _tokenExpiryTolerance = 4;
