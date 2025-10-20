@@ -6,8 +6,10 @@ import 'package:crypto/crypto.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
+import 'package:room_reservation_mobile_app/app/enum/user_role.dart';
 import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
+import 'package:room_reservation_mobile_app/app/models/request/user_register_request.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Service untuk menangani autentikasi pengguna dengan Firestore
@@ -64,79 +66,102 @@ class FirestoreAuthService {
     return _prefs.getBool(_isLoggedInKey) ?? false;
   }
 
-  /// Register a new user
-  Future<Profile> register({
-    required String email,
-    required String username,
-    required String password,
-    required String name,
-    String? role,
-  }) async {
+  /// Register a new user using UserRegisterRequest
+  Future<Profile> register({required UserRegisterRequest request}) async {
     try {
+      // Validasi request
+      request.validate();
+
       // Check if email already exists
       final emailQuery = _firestoreClient.getCollectionRef().where(
         'email',
-        isEqualTo: email,
+        isEqualTo: request.email,
       );
 
       final emailSnapshot = await emailQuery.get();
 
       if (emailSnapshot.docs.isNotEmpty) {
-        throw ValidationException('Email already exists');
+        throw ValidationException(
+          'Email sudah digunakan, silakan gunakan email lain',
+        );
       }
 
       // Check if username already exists
       final usernameQuery = _firestoreClient.getCollectionRef().where(
         'username',
-        isEqualTo: username,
+        isEqualTo: request.username,
       );
 
       final usernameSnapshot = await usernameQuery.get();
 
       if (usernameSnapshot.docs.isNotEmpty) {
-        throw ValidationException('Username already exists');
+        throw ValidationException(
+          'Username sudah digunakan, silakan gunakan username lain',
+        );
       }
 
-      // Parse name into first and last name
-      final nameParts = name.split(' ');
-      final firstName = nameParts.first;
-      final lastName = nameParts.length > 1
-          ? nameParts.sublist(1).join(' ')
-          : '';
+      // Hash password before saving
+      final hashedPassword = _hashPassword(request.password!);
 
-      // Create user object with hashed password
-      final hashedPassword = _hashPassword(password);
+      // Create user object dengan password yang sudah di-hash
+      final userData = request.toJson();
+      userData['password'] = hashedPassword;
 
-      final user = {
-        'email': email,
-        'username': username,
-        'password': hashedPassword,
-        'firstName': firstName,
-        'lastName': lastName,
-        'role': role ?? 'user',
-        'isActive': true,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
+      final employeeId = await _generateEmployeeId();
+      userData['employeeId'] = employeeId;
 
       // Save to Firestore
-      final docRef = await _firestoreClient.add(user);
+      final docRef = await _firestoreClient.add(userData);
       final userId = docRef.id;
 
-      // Create Profile object
+      // Buat Profile object untuk dikembalikan
       final profile = Profile(
         id: userId,
-        email: email,
-        username: username,
-        firstName: firstName,
-        lastName: lastName,
-        role: role ?? 'user',
+        email: request.email,
+        username: request.username,
+        firstName: request.firstName,
+        role: request.role,
       );
 
       return profile;
     } catch (e) {
       rethrow;
     }
+  }
+
+  Future<String> _generateEmployeeId() async {
+    final now = DateTime.now();
+    final year = now.year.toString();
+    final month = now.month.toString().padLeft(2, '0');
+    final prefix = '$year$month';
+
+    // Query untuk mendapatkan nomor urut tertinggi dalam bulan ini
+    final query = _firestoreClient
+        .getCollectionRef()
+        .where('employeeId', isGreaterThanOrEqualTo: prefix)
+        .where('employeeId', isLessThan: '${prefix}999')
+        .orderBy('employeeId', descending: true)
+        .limit(1);
+
+    final snapshot = await query.get();
+    int nextNumber = 1;
+
+    if (snapshot.docs.isNotEmpty) {
+      final lastDoc = snapshot.docs.first;
+      final lastEmployeeId = lastDoc['employeeId'] as String;
+      final lastNumberStr = lastEmployeeId.substring(
+        6,
+        9,
+      ); // Ambil bagian nomor urut
+      final lastNumber = int.tryParse(lastNumberStr) ?? 0;
+      nextNumber = lastNumber + 1;
+    }
+
+    final numberStr = nextNumber.toString().padLeft(3, '0');
+    final numberStrHPI = 'HPI';
+    final employeeId = '$prefix$numberStr$numberStrHPI';
+
+    return employeeId;
   }
 
   /// Login user dengan credential dan password
@@ -189,7 +214,7 @@ class FirestoreAuthService {
       username: userData['username'] as String,
       firstName: userData['firstName'] as String,
       lastName: userData['lastName'] as String? ?? '',
-      role: userData['role'] as String? ?? 'user',
+      role: UserRole.get('${userData['role']}'),
     );
 
     // Save user data to local storage
@@ -267,7 +292,7 @@ class FirestoreAuthService {
         username: userData['username'] as String,
         firstName: userData['firstName'] as String,
         lastName: userData['lastName'] as String? ?? '',
-        role: userData['role'] as String? ?? 'user',
+        role: UserRole.get('${userData['role']}'),
       );
 
       // Update cache
