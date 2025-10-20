@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 
 /// Contoh penggunaan FirestoreClient
@@ -16,7 +16,7 @@ import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.
 /// 5. Batch operation
 /// 6. Transaction
 class FirestoreCrudExamplePage extends StatefulWidget {
-  const FirestoreCrudExamplePage({Key? key}) : super(key: key);
+  const FirestoreCrudExamplePage({super.key});
 
   @override
   State<FirestoreCrudExamplePage> createState() =>

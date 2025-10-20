@@ -134,7 +134,7 @@ class _FirestoreHomePageState extends State<FirestoreHomePage>
                                       Icons.admin_panel_settings,
                                     ),
                                     title: const Text('Role'),
-                                    subtitle: Text(user.role ?? 'user'),
+                                    subtitle: Text('${user.role}'),
                                   ),
                                 ],
                               ),

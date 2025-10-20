@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:room_reservation_mobile_app/app/enum/user_role.dart';
 import 'package:room_reservation_mobile_app/app/examples/firestore_login_example_page.dart';
+import 'package:room_reservation_mobile_app/app/models/request/user_register_request.dart';
 import 'package:room_reservation_mobile_app/app/services/firestore_service/firestore_auth_service.dart';
 import 'package:room_reservation_mobile_app/app/utils/mounted_state_mixin.dart';
 
@@ -267,12 +269,16 @@ class _FirestoreRegisterExamplePageState
     try {
       final authService = await _authService;
 
-      await authService.register(
-        name: name,
-        email: email,
+      // Buat UserRegisterRequest
+      final request = UserRegisterRequest(
         username: username,
+        email: email,
         password: password,
+        firstName: name,
+        role: UserRole.user,
       );
+
+      await authService.register(request: request);
 
       setStateIfMounted(() {
         _statusMessage = 'Registrasi berhasil!';

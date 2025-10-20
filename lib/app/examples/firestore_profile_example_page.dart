@@ -307,7 +307,7 @@ class _FirestoreProfileExamplePageState
 
                 // Role (Read only)
                 TextField(
-                  controller: TextEditingController(text: profile.role ?? ''),
+                  controller: TextEditingController(text: '${profile.role}'),
                   decoration: const InputDecoration(
                     labelText: 'Role',
                     prefixIcon: Icon(Icons.security),
