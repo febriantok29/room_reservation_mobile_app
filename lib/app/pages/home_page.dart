@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/models/api_response.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/pages/login_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/reservation_list_page.dart';
 import 'package:room_reservation_mobile_app/app/services/auth_service.dart';
@@ -373,7 +373,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   if (_currentUser?.role != null)
                     Text(
-                      _currentUser!.role!,
+                      _currentUser!.role!.label,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.w500,
