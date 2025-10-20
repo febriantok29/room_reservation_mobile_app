@@ -1,3 +1,5 @@
+import 'package:room_reservation_mobile_app/app/enum/user_role.dart';
+
 class Profile {
   String? id;
   String? username;
@@ -9,7 +11,7 @@ class Profile {
   String? phone;
   DateTime? dateOfBirth;
   String? address;
-  String? role;
+  UserRole? role;
   String? createdBy;
   String? updatedBy;
   String? deletedBy;
@@ -48,7 +50,7 @@ class Profile {
     phone = json['phone'];
     dateOfBirth = DateTime.tryParse('${json['dateOfBirth']}')?.toLocal();
     address = json['address'];
-    role = json['role'];
+    role = UserRole.get('${json['role']}');
     createdBy = json['createdBy'];
     updatedBy = json['updatedBy'];
     deletedBy = json['deletedBy'];
@@ -69,7 +71,7 @@ class Profile {
       'phone': phone,
       'dateOfBirth': dateOfBirth?.toIso8601String(),
       'address': address,
-      'role': role,
+      'role': role.toString(),
       'createdBy': createdBy,
       'updatedBy': updatedBy,
       'deletedBy': deletedBy,

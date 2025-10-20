@@ -1,3 +1,5 @@
+import 'package:room_reservation_mobile_app/app/enum/user_role.dart';
+
 import 'profile.dart';
 
 class LoginResponse {
@@ -67,6 +69,6 @@ class LoginResponse {
     username: username,
     firstName: firstName,
     email: email,
-    role: role,
+    role: UserRole.get(role),
   );
 }
