@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:room_reservation_mobile_app/app/models/meta_data_response.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
-import 'package:room_reservation_mobile_app/app/pages/reservation/reservation_create_page.dart';
+import 'package:room_reservation_mobile_app/app/pages/reservation/old_reservation_create_page.dart';
 import 'package:room_reservation_mobile_app/app/repositories/reservation_repository.dart';
 
-class ReservationListPage extends StatefulWidget {
-  const ReservationListPage({super.key});
+class OldReservationListPage extends StatefulWidget {
+  const OldReservationListPage({super.key});
 
   @override
-  State<ReservationListPage> createState() => _ReservationListPageState();
+  State<OldReservationListPage> createState() => _OldReservationListPageState();
 }
 
-class _ReservationListPageState extends State<ReservationListPage> {
+class _OldReservationListPageState extends State<OldReservationListPage> {
   final _repository = ReservationRepository();
 
   @override
@@ -33,7 +33,7 @@ class _ReservationListPageState extends State<ReservationListPage> {
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const ReservationCreatePage()),
+            MaterialPageRoute(builder: (_) => const OldReservationCreatePage()),
           );
         },
         child: const Icon(Icons.add),

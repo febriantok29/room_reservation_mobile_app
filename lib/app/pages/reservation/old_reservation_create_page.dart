@@ -5,14 +5,15 @@ import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/pages/room_selector_page.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 
-class ReservationCreatePage extends StatefulWidget {
-  const ReservationCreatePage({super.key});
+class OldReservationCreatePage extends StatefulWidget {
+  const OldReservationCreatePage({super.key});
 
   @override
-  State<ReservationCreatePage> createState() => _ReservationCreatePageState();
+  State<OldReservationCreatePage> createState() =>
+      _OldReservationCreatePageState();
 }
 
-class _ReservationCreatePageState extends State<ReservationCreatePage> {
+class _OldReservationCreatePageState extends State<OldReservationCreatePage> {
   final _service = ReservationService.getInstance();
   final _formKey = GlobalKey<FormState>();
 
