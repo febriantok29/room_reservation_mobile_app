@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/core/network/api_client.dart';
 import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
@@ -8,6 +7,8 @@ import 'package:room_reservation_mobile_app/app/models/room.dart';
 /// Service untuk mengelola operasi terkait ruangan
 class RoomService {
   static const _roomCollection = 'm_rooms';
+
+  static final _cachedRooms = <Room>[];
 
   static RoomService? _instance;
 
@@ -20,28 +21,62 @@ class RoomService {
   }
 
   /// Mendapatkan semua ruangan
-  Future<List<Room>> getRoomList({bool showAll = false}) async {
-    final client = await FirestoreClient.create(_roomCollection);
+  /// [showAll] - Jika true, menampilkan juga ruangan yang sudah dihapus
+  /// [searchKeyword] - Keyword untuk mencari ruangan berdasarkan nama, lokasi, atau deskripsi
+  /// [forceRefresh] - Jika true, memaksa refresh data dari Firestore meskipun cache ada
+  Future<List<Room>> getRoomList({
+    bool showAll = false,
+    String? searchKeyword,
+    bool forceRefresh = false,
+  }) async {
+    // Jika cache kosong atau dipaksa refresh, ambil data dari Firestore
+    if (_cachedRooms.isEmpty || forceRefresh) {
+      final client = await FirestoreClient.create(_roomCollection);
+      final response = await client.getAll();
+      final docs = response.docs;
 
-    final response = await client.getAll();
+      // Kosongkan cache jika refresh dipaksa
+      if (forceRefresh && _cachedRooms.isNotEmpty) {
+        _cachedRooms.clear();
+      }
 
+      // Isi cache dengan data baru
+      for (final doc in docs) {
+        if (!doc.exists) continue;
+
+        final data = doc.data();
+        if (data == null || data is! Map<String, dynamic>) continue;
+
+        final room = Room.fromFirestore(data, doc.id);
+        _cachedRooms.add(room);
+      }
+    }
+
+    // Filter ruangan berdasarkan parameter
     final result = <Room>[];
+    final keyword = searchKeyword?.trim().toLowerCase();
 
-    final docs = response.docs;
-
-    for (final doc in docs) {
-      if (!doc.exists) continue;
-
-      final data = doc.data();
-
-      if (data == null || data is! Map<String, dynamic>) continue;
-
-      final room = Room.fromFirestore(data, doc.id);
-
-      if (showAll == false && room.isDeleted) {
+    for (final room in _cachedRooms) {
+      // Filter ruangan yang sudah dihapus jika showAll = false
+      if (!showAll && room.isDeleted) {
         continue;
       }
 
+      // Filter berdasarkan keyword jika ada
+      if (keyword != null && keyword.isNotEmpty) {
+        final name = room.name?.toLowerCase() ?? '';
+        final location = room.location?.toLowerCase() ?? '';
+        final description = room.description?.toLowerCase() ?? '';
+
+        // Jika tidak ada yang cocok dengan keyword, lewati
+        if (!name.contains(keyword) &&
+            !location.contains(keyword) &&
+            !description.contains(keyword)) {
+          continue;
+        }
+      }
+
+      // Tambahkan ke hasil jika lolos filter
       result.add(room);
     }
 
@@ -152,13 +187,16 @@ class RoomService {
   Future<Room> createRoom(Room room) async {
     final client = await FirestoreClient.create(_roomCollection);
 
-    debugPrint('Creating room with isMaintenance: ${room.isMaintenance}');
     final payload = room.toFirestore();
-    debugPrint('Payload to Firestore: $payload');
 
     final doc = await client.add(payload);
 
-    return Room.fromFirestore(payload, doc.id);
+    final createdRoom = Room.fromFirestore(payload, doc.id);
+
+    // Update cache
+    _updateCache(createdRoom);
+
+    return createdRoom;
   }
 
   /// Update ruangan yang sudah ada
@@ -172,6 +210,9 @@ class RoomService {
     final payload = room.toFirestore();
 
     await client.update(room.id!, payload);
+
+    // Update cache
+    _updateCache(room);
 
     return room;
   }
@@ -190,6 +231,9 @@ class RoomService {
     final payload = room.toFirestore();
 
     await client.update(room.id!, payload);
+
+    // Update cache dengan ruangan yang sudah ditandai dihapus
+    _updateCache(room);
   }
 
   /// Menghapus ruangan secara permanen (hard delete)
@@ -201,5 +245,29 @@ class RoomService {
     final client = await FirestoreClient.create(_roomCollection);
 
     await client.delete(roomId);
+
+    // Hapus dari cache jika ada
+    _removeFromCache(roomId);
+  }
+
+  /// Memaksa refresh cache ruangan
+  Future<List<Room>> refreshCache() async {
+    return getRoomList(forceRefresh: true);
+  }
+
+  /// Menghapus ruangan dari cache berdasarkan ID
+  void _removeFromCache(String roomId) {
+    _cachedRooms.removeWhere((room) => room.id == roomId);
+  }
+
+  /// Menambahkan atau memperbaharui ruangan dalam cache
+  void _updateCache(Room room) {
+    final index = _cachedRooms.indexWhere((r) => r.id == room.id);
+
+    if (index >= 0) {
+      _cachedRooms[index] = room;
+    } else {
+      _cachedRooms.add(room);
+    }
   }
 }

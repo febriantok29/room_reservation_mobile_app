@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
+import 'package:room_reservation_mobile_app/app/pages/image_viewer_page.dart';
+import 'package:room_reservation_mobile_app/app/pages/room/room_list_modal_bottom_sheet.dart';
 import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 
 class RoomListPage extends StatefulWidget {
@@ -14,10 +18,18 @@ class RoomListPage extends StatefulWidget {
 }
 
 class _RoomListPageState extends State<RoomListPage> {
+  final _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
+
   final _roomService = RoomService.getInstance();
   late Future<List<Room>> _rooms;
 
+  // State untuk filter
   bool _showAll = false;
+  String _searchKeyword = '';
+  final _searchController = TextEditingController();
+
+  // Debounce timer untuk pencarian
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -25,94 +37,208 @@ class _RoomListPageState extends State<RoomListPage> {
     _loadRooms();
   }
 
-  void _loadRooms() {
-    _rooms = _roomService.getRoomList(showAll: _showAll);
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _loadRooms({bool forceRefresh = false}) {
+    setState(() {
+      _rooms = _roomService.getRoomList(
+        showAll: _showAll,
+        searchKeyword: _searchKeyword,
+        forceRefresh: forceRefresh,
+      );
+    });
+  }
+
+  // Fungsi pencarian dengan debounce
+  void _searchRooms(String keyword) {
+    // Batalkan timer sebelumnya jika masih berjalan
+    _debounceTimer?.cancel();
+
+    // Atur timer baru (2 detik)
+    _debounceTimer = Timer(const Duration(milliseconds: 800), () {
+      if (_searchKeyword != keyword) {
+        setState(() {
+          _searchKeyword = keyword;
+          _loadRooms();
+        });
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Daftar Ruangan Meeting')),
-      floatingActionButton: _addRoomButton(),
-      body: Column(
-        children: [
-          if (widget.user.isAdmin)
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  const Expanded(child: Text('Lihat semua ruangan')),
-                  Switch(
-                    value: _showAll,
-                    onChanged: (_) {
-                      setState(() {
-                        _showAll = !_showAll;
-                        _loadRooms();
-                      });
+    return GestureDetector(
+      onTap: () {
+        FocusScope.of(context).requestFocus(FocusNode());
+      },
+      child: RefreshIndicator(
+        key: _refreshIndicatorKey,
+        onRefresh: () async {
+          _loadRooms(forceRefresh: true);
+        },
+        child: Scaffold(
+          appBar: AppBar(title: const Text('Daftar Ruangan Meeting')),
+          floatingActionButton: _addRoomButton(),
+          body: Column(children: [_buildFilterSection(), _buildContent()]),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterSection() {
+    final filter = <Widget>[
+      // Kolom pencarian
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8.0),
+        child: TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: 'Cari ruangan...',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _searchController.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _searchController.clear();
+                      _searchRooms('');
                     },
-                  ),
-                ],
-              ),
+                  )
+                : null,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey[300]!),
             ),
-          FutureBuilder<List<Room>>(
-            future: _rooms,
-            builder: (_, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          ),
+          onChanged: _searchRooms,
+        ),
+      ),
+    ];
 
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
+    // Filter untuk admin
+    if (widget.user.isAdmin) {
+      filter.add(
+        Row(
+          children: [
+            const Expanded(child: Text('Lihat semua ruangan')),
+            Switch(
+              value: _showAll,
+              onChanged: (_) {
+                setState(() {
+                  _showAll = !_showAll;
+                  _loadRooms();
+                });
+              },
+            ),
+          ],
+        ),
+      );
+    }
 
-              final data = snapshot.data ?? [];
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+      color: Colors.grey[200],
+      child: Column(children: filter),
+    );
+  }
 
-              if (data.isEmpty) {
-                return const Center(child: Text('Tidak ada ruangan tersedia.'));
-              }
+  Widget _buildContent() {
+    return FutureBuilder<List<Room>>(
+      future: _rooms,
+      builder: (_, snapshot) {
+        // Tampilkan indikator loading selama pencarian
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.only(top: 24.0),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
 
-              return Flexible(
-                child: ListView.builder(
-                  itemCount: data.length,
-                  itemBuilder: (_, index) {
-                    final room = data[index];
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: EdgeInsets.only(top: 24.0),
 
-                    Widget card = _buildCard(room);
+              child: Text('Gagal memuat ruangan: ${snapshot.error}'),
+            ),
+          );
+        }
 
-                    if (widget.user.isAdmin) {
-                      card = Slidable(
-                        key: ValueKey(room.id),
-                        endActionPane: ActionPane(
-                          motion: const ScrollMotion(),
-                          children: [
-                            SlidableAction(
-                              onPressed: (_) => _showRoomBottomSheet(room),
-                              backgroundColor: Colors.blue,
-                              foregroundColor: Colors.white,
-                              icon: Icons.edit,
-                              label: 'Edit',
-                            ),
-                            SlidableAction(
-                              onPressed: (_) => _confirmDeleteRoom(room),
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              icon: Icons.delete,
-                              label: 'Hapus',
-                            ),
-                          ],
+        final data = snapshot.data ?? [];
+
+        // Tampilkan pesan kosong yang berbeda berdasarkan pencarian
+        if (data.isEmpty) {
+          return Padding(
+            padding: EdgeInsets.only(top: 24.0),
+            child: Center(
+              child: _searchKeyword.isNotEmpty
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.search_off,
+                          size: 64,
+                          color: Colors.grey,
                         ),
-                        child: card,
-                      );
-                    }
+                        const SizedBox(height: 16),
+                        Text(
+                          'Tidak ada ruangan dengan kata kunci "$_searchKeyword"',
+                        ),
+                      ],
+                    )
+                  : const Text('Tidak ada ruangan tersedia.'),
+            ),
+          );
+        }
 
-                    return card;
-                  },
-                ),
-              );
+        return Flexible(
+          child: ListView.builder(
+            itemCount: data.length,
+            itemBuilder: (_, index) {
+              final room = data[index];
+
+              Widget card = _buildCard(room);
+
+              if (widget.user.isAdmin) {
+                card = Slidable(
+                  key: ValueKey(room.id),
+                  endActionPane: ActionPane(
+                    motion: const ScrollMotion(),
+                    children: [
+                      SlidableAction(
+                        onPressed: (_) => _showRoomBottomSheet(room),
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        icon: Icons.edit,
+                        label: 'Edit',
+                      ),
+                      SlidableAction(
+                        onPressed: (_) => _confirmDeleteRoom(room),
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        icon: Icons.delete,
+                        label: 'Hapus',
+                      ),
+                    ],
+                  ),
+                  child: card,
+                );
+              }
+
+              return card;
             },
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -140,18 +266,29 @@ class _RoomListPageState extends State<RoomListPage> {
             // Bagian gambar ruangan
             Expanded(
               flex: 1,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(8.0),
-                  bottomLeft: Radius.circular(8.0),
-                ),
-                child: Image.network(
-                  room.imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: Colors.grey[200],
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.meeting_room, size: 64),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ImageViewerPage(
+                        imageProvider: NetworkImage(room.imageUrl),
+                      ),
+                    ),
+                  );
+                },
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(8.0),
+                    bottomLeft: Radius.circular(8.0),
+                  ),
+                  child: Image.network(
+                    room.imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.grey[200],
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.meeting_room, size: 64),
+                    ),
                   ),
                 ),
               ),
@@ -291,284 +428,19 @@ class _RoomListPageState extends State<RoomListPage> {
     return FloatingActionButton(
       onPressed: () => _showRoomBottomSheet(),
       tooltip: 'Tambah Ruangan',
-      child: const Icon(Icons.add),
+      child: const Icon(Icons.add, color: Colors.white),
     );
   }
 
   /// Menampilkan bottom sheet untuk tambah/edit ruangan
+  /// Menggunakan widget RoomListModalBottomSheet yang sudah direfaktor
   void _showRoomBottomSheet([Room? room]) async {
-    final isEditing = room != null;
-
-    final nameController = TextEditingController(text: room?.name);
-    final locationController = TextEditingController(text: room?.location);
-    final capacityController = TextEditingController(
-      text: room?.capacity?.toString() ?? '',
-    );
-    final descriptionController = TextEditingController(
-      text: room?.description ?? '',
-    );
-
-    bool? needRefresh = await showModalBottomSheet<bool>(
+    // Menggunakan factory method static untuk menampilkan bottom sheet
+    final bool? needRefresh = await RoomListModalBottomSheet.show(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true, // Gunakan safe area
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) {
-        bool isMaintenance = room?.isMaintenance ?? false;
-        bool isLoading = false;
-        String errorMessage = '';
-
-        return StatefulBuilder(
-          builder: (_, setModalState) {
-            // Hitung ukuran keyboard dan pastikan bottomSheet cukup tinggi
-            final keyboardSpace = MediaQuery.of(context).viewInsets.bottom;
-            return Container(
-              padding: EdgeInsets.only(
-                left: 16.0,
-                right: 16.0,
-                top: 8.0,
-                bottom: keyboardSpace > 0
-                    ? keyboardSpace + 16.0
-                    : 24.0, // Tambahkan extra padding jika keyboard muncul
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        isEditing
-                            ? 'Edit Ruangan Meeting'
-                            : 'Tambah Ruangan Meeting',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-
-                    if (errorMessage.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(8.0),
-                        margin: const EdgeInsets.only(bottom: 16.0),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade100,
-                          borderRadius: BorderRadius.circular(4.0),
-                        ),
-                        child: Text(
-                          errorMessage,
-                          style: TextStyle(color: Colors.red.shade800),
-                        ),
-                      ),
-
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
-                      child: TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Nama Ruangan',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.meeting_room),
-                        ),
-                        enabled: !isLoading,
-                        textInputAction: TextInputAction.next,
-                      ),
-                    ),
-
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
-                      child: TextField(
-                        controller: locationController,
-                        decoration: const InputDecoration(
-                          labelText: 'Lokasi',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.location_on),
-                        ),
-                        enabled: !isLoading,
-                        textInputAction: TextInputAction.next,
-                      ),
-                    ),
-
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
-                      child: TextField(
-                        controller: capacityController,
-                        decoration: const InputDecoration(
-                          labelText: 'Kapasitas',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.people),
-                        ),
-                        keyboardType: TextInputType.number,
-                        enabled: !isLoading,
-                        textInputAction: TextInputAction.next,
-                      ),
-                    ),
-
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
-                      child: TextField(
-                        controller: descriptionController,
-                        decoration: const InputDecoration(
-                          labelText: 'Deskripsi',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.description),
-                          alignLabelWithHint: true,
-                        ),
-                        maxLines: 3,
-                        enabled: !isLoading,
-                      ),
-                    ),
-
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 24.0),
-                      child: Row(
-                        children: [
-                          const Expanded(child: Text('Sedang dalam perawatan')),
-                          Switch(
-                            value: isMaintenance,
-                            onChanged: isLoading
-                                ? null
-                                : (value) {
-                                    setModalState(() {
-                                      isMaintenance = value;
-                                    });
-                                  },
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    SizedBox(
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: isLoading
-                            ? null
-                            : () async {
-                                // Validasi input
-                                if (nameController.text.trim().isEmpty) {
-                                  setModalState(() {
-                                    errorMessage =
-                                        'Nama ruangan tidak boleh kosong';
-                                  });
-                                  return;
-                                }
-
-                                if (locationController.text.trim().isEmpty) {
-                                  setModalState(() {
-                                    errorMessage = 'Lokasi tidak boleh kosong';
-                                  });
-                                  return;
-                                }
-
-                                int? capacity;
-                                if (capacityController.text.isNotEmpty) {
-                                  try {
-                                    capacity = int.parse(
-                                      capacityController.text,
-                                    );
-                                    if (capacity <= 0) {
-                                      setModalState(() {
-                                        errorMessage =
-                                            'Kapasitas harus lebih dari 0';
-                                      });
-                                      return;
-                                    }
-                                  } catch (e) {
-                                    setModalState(() {
-                                      errorMessage =
-                                          'Kapasitas harus berupa angka';
-                                    });
-                                    return;
-                                  }
-                                }
-
-                                setModalState(() {
-                                  isLoading = true;
-                                  errorMessage = '';
-                                });
-
-                                try {
-                                  if (isEditing) {
-                                    // Update objek Room yang sudah ada
-                                    final updatedRoom = room.copyWith(
-                                      name: nameController.text.trim(),
-                                      location: locationController.text.trim(),
-                                      capacity: capacity,
-                                      description: descriptionController.text
-                                          .trim(),
-                                      isMaintenance: isMaintenance,
-                                    );
-
-                                    // Siapkan data untuk update
-                                    updatedRoom.prepareForUpdate(
-                                      widget.user.id,
-                                    );
-
-                                    // Update room di Firestore
-                                    await _roomService.updateRoom(updatedRoom);
-                                  } else {
-                                    // Buat objek Room baru
-                                    final newRoom = Room(
-                                      name: nameController.text.trim(),
-                                      location: locationController.text.trim(),
-                                      capacity: capacity,
-                                      description: descriptionController.text
-                                          .trim(),
-                                      isMaintenance:
-                                          isMaintenance, // Pastikan nilai isMaintenance benar
-                                    );
-
-                                    // Siapkan data untuk Firestore dengan user profile
-                                    newRoom.prepareForCreate(widget.user.id);
-
-                                    // Tambahkan room ke Firestore
-                                    await _roomService.createRoom(newRoom);
-                                  }
-
-                                  // Tutup bottom sheet dan refresh
-                                  if (!mounted) {
-                                    return;
-                                  }
-
-                                  Navigator.pop(context, true);
-                                } catch (e) {
-                                  setModalState(() {
-                                    isLoading = false;
-                                    errorMessage =
-                                        'Gagal menyimpan ruangan: ${e.toString()}';
-                                  });
-                                }
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).primaryColor,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: isLoading
-                            ? const SizedBox(
-                                height: 24,
-                                width: 24,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('SIMPAN'),
-                      ),
-                    ),
-                    SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      user: widget.user,
+      room: room,
+      onSuccess: null,
     );
 
     // Refresh daftar ruangan jika berhasil menambahkan/mengubah ruangan

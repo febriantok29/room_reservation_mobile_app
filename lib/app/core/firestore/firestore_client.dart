@@ -177,10 +177,55 @@ class FirestoreClient {
   /// Returns a query snapshot containing documents that match the condition
   Future<QuerySnapshot> query({
     required String field,
-    required dynamic isEqualTo,
+    dynamic isEqualTo,
+    dynamic isNotEqualTo,
+    dynamic isLessThan,
+    dynamic isLessThanOrEqualTo,
+    dynamic isGreaterThan,
+    dynamic isGreaterThanOrEqualTo,
+    dynamic arrayContains,
+    List<dynamic>? arrayContainsAny,
+    List<dynamic>? whereIn,
+    List<dynamic>? whereNotIn,
   }) async {
     try {
-      return await _collectionRef.where(field, isEqualTo: isEqualTo).get();
+      Query query = _collectionRef;
+
+      if (isEqualTo != null) {
+        query = query.where(field, isEqualTo: isEqualTo);
+      }
+      if (isNotEqualTo != null) {
+        query = query.where(field, isNotEqualTo: isNotEqualTo);
+      }
+      if (isLessThan != null) {
+        query = query.where(field, isLessThan: isLessThan);
+      }
+      if (isLessThanOrEqualTo != null) {
+        query = query.where(field, isLessThanOrEqualTo: isLessThanOrEqualTo);
+      }
+      if (isGreaterThan != null) {
+        query = query.where(field, isGreaterThan: isGreaterThan);
+      }
+      if (isGreaterThanOrEqualTo != null) {
+        query = query.where(
+          field,
+          isGreaterThanOrEqualTo: isGreaterThanOrEqualTo,
+        );
+      }
+      if (arrayContains != null) {
+        query = query.where(field, arrayContains: arrayContains);
+      }
+      if (arrayContainsAny != null) {
+        query = query.where(field, arrayContainsAny: arrayContainsAny);
+      }
+      if (whereIn != null) {
+        query = query.where(field, whereIn: whereIn);
+      }
+      if (whereNotIn != null) {
+        query = query.where(field, whereNotIn: whereNotIn);
+      }
+
+      return await query.get();
     } catch (e) {
       debugPrint('Error querying documents: $e');
       rethrow;
@@ -345,6 +390,109 @@ class FirestoreClient {
         debugPrint('Error counting documents: $e');
         rethrow;
       }
+    }
+  }
+
+  /// Perform prefix search on a field
+  /// This implements the strategy of using isGreaterThanOrEqualTo and isLessThanOrEqualTo
+  /// to search for documents where the field starts with a specific prefix
+  ///
+  /// Example usage:
+  /// ```dart
+  /// final results = await client.searchByPrefix(
+  ///   field: 'name',
+  ///   prefix: 'jo', // Will match 'john', 'joseph', etc.
+  /// );
+  /// ```
+  Future<QuerySnapshot> searchByPrefix({
+    required String field,
+    required String prefix,
+    int? limit,
+    String? orderBy,
+    bool descending = false,
+  }) async {
+    try {
+      if (prefix.isEmpty) {
+        return await getAll();
+      }
+
+      // For prefix search, we use the technique with Unicode character
+      // We search for all values greater than or equal to the prefix
+      // and less than or equal to prefix + \uf8ff (high-value Unicode char)
+      final endPrefix = '$prefix\uf8ff';
+
+      debugPrint('Searching $field with prefix: $prefix, end: $prefix\uf8ff');
+
+      Query query = _collectionRef
+          .where(field, isGreaterThanOrEqualTo: prefix)
+          .where(field, isLessThanOrEqualTo: endPrefix);
+
+      // Apply ordering if specified
+      if (orderBy != null) {
+        query = query.orderBy(orderBy, descending: descending);
+      } else {
+        // Default order by the search field
+        query = query.orderBy(field, descending: descending);
+      }
+
+      // Apply limit if specified
+      if (limit != null) {
+        query = query.limit(limit);
+      }
+
+      final result = await query.get();
+      debugPrint('Prefix search results for $field: ${result.docs.length}');
+
+      return result;
+    } catch (e) {
+      debugPrint('Error searching by prefix: $e');
+      rethrow;
+    }
+  }
+
+  /// Perform a multi-field search with a prefix
+  /// This method allows searching across multiple fields for a prefix
+  /// It returns a list of QuerySnapshot, one for each field search
+  ///
+  /// Example usage:
+  /// ```dart
+  /// final results = await client.multiFieldPrefixSearch(
+  ///   fields: ['name', 'description', 'location'],
+  ///   prefix: 'co',
+  ///   limit: 10,
+  /// );
+  /// ```
+  Future<List<QuerySnapshot>> multiFieldPrefixSearch({
+    required List<String> fields,
+    required String prefix,
+    int? limit,
+    bool descending = false,
+  }) async {
+    try {
+      if (prefix.isEmpty) {
+        return [await getAll()];
+      }
+
+      // Create a list to hold results from each field search
+      final results = <QuerySnapshot>[];
+
+      // Search each field
+      for (final field in fields) {
+        final snapshot = await searchByPrefix(
+          field: field,
+          prefix: prefix,
+          limit: limit,
+          orderBy: field,
+          descending: descending,
+        );
+
+        results.add(snapshot);
+      }
+
+      return results;
+    } catch (e) {
+      debugPrint('Error in multi-field prefix search: $e');
+      rethrow;
     }
   }
 
