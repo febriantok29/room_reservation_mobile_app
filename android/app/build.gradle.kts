@@ -49,8 +49,6 @@ flutter {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.10.1")
-    implementation("com.google.android.gms:play-services-base:18.2.0")
-//    multides
     implementation("androidx.multidex:multidex:2.0.1")
     implementation(platform("com.google.firebase:firebase-bom:34.4.0"))
     implementation("com.google.firebase:firebase-auth")
