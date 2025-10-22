@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/pages/home_page.dart';
-import 'package:room_reservation_mobile_app/app/services/auth_service.dart';
+import 'package:room_reservation_mobile_app/app/states/auth_state.dart';
 import 'package:room_reservation_mobile_app/app/theme/app_colors.dart';
 import 'package:room_reservation_mobile_app/app/theme/app_sizes.dart';
-import 'package:room_reservation_mobile_app/app/ui_items/app_button.dart';
-import 'package:room_reservation_mobile_app/app/ui_items/app_snackbar.dart';
-import 'package:room_reservation_mobile_app/app/ui_items/app_text_field.dart';
+import 'package:room_reservation_mobile_app/app/utils/mounted_state_mixin.dart';
 
 /// Halaman login untuk aplikasi reservasi ruangan
 class LoginPage extends StatefulWidget {
@@ -16,61 +13,40 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends State<LoginPage> with MountedStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
+
+  // Controllers untuk form
+  final _credentialController = TextEditingController();
   final _passwordController = TextEditingController();
+
+  // UI state
   bool _isLoading = false;
+  String _errorMessage = '';
   bool _obscurePassword = true;
-  String? _errorMessage;
 
   @override
-  void dispose() {
-    _usernameController.dispose();
-    _passwordController.dispose();
-    super.dispose();
+  void initState() {
+    _loadLastLoggedInUser();
+    super.initState();
   }
 
-  /// Fungsi login dengan error handling yang lengkap
-  Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) {
+  Future<void> _loadLastLoggedInUser() async {
+    final lastUser = await AuthState.getLastLoggedInUser();
+    if (lastUser == null || lastUser.isEmpty) {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+    setStateIfMounted(() {
+      _credentialController.text = lastUser;
     });
+  }
 
-    try {
-      final authService = await AuthService.getInstance();
-      await authService.login(
-        credential: _usernameController.text.trim(),
-        password: _passwordController.text,
-      );
-
-      // Login berhasil
-      if (mounted) {
-        AppSnackBar.show(context, message: 'Login berhasil');
-        Navigator.of(
-          context,
-        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
-      }
-    } on ValidationException catch (e) {
-      setState(() {
-        _errorMessage = e.message;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Terjadi kesalahan: ${e.toString()}';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+  @override
+  void dispose() {
+    _credentialController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -103,52 +79,12 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: AppSizes.xxxl),
 
-                  // Form login
-                  AppTextField(
-                    controller: _usernameController,
-                    label: 'Username',
-                    prefixIcon: Icons.person_outline,
-                    textCapitalization: TextCapitalization.none,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Username tidak boleh kosong';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: AppSizes.lg),
-
-                  AppTextField(
-                    controller: _passwordController,
-                    label: 'Password',
-                    prefixIcon: Icons.lock_outline,
-                    obscureText: _obscurePassword,
-                    suffix: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                        color: AppColors.textSecondary,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Password tidak boleh kosong';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: AppSizes.lg),
+                  ..._buildForms(),
 
                   // Error message
-                  if (_errorMessage != null) ...[
+                  if (_errorMessage.isNotEmpty) ...[
                     Text(
-                      _errorMessage!,
+                      _errorMessage,
                       style: Theme.of(
                         context,
                       ).textTheme.bodyMedium?.copyWith(color: AppColors.error),
@@ -157,13 +93,7 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: AppSizes.lg),
                   ],
 
-                  // Tombol login
-                  AppButton(
-                    text: 'Login',
-                    onPressed: _handleLogin,
-                    isLoading: _isLoading,
-                    icon: Icons.login_rounded,
-                  ),
+                  _buildLoginButton(),
                 ],
               ),
             ),
@@ -171,5 +101,126 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ),
     );
+  }
+
+  List<Widget> _buildForms() {
+    return [
+      // Form login
+      TextFormField(
+        controller: _credentialController,
+        decoration: const InputDecoration(
+          labelText: 'No. Induk Pegawai / Email',
+          prefixIcon: Icon(Icons.person),
+          border: OutlineInputBorder(),
+        ),
+        keyboardType: TextInputType.emailAddress,
+        textInputAction: TextInputAction.next,
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'No. Induk Pegawai / Email harus diisi';
+          }
+
+          return null;
+        },
+        enabled: !_isLoading,
+      ),
+      const SizedBox(height: AppSizes.lg),
+
+      TextFormField(
+        controller: _passwordController,
+        decoration: InputDecoration(
+          labelText: 'Password',
+          prefixIcon: const Icon(Icons.lock),
+          border: const OutlineInputBorder(),
+          suffixIcon: IconButton(
+            icon: Icon(
+              _obscurePassword ? Icons.visibility : Icons.visibility_off,
+            ),
+            onPressed: () {
+              setStateIfMounted(() {
+                _obscurePassword = !_obscurePassword;
+              });
+            },
+          ),
+        ),
+        obscureText: _obscurePassword,
+        textInputAction: TextInputAction.done,
+        onFieldSubmitted: (_) => _login(),
+        enabled: !_isLoading,
+      ),
+      const SizedBox(height: AppSizes.lg),
+    ];
+  }
+
+  Widget _buildLoginButton() {
+    Widget content = Text('Login');
+
+    if (_isLoading) {
+      content = const SizedBox(
+        height: 20,
+        width: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+
+    return ElevatedButton.icon(
+      icon: Icon(Icons.login_rounded),
+      label: content,
+      onPressed: _isLoading ? null : _login,
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        textStyle: const TextStyle(fontSize: 16),
+      ),
+    );
+  }
+
+  /// Login user
+  Future<void> _login() async {
+    // Validate form
+    final credential = _credentialController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (credential.isEmpty || password.isEmpty) {
+      setStateIfMounted(() {
+        _errorMessage = 'No. Induk Pegawai / Email dan password harus diisi';
+      });
+
+      return;
+    }
+
+    setStateIfMounted(() {
+      _isLoading = true;
+    });
+
+    try {
+      final user = await AuthState.login(
+        credential: credential,
+        password: password,
+      );
+
+      if (user == null) {
+        throw 'Gagal mendapatkan data user setelah login';
+      }
+
+      // Clear form
+      _credentialController.clear();
+      _passwordController.clear();
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
+    } catch (e) {
+      setStateIfMounted(() {
+        _errorMessage = 'Error login: ${e.toString()}';
+      });
+    } finally {
+      setStateIfMounted(() {
+        _isLoading = false;
+      });
+    }
   }
 }

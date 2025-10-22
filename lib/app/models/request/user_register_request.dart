@@ -1,26 +1,25 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:room_reservation_mobile_app/app/enum/user_role.dart';
+import 'package:room_reservation_mobile_app/app/enums/user_role.dart';
+import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 
-class UserRegisterRequest {
-  String? username;
+class UserRegisterRequest extends BaseFirestoreModel {
   String? email;
   String? password;
   String? firstName;
+  String? lastName;
+  DateTime? dateOfBirth;
   UserRole role;
 
   UserRegisterRequest({
-    this.username,
     this.email,
     this.password,
     this.firstName,
+    this.lastName,
+    this.dateOfBirth,
     this.role = UserRole.user,
   });
 
+  @override
   void validate() {
-    if (email == null || email!.isEmpty) {
-      throw 'Silakan masukkan email.';
-    }
-
     if (password == null || password!.isEmpty) {
       throw 'Silakan masukkan kata sandi.';
     }
@@ -28,18 +27,25 @@ class UserRegisterRequest {
     if (firstName == null || firstName!.isEmpty) {
       throw 'Silakan masukkan nama depan.';
     }
+
+    if (dateOfBirth == null) {
+      throw 'Silakan masukkan tanggal lahir.';
+    }
   }
 
+  @override
   Map<String, dynamic> toJson() {
-    return {
-      'username': username,
-      'email': email,
+    final payload = super.toJson();
+
+    payload.addAll({
+      'email': email!.toLowerCase(),
       'password': password,
       'firstName': firstName,
+      'lastName': lastName,
+      'dateOfBirth': dateOfBirth?.toUtc().toIso8601String(),
       'role': role.name,
-      'isActive': true,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
+    });
+
+    return payload;
   }
 }

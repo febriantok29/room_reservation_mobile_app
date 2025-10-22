@@ -404,7 +404,7 @@ class ApiClient {
 
   /// Initialize required services
   Future<void> _initializeServices() async {
-    _authService = await AuthService.getInstance();
+    _authService = AuthService.getInstance();
     _responseInterceptors.clear();
 
     // Add response interceptor to handle token expired

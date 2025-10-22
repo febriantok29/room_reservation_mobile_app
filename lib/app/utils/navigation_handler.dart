@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:room_reservation_mobile_app/app/pages/login_page.dart';
 import 'package:room_reservation_mobile_app/app/services/auth_service.dart';
+import 'package:room_reservation_mobile_app/app/states/auth_state.dart';
 
 /// Handler untuk navigasi global
 class NavigationHandler {
@@ -26,8 +27,9 @@ class NavigationHandler {
 
       // Hapus token dan navigate ke login
       // Note: logout should have already been called by the caller, but we'll ensure it here
-      final authService = await AuthService.getInstance();
-      if (authService.isLoggedIn()) {
+      final authService = AuthService.getInstance();
+      final isLoggedIn = await AuthState.isLoggedIn();
+      if (isLoggedIn) {
         await authService.logout();
       }
 

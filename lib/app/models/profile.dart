@@ -1,8 +1,10 @@
-import 'package:room_reservation_mobile_app/app/enum/user_role.dart';
+import 'package:room_reservation_mobile_app/app/enums/user_role.dart';
+import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 
-class Profile {
-  String? id;
-  String? username;
+class Profile extends BaseFirestoreModel {
+  static String collectionName = 's_users';
+
+  String? employeeId;
   String? email;
   String? password;
   String? firstName;
@@ -10,18 +12,13 @@ class Profile {
   String? gender;
   String? phone;
   DateTime? dateOfBirth;
+  DateTime? lastLoginAt;
   String? address;
   UserRole? role;
-  String? createdBy;
-  String? updatedBy;
-  String? deletedBy;
-  DateTime? createdAt;
-  DateTime? updatedAt;
-  DateTime? deletedAt;
 
   Profile({
-    this.id,
-    this.username,
+    super.id,
+    this.employeeId,
     this.email,
     this.password,
     this.firstName,
@@ -29,40 +26,42 @@ class Profile {
     this.gender,
     this.phone,
     this.dateOfBirth,
+    this.lastLoginAt,
     this.address,
     this.role,
-    this.createdBy,
-    this.updatedBy,
-    this.deletedBy,
-    this.createdAt,
-    this.updatedAt,
-    this.deletedAt,
+    super.createdBy,
+    super.updatedBy,
+    super.deletedBy,
+    super.createdAt,
+    super.updatedAt,
+    super.deletedAt,
   });
 
-  Profile.fromJson(dynamic json) {
-    id = json['id'];
-    username = json['username'];
-    email = json['email'];
-    password = json['password'];
-    firstName = json['firstName'];
-    lastName = json['lastName'];
-    gender = json['gender'];
-    phone = json['phone'];
-    dateOfBirth = DateTime.tryParse('${json['dateOfBirth']}')?.toLocal();
-    address = json['address'];
-    role = UserRole.get('${json['role']}');
-    createdBy = json['createdBy'];
-    updatedBy = json['updatedBy'];
-    deletedBy = json['deletedBy'];
-    createdAt = DateTime.tryParse('${json['createdAt']}')?.toLocal();
-    updatedAt = DateTime.tryParse('${json['updatedAt']}')?.toLocal();
-    deletedAt = DateTime.tryParse('${json['deletedAt']}')?.toLocal();
+  factory Profile.fromJson(Map<String, dynamic> json, String documentId) {
+    final profile = Profile(
+      employeeId: json['employeeId'],
+      email: json['email'],
+      password: json['password'],
+      firstName: json['firstName'],
+      lastName: json['lastName'],
+      dateOfBirth: DateTime.tryParse('${json['dateOfBirth']}')?.toLocal(),
+      gender: json['gender'],
+      phone: json['phone'],
+      lastLoginAt: DateTime.tryParse('${json['lastLoginAt']}')?.toLocal(),
+      address: json['address'],
+      role: UserRole.get('${json['role']}'),
+    );
+
+    profile.setCommonFields(json, documentId);
+
+    return profile;
   }
 
+  @override
   Map<String, dynamic> toJson() {
-    return {
+    final payload = <String, dynamic>{
       'id': id,
-      'username': username,
+      'employeeId': employeeId,
       'email': email,
       'password': password,
       'firstName': firstName,
@@ -70,16 +69,17 @@ class Profile {
       'gender': gender,
       'phone': phone,
       'dateOfBirth': dateOfBirth?.toIso8601String(),
+      'lastLoginAt': lastLoginAt?.toIso8601String(),
       'address': address,
       'role': role.toString(),
-      'createdBy': createdBy,
-      'updatedBy': updatedBy,
-      'deletedBy': deletedBy,
-      'createdAt': createdAt?.toIso8601String(),
-      'updatedAt': updatedAt?.toIso8601String(),
-      'deletedAt': deletedAt?.toIso8601String(),
     };
+
+    payload.addAll(super.toJson());
+
+    return payload;
   }
 
   String get name => '${firstName ?? ''} ${lastName ?? ''}'.trim();
+
+  bool get isAdmin => role == UserRole.admin;
 }

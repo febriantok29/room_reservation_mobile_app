@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/services/auth_service.dart';
+import 'package:room_reservation_mobile_app/app/states/auth_state.dart';
 import 'package:room_reservation_mobile_app/app/theme/app_colors.dart';
 import 'package:room_reservation_mobile_app/app/theme/app_sizes.dart';
 
@@ -61,26 +61,25 @@ class _SplashPageState extends State<SplashPage>
     try {
       await Future.delayed(const Duration(seconds: 2));
 
-      final authService = await AuthService.getInstance();
-      final isLoggedIn = authService.isLoggedIn();
+      final isLoggedIn = await AuthState.isLoggedIn();
 
-      if (mounted) {
-        if (isLoggedIn) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const HomePage()),
-          );
-        } else {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const LoginPage()),
-          );
-        }
+      if (!mounted) {
+        return;
       }
+
+      final nextPage = isLoggedIn ? const HomePage() : const LoginPage();
+
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => nextPage));
     } catch (e) {
-      if (mounted) {
-        Navigator.of(
-          context,
-        ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
+      if (!mounted) {
+        return;
       }
+
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
     }
   }
 

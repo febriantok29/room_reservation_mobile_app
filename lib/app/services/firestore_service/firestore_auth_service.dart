@@ -6,7 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
-import 'package:room_reservation_mobile_app/app/enum/user_role.dart';
+import 'package:room_reservation_mobile_app/app/enums/user_role.dart';
 import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/request/user_register_request.dart';
@@ -86,20 +86,6 @@ class FirestoreAuthService {
         );
       }
 
-      // Check if username already exists
-      final usernameQuery = _firestoreClient.getCollectionRef().where(
-        'username',
-        isEqualTo: request.username,
-      );
-
-      final usernameSnapshot = await usernameQuery.get();
-
-      if (usernameSnapshot.docs.isNotEmpty) {
-        throw ValidationException(
-          'Username sudah digunakan, silakan gunakan username lain',
-        );
-      }
-
       // Hash password before saving
       final hashedPassword = _hashPassword(request.password!);
 
@@ -115,13 +101,7 @@ class FirestoreAuthService {
       final userId = docRef.id;
 
       // Buat Profile object untuk dikembalikan
-      final profile = Profile(
-        id: userId,
-        email: request.email,
-        username: request.username,
-        firstName: request.firstName,
-        role: request.role,
-      );
+      final profile = Profile.fromJson(userData, userId);
 
       return profile;
     } catch (e) {
@@ -211,7 +191,7 @@ class FirestoreAuthService {
     final profile = Profile(
       id: userId,
       email: userData['email'] as String,
-      username: userData['username'] as String,
+      employeeId: userData['username'] as String,
       firstName: userData['firstName'] as String,
       lastName: userData['lastName'] as String? ?? '',
       role: UserRole.get('${userData['role']}'),
@@ -250,7 +230,7 @@ class FirestoreAuthService {
       if (userDataString == null || userDataString.isEmpty) return null;
 
       final userData = jsonDecode(userDataString) as Map<String, dynamic>;
-      return Profile.fromJson(userData);
+      return Profile.fromJson(userData, '');
     } catch (e) {
       debugPrint('Error getting user data from cache: $e');
       return null;
@@ -289,7 +269,7 @@ class FirestoreAuthService {
       final profile = Profile(
         id: docSnapshot.id,
         email: userData['email'] as String,
-        username: userData['username'] as String,
+        employeeId: userData['username'] as String,
         firstName: userData['firstName'] as String,
         lastName: userData['lastName'] as String? ?? '',
         role: UserRole.get('${userData['role']}'),
@@ -342,10 +322,10 @@ class FirestoreAuthService {
 
       // Check if username is changed and if it exists
       if (currentProfile != null &&
-          currentProfile.username != profile.username) {
+          currentProfile.employeeId != profile.employeeId) {
         final usernameQuery = _firestoreClient.getCollectionRef().where(
           'username',
-          isEqualTo: profile.username,
+          isEqualTo: profile.employeeId,
         );
 
         final usernameSnapshot = await usernameQuery.get();
@@ -359,7 +339,7 @@ class FirestoreAuthService {
       // Update profile in Firestore
       await _firestoreClient.update(userId, {
         'email': profile.email,
-        'username': profile.username,
+        'username': profile.employeeId,
         'firstName': profile.firstName,
         'lastName': profile.lastName,
         'role': profile.role,

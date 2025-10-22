@@ -1,4 +1,4 @@
-import 'package:room_reservation_mobile_app/app/enum/user_role.dart';
+import 'package:room_reservation_mobile_app/app/enums/user_role.dart';
 
 import 'profile.dart';
 
@@ -66,7 +66,7 @@ class LoginResponse {
   // Getter untuk mendapatkan UserData dari LoginResponse
   Profile get userData => Profile(
     id: id,
-    username: username,
+    employeeId: username,
     firstName: firstName,
     email: email,
     role: UserRole.get(role),

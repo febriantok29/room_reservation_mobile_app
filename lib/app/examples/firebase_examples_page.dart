@@ -3,11 +3,11 @@
 // found in the LICENSE file.
 
 import 'package:flutter/material.dart';
+import 'package:room_reservation_mobile_app/app/examples/admin_register_page.dart';
 import 'package:room_reservation_mobile_app/app/examples/firestore_crud_example_page.dart';
 import 'package:room_reservation_mobile_app/app/examples/firestore_home_page.dart';
 import 'package:room_reservation_mobile_app/app/examples/firestore_login_example_page.dart';
 import 'package:room_reservation_mobile_app/app/examples/firestore_profile_example_page.dart';
-import 'package:room_reservation_mobile_app/app/examples/firestore_register_example_page.dart';
 
 /// Halaman contoh penggunaan Firebase Firestore
 ///
@@ -79,7 +79,7 @@ class FirebaseExamplesPage extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const FirestoreRegisterExamplePage(),
+                  builder: (context) => const AdminRegisterPage(),
                 ),
               );
             },

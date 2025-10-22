@@ -57,7 +57,7 @@ class _FirestoreProfileExamplePageState
         _firstNameController.text = profile.firstName ?? '';
         _lastNameController.text = profile.lastName ?? '';
         _emailController.text = profile.email ?? '';
-        _usernameController.text = profile.username ?? '';
+        _usernameController.text = profile.employeeId ?? '';
       }
 
       return profile;
@@ -105,7 +105,7 @@ class _FirestoreProfileExamplePageState
         firstName: firstName,
         lastName: lastName,
         email: email,
-        username: username,
+        employeeId: username,
         role: profile.role,
       );
 

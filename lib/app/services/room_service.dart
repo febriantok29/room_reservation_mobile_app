@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/core/network/api_client.dart';
 import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/models/api_response.dart';
@@ -5,6 +7,8 @@ import 'package:room_reservation_mobile_app/app/models/room.dart';
 
 /// Service untuk mengelola operasi terkait ruangan
 class RoomService {
+  static const _roomCollection = 'm_rooms';
+
   static RoomService? _instance;
 
   RoomService._();
@@ -16,16 +20,32 @@ class RoomService {
   }
 
   /// Mendapatkan semua ruangan
-  Future<List<Room>> getAllRoom() async {
-    final builder = await ApiClient.create('Room.getAll');
-    final response = await builder.get<List<Room>>(
-      fromJson: (json) => (json as List)
-          .map((item) => Room.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      errorMessage: 'Gagal memuat data ruangan',
-    );
+  Future<List<Room>> getRoomList({bool showAll = false}) async {
+    final client = await FirestoreClient.create(_roomCollection);
 
-    return response.data ?? [];
+    final response = await client.getAll();
+
+    final result = <Room>[];
+
+    final docs = response.docs;
+
+    for (final doc in docs) {
+      if (!doc.exists) continue;
+
+      final data = doc.data();
+
+      if (data == null || data is! Map<String, dynamic>) continue;
+
+      final room = Room.fromFirestore(data, doc.id);
+
+      if (showAll == false && room.isDeleted) {
+        continue;
+      }
+
+      result.add(room);
+    }
+
+    return result;
   }
 
   /// Mendapatkan ruangan berdasarkan ID
@@ -112,7 +132,7 @@ class RoomService {
   /// Cari ruangan berdasarkan keyword
   Future<List<Room>> searchRooms(String keyword) async {
     if (keyword.trim().isEmpty) {
-      return await getAllRoom();
+      return await getRoomList();
     }
 
     final builder = await ApiClient.create('Room.getAll');
@@ -126,5 +146,60 @@ class RoomService {
     );
 
     return response.data ?? [];
+  }
+
+  // Create room
+  Future<Room> createRoom(Room room) async {
+    final client = await FirestoreClient.create(_roomCollection);
+
+    debugPrint('Creating room with isMaintenance: ${room.isMaintenance}');
+    final payload = room.toFirestore();
+    debugPrint('Payload to Firestore: $payload');
+
+    final doc = await client.add(payload);
+
+    return Room.fromFirestore(payload, doc.id);
+  }
+
+  /// Update ruangan yang sudah ada
+  Future<Room> updateRoom(Room room) async {
+    if (room.id == null) {
+      throw ValidationException('ID ruangan tidak boleh kosong');
+    }
+
+    final client = await FirestoreClient.create(_roomCollection);
+
+    final payload = room.toFirestore();
+
+    await client.update(room.id!, payload);
+
+    return room;
+  }
+
+  /// Menghapus ruangan (soft delete)
+  Future<void> deleteRoom(Room room, String userId) async {
+    if (room.id == null) {
+      throw ValidationException('ID ruangan tidak boleh kosong');
+    }
+
+    final client = await FirestoreClient.create(_roomCollection);
+
+    // Soft delete dengan marking deletedAt dan deletedBy
+    room.markAsDeleted(userId);
+
+    final payload = room.toFirestore();
+
+    await client.update(room.id!, payload);
+  }
+
+  /// Menghapus ruangan secara permanen (hard delete)
+  Future<void> permanentDeleteRoom(String roomId) async {
+    if (roomId.isEmpty) {
+      throw ValidationException('ID ruangan tidak boleh kosong');
+    }
+
+    final client = await FirestoreClient.create(_roomCollection);
+
+    await client.delete(roomId);
   }
 }

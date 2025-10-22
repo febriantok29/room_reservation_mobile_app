@@ -1,49 +1,49 @@
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 
-class Room {
-  String? id;
-  String? name;
-  num? capacity;
-  String? location;
-  String? description;
-  bool? isMaintenance;
-  String? createdBy;
-  String? updatedBy;
-  String? deletedBy;
-  DateTime? createdAt;
-  DateTime? updatedAt;
-  DateTime? deletedAt;
+class Room extends BaseFirestoreModel {
+  final String? name;
+  final num? capacity;
+  final String? location;
+  final String? description;
+  final bool? isMaintenance;
 
   Room({
-    this.id,
+    super.id,
     this.name,
     this.capacity,
     this.location,
     this.description,
     this.isMaintenance,
-    this.createdBy,
-    this.updatedBy,
-    this.deletedBy,
-    this.createdAt,
-    this.updatedAt,
-    this.deletedAt,
+    super.createdBy,
+    super.updatedBy,
+    super.deletedBy,
+    super.createdAt,
+    super.updatedAt,
+    super.deletedAt,
   });
 
-  Room.fromJson(dynamic json) {
-    id = json['id'];
-    name = json['name'];
-    capacity = json['capacity'];
-    location = json['location'];
-    description = json['description'];
-    isMaintenance = json['isMaintenance'];
-    createdBy = json['createdBy'];
-    updatedBy = json['updatedBy'];
-    deletedBy = json['deletedBy'];
-    createdAt = DateTime.tryParse('${json['createdAt']}')?.toLocal();
-    updatedAt = DateTime.tryParse('${json['updatedAt']}')?.toLocal();
-    deletedAt = DateTime.tryParse('${json['deletedAt']}')?.toLocal();
+  factory Room.fromJson(dynamic json) {
+    if (json == null || json is! Map<String, dynamic>) {
+      return Room();
+    }
+
+    return Room(
+      id: json['id'],
+      name: json['name'],
+      capacity: json['capacity'],
+      location: json['location'],
+      description: json['description'],
+      isMaintenance: json['isMaintenance'],
+      createdBy: json['createdBy'],
+      updatedBy: json['updatedBy'],
+      deletedBy: json['deletedBy'],
+      createdAt: DateTime.tryParse('${json['createdAt']}')?.toLocal(),
+      updatedAt: DateTime.tryParse('${json['updatedAt']}')?.toLocal(),
+      deletedAt: DateTime.tryParse('${json['deletedAt']}')?.toLocal(),
+    );
   }
 
   String get imageUrl {
@@ -58,39 +58,65 @@ class Room {
     return 'https://placehold.co/600x400/$backgroundColor/$textColor/png?text=${Uri.encodeComponent(name ?? 'Room')}&font=roboto';
   }
 
-  /// Create a Room instance from a Firestore document
   factory Room.fromFirestore(Map<String, dynamic> data, String documentId) {
-    return Room(
+    final room = Room(
       id: documentId,
       name: data['name'],
       capacity: data['capacity'],
       location: data['location'],
       description: data['description'],
       isMaintenance: data['isMaintenance'] ?? false,
-      createdBy: data['createdBy'],
-      updatedBy: data['updatedBy'],
-      deletedBy: data['deletedBy'],
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
-      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
-      deletedAt: (data['deletedAt'] as Timestamp?)?.toDate(),
     );
+
+    room.setCommonFields(data, documentId);
+
+    return room;
   }
 
   Map<String, dynamic> toFirestore() {
-    final map = <String, dynamic>{};
+    final bool maintenanceValue = isMaintenance == true;
 
-    if (name != null) map['name'] = name;
-    if (capacity != null) map['capacity'] = capacity;
-    if (location != null) map['location'] = location;
-    if (description != null) map['description'] = description;
-    map['isMaintenance'] = isMaintenance ?? false;
-    if (createdBy != null) map['createdBy'] = createdBy;
-    if (updatedBy != null) map['updatedBy'] = updatedBy;
-    if (deletedBy != null) map['deletedBy'] = deletedBy;
-    if (createdAt != null) map['createdAt'] = Timestamp.fromDate(createdAt!);
-    if (updatedAt != null) map['updatedAt'] = Timestamp.fromDate(updatedAt!);
-    if (deletedAt != null) map['deletedAt'] = Timestamp.fromDate(deletedAt!);
+    final map = <String, dynamic>{
+      'name': name,
+      'capacity': capacity,
+      'location': location,
+      'description': description,
+      'isMaintenance': maintenanceValue,
+    };
+
+    map.addAll(super.toMap());
 
     return map;
+  }
+
+  //   Copy method
+  Room copyWith({
+    String? id,
+    String? name,
+    num? capacity,
+    String? location,
+    String? description,
+    bool? isMaintenance,
+    DocumentReference? createdBy,
+    DocumentReference? updatedBy,
+    DocumentReference? deletedBy,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? deletedAt,
+  }) {
+    return Room(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      capacity: capacity ?? this.capacity,
+      location: location ?? this.location,
+      description: description ?? this.description,
+      isMaintenance: isMaintenance ?? this.isMaintenance,
+      createdBy: createdBy ?? this.createdBy,
+      updatedBy: updatedBy ?? this.updatedBy,
+      deletedBy: deletedBy ?? this.deletedBy,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+    );
   }
 }

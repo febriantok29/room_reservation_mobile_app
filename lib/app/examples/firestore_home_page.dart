@@ -127,7 +127,7 @@ class _FirestoreHomePageState extends State<FirestoreHomePage>
                                   ListTile(
                                     leading: const Icon(Icons.account_circle),
                                     title: const Text('Username'),
-                                    subtitle: Text(user.username ?? '-'),
+                                    subtitle: Text(user.employeeId ?? '-'),
                                   ),
                                   ListTile(
                                     leading: const Icon(
