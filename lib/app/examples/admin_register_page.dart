@@ -27,6 +27,8 @@ class _AdminRegisterPageState extends State<AdminRegisterPage>
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _addressController = TextEditingController();
 
   DateTime? _dateOfBirth;
 

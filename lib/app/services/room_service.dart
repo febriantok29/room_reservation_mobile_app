@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/core/network/api_client.dart';
 import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
@@ -6,8 +8,6 @@ import 'package:room_reservation_mobile_app/app/models/room.dart';
 
 /// Service untuk mengelola operasi terkait ruangan
 class RoomService {
-  static const _roomCollection = 'm_rooms';
-
   static final _cachedRooms = <Room>[];
 
   static RoomService? _instance;
@@ -31,7 +31,7 @@ class RoomService {
   }) async {
     // Jika cache kosong atau dipaksa refresh, ambil data dari Firestore
     if (_cachedRooms.isEmpty || forceRefresh) {
-      final client = await FirestoreClient.create(_roomCollection);
+      final client = await FirestoreClient.create(Room.collectionName);
       final response = await client.getAll();
       final docs = response.docs;
 
@@ -45,7 +45,6 @@ class RoomService {
         if (!doc.exists) continue;
 
         final data = doc.data();
-        if (data == null || data is! Map<String, dynamic>) continue;
 
         final room = Room.fromFirestore(data, doc.id);
         _cachedRooms.add(room);
@@ -83,30 +82,98 @@ class RoomService {
     return result;
   }
 
+  Future<List<Room>> getByIds(Set<String> ids) async {
+    if (ids.isEmpty) {
+      return [];
+    }
+
+    // Cek cache dulu untuk ruangan yang sudah ada
+    final cachedRooms = <Room>[];
+    final uncachedIds = <DocumentReference>[];
+
+    // Cari di cache terlebih dahulu
+    for (final id in ids) {
+      final cachedRoom = _cachedRooms.where((room) => room.id == id);
+
+      if (cachedRoom.isNotEmpty) {
+        cachedRooms.add(cachedRoom.first);
+      } else {
+        uncachedIds.add(
+          FirebaseFirestore.instance.doc('$Room.collectionName/$id'),
+        );
+      }
+    }
+
+    // Jika semua ID sudah ada di cache, kembalikan langsung
+    if (uncachedIds.isEmpty) {
+      return cachedRooms;
+    }
+
+    // Ambil dari Firestore hanya untuk ID yang tidak ada di cache
+    final client = await FirestoreClient.create(Room.collectionName);
+    final snapshot = await client.query(field: 'roomId', whereIn: uncachedIds);
+
+    final fetchedRooms = <Room>[];
+
+    for (final doc in snapshot.docs) {
+      if (!doc.exists) continue;
+
+      final data = doc.data();
+      final room = Room.fromFirestore(data, doc.id);
+
+      // Tambahkan ke hasil dan update cache
+      fetchedRooms.add(room);
+      _updateCache(room);
+    }
+
+    // Gabungkan hasil dari cache dan Firestore
+    return [...cachedRooms, ...fetchedRooms];
+  }
+
   /// Mendapatkan ruangan berdasarkan ID
-  Future<Room> getRoomById(String id) async {
-    if (id.isEmpty) {
-      throw ValidationException('ID ruangan tidak boleh kosong');
+  /// [roomRef] - ID ruangan yang dicari
+  /// [forceRefresh] - Jika true, memaksa refresh data dari backend meskipun cache ada
+  Future<Room?> getRoomByDoc(
+    DocumentReference roomRef, {
+    bool forceRefresh = false,
+  }) async {
+    if (roomRef.id.isEmpty) {
+      return null;
     }
 
-    final builder = await ApiClient.create('Room.getById');
-    builder.addParameter('id', id);
-
-    final response = await builder.get<Room>(
-      fromJson: Room.fromJson,
-      errorMessage: 'Gagal memuat detail ruangan',
-    );
-
-    final data = response.data;
-
-    if (data == null) {
-      throw NotFoundException('Ruangan dengan ID $id tidak ditemukan');
+    // Cek cache terlebih dahulu jika tidak dipaksa refresh
+    if (!forceRefresh) {
+      final cachedRoom = _cachedRooms.where((room) => room.id == roomRef.id);
+      if (cachedRoom.isNotEmpty) {
+        return cachedRoom.first;
+      }
     }
 
-    return data;
+    // Coba dapatkan dari Firestore dulu
+    try {
+      final client = await FirestoreClient.create(Room.collectionName);
+      final doc = await client.get(roomRef.id);
+
+      if (doc.exists) {
+        final data = doc.data() ?? {};
+        final room = Room.fromFirestore(data, doc.id);
+
+        // Update cache
+        _updateCache(room);
+
+        return room;
+      }
+    } catch (e) {
+      debugPrint('Error fetching room from Firestore: $e');
+
+      return null;
+    }
+
+    return null;
   }
 
   /// Mendapatkan ruangan yang tersedia pada rentang waktu tertentu
+  @Deprecated('Removed this after firebase firestore migration')
   Future<ApiResponse<List<Room>>> getRawAvailableRoom({
     required DateTime start,
     required DateTime end,
@@ -116,9 +183,7 @@ class RoomService {
     // Validasi format waktu
     try {
       if (start.isAfter(end)) {
-        throw ValidationException(
-          'Waktu mulai tidak boleh lebih besar dari waktu selesai',
-        );
+        throw 'Waktu mulai tidak boleh lebih besar dari waktu selesai';
       }
 
       // Compare dates up to minutes for more accurate validation
@@ -139,13 +204,43 @@ class RoomService {
       );
 
       if (startCompare.isBefore(currentTime)) {
-        throw ValidationException('Waktu mulai tidak boleh di masa lalu');
+        throw 'Waktu mulai tidak boleh di masa lalu';
       }
+
+      // final client = await FirestoreClient.create(Room.collectionName);
+      //
+      // final response = await client.advancedQuery(
+      //   conditions: [
+      //     QueryCondition(field: 'isDeleted', isEqualTo: null),
+      //     QueryCondition(field: 'isMaintenance', isEqualTo: false),
+      //   ],
+      // );
+      //
+      // final result = <Room>[];
+      //
+      // final docs = response.docs;
+      //
+      // for (final doc in docs) {
+      //   if (!doc.exists) continue;
+      //
+      //   final data = doc.data();
+      //
+      //   final room = Room.fromFirestore(data, doc.id);
+      //   result.add(room);
+      // }
+      //
+      // return result;
 
       final builder = await ApiClient.create('Room.getAvailable');
       builder
           .addQuery('startDate', start.toIso8601String())
           .addQuery('endDate', end.toIso8601String());
+
+      if (limit != null) {
+        builder.addQuery('limit', '$limit');
+      }
+
+      builder.addQuery('page', '$page');
 
       if (limit != null) {
         builder.addQuery('limit', '$limit');
@@ -165,6 +260,7 @@ class RoomService {
   }
 
   /// Cari ruangan berdasarkan keyword
+  @Deprecated('Removed this after firebase firestore migration')
   Future<List<Room>> searchRooms(String keyword) async {
     if (keyword.trim().isEmpty) {
       return await getRoomList();
@@ -185,8 +281,9 @@ class RoomService {
 
   // Create room
   Future<Room> createRoom(Room room) async {
-    final client = await FirestoreClient.create(_roomCollection);
+    final client = await FirestoreClient.create(Room.collectionName);
 
+    room.prepareForCreate();
     final payload = room.toFirestore();
 
     final doc = await client.add(payload);
@@ -202,11 +299,12 @@ class RoomService {
   /// Update ruangan yang sudah ada
   Future<Room> updateRoom(Room room) async {
     if (room.id == null) {
-      throw ValidationException('ID ruangan tidak boleh kosong');
+      throw 'Silakan pilih ruangan yang akan diperbarui terlebih dahulu';
     }
 
-    final client = await FirestoreClient.create(_roomCollection);
+    final client = await FirestoreClient.create(Room.collectionName);
 
+    room.prepareForUpdate();
     final payload = room.toFirestore();
 
     await client.update(room.id!, payload);
@@ -218,16 +316,15 @@ class RoomService {
   }
 
   /// Menghapus ruangan (soft delete)
-  Future<void> deleteRoom(Room room, String userId) async {
+  Future<void> deleteRoom(Room room) async {
     if (room.id == null) {
-      throw ValidationException('ID ruangan tidak boleh kosong');
+      throw 'Silakan pilih ruangan yang akan dihapus terlebih dahulu';
     }
 
-    final client = await FirestoreClient.create(_roomCollection);
+    final client = await FirestoreClient.create(Room.collectionName);
 
     // Soft delete dengan marking deletedAt dan deletedBy
-    room.markAsDeleted(userId);
-
+    room.markAsDeleted();
     final payload = room.toFirestore();
 
     await client.update(room.id!, payload);
@@ -242,7 +339,7 @@ class RoomService {
       throw ValidationException('ID ruangan tidak boleh kosong');
     }
 
-    final client = await FirestoreClient.create(_roomCollection);
+    final client = await FirestoreClient.create(Room.collectionName);
 
     await client.delete(roomId);
 
@@ -262,12 +359,16 @@ class RoomService {
 
   /// Menambahkan atau memperbaharui ruangan dalam cache
   void _updateCache(Room room) {
+    if (room.id == null) return; // Skip jika tidak ada ID
+
     final index = _cachedRooms.indexWhere((r) => r.id == room.id);
 
     if (index >= 0) {
       _cachedRooms[index] = room;
+      debugPrint('Room cache updated for ID: ${room.id}');
     } else {
       _cachedRooms.add(room);
+      debugPrint('Room added to cache with ID: ${room.id}');
     }
   }
 }

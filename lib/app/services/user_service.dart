@@ -1,5 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
+import 'package:room_reservation_mobile_app/app/enums/user_role.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
+import 'package:room_reservation_mobile_app/app/services/auth_service.dart';
 
 class UserService {
   static UserService? _instance;
@@ -12,6 +15,61 @@ class UserService {
   }
 
   static final _cachedUsers = <Profile>[];
+
+  static Future<List<Profile>> getAllUsers() async {
+    print('_cachedUsers gan: ${_cachedUsers.length}');
+
+    if (_cachedUsers.isNotEmpty && _cachedUsers.length > 1) {
+      return _cachedUsers.where((user) => user.role != UserRole.admin).toList();
+    }
+
+    final client = await FirestoreClient.create(Profile.collectionName);
+
+    final snapshot = await client.getAll();
+    //     .advancedQuery(
+    //   conditions: <QueryCondition>[
+    //     QueryCondition(field: 'role', isNotEqualTo: 'admin'),
+    //     QueryCondition(field: 'deletedAt', isEqualTo: null),
+    //   ],
+    // );
+    //     .query(field: 'role', isNotEqualTo: 'admin');
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+
+      final profile = Profile.fromJson(data, doc.id);
+      _cachedUsers.add(profile);
+    }
+
+    return _cachedUsers;
+  }
+
+  static Future<Profile> getProfileByDoc(DocumentReference document) async {
+    // Check cache first
+    final cachedUser = _cachedUsers.where((user) => user.id == document.id);
+
+    if (cachedUser.isNotEmpty) {
+      return cachedUser.first;
+    }
+
+    // Query Firestore
+    final firestoreClient = await FirestoreClient.create(
+      Profile.collectionName,
+    );
+
+    final doc = await firestoreClient.get(document.id);
+
+    if (!doc.exists) {
+      throw 'Akun tidak ditemukan.';
+    }
+
+    final data = doc.data()!;
+
+    final profile = Profile.fromJson(data, doc.id);
+    _cachedUsers.add(profile);
+
+    return profile;
+  }
 
   static Future<Profile> getProfileByEmployeeId(String employeeId) async {
     // Check cache first
@@ -41,10 +99,6 @@ class UserService {
     final doc = snapshot.docs.first;
 
     final data = doc.data();
-
-    if (data == null || data is! Map<String, dynamic>) {
-      throw 'Akun tidak ditemukan.';
-    }
 
     final profile = Profile.fromJson(data, doc.id);
     _cachedUsers.add(profile);
@@ -87,10 +141,6 @@ class UserService {
     for (final doc in documents) {
       final data = doc.data();
 
-      if (data == null || data is! Map<String, dynamic>) {
-        continue;
-      }
-
       final profile = Profile.fromJson(data, doc.id);
       _cachedUsers.add(profile);
 
@@ -99,5 +149,17 @@ class UserService {
 
     // Return combined results
     return [...cachedUsers, ...result];
+  }
+
+  static Future<void> generateSampleUsers() async {
+    final maxDummy = 10;
+
+    final authService = AuthService.getInstance();
+
+    for (var i = 1; i <= maxDummy; i++) {
+      final user = Profile.random();
+
+      await authService.register(user);
+    }
   }
 }

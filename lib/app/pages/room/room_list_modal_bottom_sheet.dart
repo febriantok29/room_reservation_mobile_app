@@ -324,7 +324,7 @@ class _RoomListModalBottomSheetState extends State<RoomListModalBottomSheet> {
         );
 
         // Siapkan data untuk update
-        updatedRoom.prepareForUpdate(widget.user.id);
+        updatedRoom.prepareForUpdate();
 
         // Update room di Firestore
         await _roomService.updateRoom(updatedRoom);
@@ -337,9 +337,6 @@ class _RoomListModalBottomSheetState extends State<RoomListModalBottomSheet> {
           description: _descriptionController.text.trim(),
           isMaintenance: _isMaintenance,
         );
-
-        // Siapkan data untuk Firestore
-        newRoom.prepareForCreate(widget.user.id);
 
         // Tambahkan room ke Firestore
         await _roomService.createRoom(newRoom);

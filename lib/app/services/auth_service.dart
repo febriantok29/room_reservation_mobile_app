@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
+import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/request/user_register_request.dart';
 
@@ -53,18 +54,22 @@ class AuthService {
       throw 'Akun Anda telah dinonaktifkan. Silakan hubungi admin untuk informasi lebih lanjut.';
     }
 
-    await firestoreClient.doc(id).update({
-      'lastLoginAt': FieldValue.serverTimestamp(),
-    });
+    profile.lastLoginAt = DateTime.now();
+    profile.prepareForUpdate();
+
+    final updatedData = profile.toJson();
+    firestoreClient.doc(id).update(updatedData);
 
     return profile;
   }
 
   Future<void> register(UserRegisterRequest request) async {
-    final firestore = FirebaseFirestore.instance;
-    final firestoreClient = firestore.collection(Profile.collectionName);
+    final firestoreClient = await FirestoreClient.create(
+      Profile.collectionName,
+    );
 
     request.validate();
+    request.prepareForCreate();
     final newUserData = request.toJson();
 
     final hashedPassword = _hashPassword(request.password!);
@@ -73,8 +78,7 @@ class AuthService {
 
     newUserData['employeeId'] = employeeId;
     newUserData['password'] = hashedPassword;
-
-    await firestoreClient.add(newUserData);
+    await firestoreClient.set(employeeId, newUserData);
   }
 
   String _hashPassword(String password) {
@@ -99,11 +103,8 @@ class AuthService {
 
     final snapshot = await query.get();
 
-    // Count the existing IDs for this year
     final sequenceNumber = snapshot.docs.length + 1;
 
-    // Format: YYGGXXXHPI
-    // YY = current year, GG = birth year, XXX = sequence (padded to 3 digits), HPI = suffix
     final sequencePart = sequenceNumber.toString().padLeft(3, '0');
     final employeeId = '$yearPart$dobYearPart${sequencePart}HPI';
 

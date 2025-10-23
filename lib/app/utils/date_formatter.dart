@@ -1,7 +1,24 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 /// Utility class untuk format tanggal yang readable
 class DateFormatter {
+  static DateTime? getDateTime(dynamic timestamp) {
+    if (timestamp == null) return null;
+
+    DateTime? result;
+
+    if (timestamp is Timestamp) {
+      result = timestamp.toDate();
+    } else if (timestamp is int) {
+      result = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    } else {
+      result = DateTime.tryParse('$timestamp');
+    }
+
+    return result?.toLocal();
+  }
+
   static final _dayNames = {
     1: 'Senin',
     2: 'Selasa',

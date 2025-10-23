@@ -234,6 +234,14 @@ class _RoomListPageState extends State<RoomListPage> {
                 );
               }
 
+              final isLast = index == data.length - 1;
+              if (isLast) {
+                card = Padding(
+                  padding: const EdgeInsets.only(bottom: 96.0),
+                  child: card,
+                );
+              }
+
               return card;
             },
           ),
@@ -476,7 +484,7 @@ class _RoomListPageState extends State<RoomListPage> {
     if (confirmed == true) {
       try {
         // Hapus ruangan (soft delete)
-        await _roomService.deleteRoom(room, widget.user.id!);
+        await _roomService.deleteRoom(room);
 
         // Reload daftar ruangan
         setState(() {

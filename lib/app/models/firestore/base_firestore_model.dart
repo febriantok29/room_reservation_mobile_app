@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
+import 'package:room_reservation_mobile_app/app/states/auth_state.dart';
+import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
 
 abstract class BaseFirestoreModel {
   static final _dateFormat = DateFormat('EEEE, dd MMMM yyyy HH:mm:ss', 'id_ID');
@@ -84,9 +86,9 @@ abstract class BaseFirestoreModel {
     updatedBy = _getUserReference(map['updatedBy']);
     deletedBy = _getUserReference(map['deletedBy']);
 
-    createdAt = _getDateTime(map['createdAt']);
-    updatedAt = _getDateTime(map['updatedAt']);
-    deletedAt = _getDateTime(map['deletedAt']);
+    createdAt = DateFormatter.getDateTime(map['createdAt']);
+    updatedAt = DateFormatter.getDateTime(map['updatedAt']);
+    deletedAt = DateFormatter.getDateTime(map['deletedAt']);
   }
 
   DocumentReference? _getUserReference(dynamic user) {
@@ -103,46 +105,26 @@ abstract class BaseFirestoreModel {
     return FirebaseFirestore.instance.doc('${Profile.collectionName}/$user');
   }
 
-  DateTime? _getDateTime(dynamic timestamp) {
-    if (timestamp == null) return null;
-
-    DateTime? result;
-
-    if (timestamp is Timestamp) {
-      result = timestamp.toDate();
-    } else if (timestamp is int) {
-      result = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    } else {
-      result = DateTime.tryParse('$timestamp');
-    }
-
-    return result?.toLocal();
+  void prepareForCreate() {
+    createdBy = AuthState.currentUser?.reference;
+    createdAt = DateTime.now();
   }
 
-  void prepareForCreate(String? userId) {
-    createdBy = _getUserReference(userId);
-
-    final now = DateTime.now();
-    createdAt = now;
-  }
-
-  void prepareForUpdate(String? userId) {
+  void prepareForUpdate() {
     if (id == null) {
       throw 'Cannot prepare for update: Document ID is null';
     }
 
-    updatedBy = _getUserReference(userId);
-
-    final now = DateTime.now();
-    updatedAt = now;
+    updatedBy = AuthState.currentUser?.reference;
+    updatedAt = DateTime.now();
   }
 
-  void markAsDeleted(String? userId) {
+  void markAsDeleted() {
     if (id == null) {
       throw 'Cannot mark as deleted: Document ID is null';
     }
 
-    deletedBy = _getUserReference(userId);
+    deletedBy = AuthState.currentUser?.reference;
     deletedAt = DateTime.now();
   }
 }

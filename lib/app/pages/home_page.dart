@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:room_reservation_mobile_app/app/examples/admin_register_page.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/pages/login_page.dart';
+import 'package:room_reservation_mobile_app/app/pages/reservation/reservation_list_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/room/room_list_page.dart';
+import 'package:room_reservation_mobile_app/app/services/user_service.dart';
 import 'package:room_reservation_mobile_app/app/states/auth_state.dart';
 
 class HomePage extends StatefulWidget {
@@ -73,11 +75,73 @@ class _HomePageState extends State<HomePage> {
               );
             }),
 
+            ElevatedButton(
+              onPressed: _generateUsers,
+              child: Text('Generate Users'),
+            ),
             ElevatedButton(onPressed: _doLogout, child: Text('Logout')),
           ],
         ),
       ),
     );
+  }
+
+  void _generateUsers() async {
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm User Generation'),
+        content: const Text('Are you sure you want to generate sample users?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+
+    confirm ??= false;
+
+    if (!confirm || !mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        content: Row(
+          children: const [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Generating users...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      await UserService.generateSampleUsers();
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sample users generated successfully')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error generating users: $e')));
+    }
   }
 
   List<_HomePageButton> _getMenus(Profile? user) {
@@ -104,6 +168,12 @@ class _HomePageState extends State<HomePage> {
         icon: Icons.meeting_room,
         color: Colors.blue,
         page: RoomListPage(user: user),
+      ),
+      _HomePageButton(
+        title: 'Reservation List',
+        icon: Icons.list,
+        color: Colors.green,
+        page: ReservationListPage(user: user),
       ),
     ]);
 

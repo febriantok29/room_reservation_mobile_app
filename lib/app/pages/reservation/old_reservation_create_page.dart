@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:room_reservation_mobile_app/app/models/request/reservation_create_request.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/pages/room_selector_page.dart';
-import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 
 class OldReservationCreatePage extends StatefulWidget {
   const OldReservationCreatePage({super.key});
@@ -14,7 +13,6 @@ class OldReservationCreatePage extends StatefulWidget {
 }
 
 class _OldReservationCreatePageState extends State<OldReservationCreatePage> {
-  final _service = ReservationService.getInstance();
   final _formKey = GlobalKey<FormState>();
 
   // Create datetime formater for "Jumat, 15 Sep 2023"
@@ -136,8 +134,7 @@ class _OldReservationCreatePageState extends State<OldReservationCreatePage> {
     _formKey.currentState!.save();
 
     try {
-      final service = await _service;
-      await service.createReservation(reservationForm: _request);
+      await Future.delayed(const Duration(milliseconds: 500));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

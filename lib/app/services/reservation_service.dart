@@ -1,9 +1,13 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/core/network/api_client.dart';
 import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/models/api_response.dart';
-import 'package:room_reservation_mobile_app/app/models/request/reservation_create_request.dart';
-import 'package:room_reservation_mobile_app/app/models/request/reservation_update_request.dart';
+import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
+import 'package:room_reservation_mobile_app/app/models/room.dart';
+import 'package:room_reservation_mobile_app/app/services/room_service.dart';
+import 'package:room_reservation_mobile_app/app/services/user_service.dart';
 
 /// Service untuk mengelola operasi terkait reservasi
 class ReservationService {
@@ -12,9 +16,70 @@ class ReservationService {
   ReservationService._();
 
   /// Singleton instance
-  static Future<ReservationService> getInstance() async {
+  static ReservationService getInstance() {
     _instance ??= ReservationService._();
     return _instance!;
+  }
+
+  Future<List<Reservation>> getReservationList({
+    DocumentReference? userId,
+  }) async {
+    final client = await FirestoreClient.create(Reservation.collectionName);
+
+    QuerySnapshot<Map<String, dynamic>> response;
+    if (userId != null) {
+      response = await client.query(field: 'userId', isEqualTo: userId);
+    } else {
+      response = await client.getAll();
+    }
+
+    final reservations = <Reservation>[];
+
+    for (final doc in response.docs) {
+      if (!doc.exists) continue;
+
+      final data = doc.data();
+
+      final reservation = Reservation.fromFirestore(data, doc.id);
+
+      reservations.add(reservation);
+    }
+
+    final roomIds = reservations
+        .where((res) => res.roomRef != null)
+        .map((res) => res.roomRef!.id)
+        .toSet();
+
+    final roomService = RoomService.getInstance();
+    final rooms = await roomService.getByIds(roomIds);
+
+    for (final reservation in reservations) {
+      if (reservation.roomRef == null || reservation.roomRef!.id.isEmpty) {
+        continue;
+      }
+
+      reservation.room = rooms.firstWhere(
+        (room) => room.id == reservation.roomRef?.id,
+        orElse: () => Room(),
+      );
+    }
+
+    final userIds = Set<String>.from(
+      reservations.map((res) => res.userRef?.id),
+    );
+
+    final users = await UserService.getUserByEmployeeIds(userIds);
+
+    for (final reservation in reservations) {
+      final user = users.firstWhere(
+        (user) => user.id == reservation.userRef?.id,
+        orElse: () => Profile(),
+      );
+
+      reservation.user = user;
+    }
+
+    return reservations;
   }
 
   /// Mendapatkan semua reservasi user yang sedang login
@@ -41,99 +106,136 @@ class ReservationService {
       throw ValidationException('ID reservasi tidak boleh kosong');
     }
 
-    final builder = await ApiClient.create('Reservation.getById');
-    builder.addParameter('id', id);
+    // Ambil dari Firestore
+    final client = await FirestoreClient.create(Reservation.collectionName);
 
-    final response = await builder.get<Reservation>(
-      fromJson: Reservation.fromJson,
-      errorMessage: 'Gagal memuat detail reservasi',
-    );
+    final doc = await client.get(id);
 
-    final data = response.data;
-
-    if (data == null) {
+    if (!doc.exists) {
       throw NotFoundException('Reservasi dengan ID $id tidak ditemukan');
     }
 
-    return data;
+    final data = doc.data() ?? {};
+    final reservation = Reservation.fromFirestore(data, id);
+
+    // Ambil data ruangan dan user jika perlu
+    if (reservation.roomRef != null && reservation.roomRef!.id.isNotEmpty) {
+      final roomService = RoomService.getInstance();
+      try {
+        final room = await roomService.getRoomByDoc(reservation.roomRef!);
+        reservation.room = room;
+      } catch (_) {}
+    }
+
+    final userRef = reservation.userRef;
+    if (userRef != null) {
+      try {
+        final user = await UserService.getProfileByDoc(userRef);
+        reservation.user = user;
+      } catch (_) {}
+    }
+
+    return reservation;
   }
 
   /// Membuat reservasi baru
-  Future<Reservation> createReservation({
-    required ReservationCreateRequest reservationForm,
-  }) async {
-    reservationForm.validate();
+  Future<Reservation> createReservation(Reservation reservation) async {
+    // Validasi data
+    reservation.validate();
 
-    _validateReservationTime(
-      startDateTime: reservationForm.startTime,
-      endDateTime: reservationForm.endTime,
-    );
-
-    final reservationData = reservationForm.toJson();
-
-    final builder = await ApiClient.create('Reservation.create');
-
-    final response = await builder.post<Reservation>(
-      body: reservationData,
-      fromJson: Reservation.fromJson,
-      errorMessage: 'Gagal membuat reservasi',
-    );
-
-    final data = response.data;
-
-    if (data == null) {
-      throw NotFoundException('Reservasi tidak ditemukan setelah dibuat');
-    }
-
-    return data;
-  }
-
-  /// Update reservasi (hanya untuk reservasi sendiri yang belum disetujui)
-  Future<Reservation> updateReservation(
-    ReservationUpdateRequest reservationData,
-  ) async {
-    reservationData.validate();
-
-    // Validasi waktu jika ada update
-    _validateReservationTime(
-      startDateTime: reservationData.startTime,
-      endDateTime: reservationData.endTime,
-    );
-
-    final builder = await ApiClient.create('Reservation.update');
-    builder.addParameter('id', reservationData.reservationId);
-
-    final response = await builder.put<Reservation>(
-      body: reservationData,
-      fromJson: Reservation.fromJson,
-      errorMessage: 'Gagal mengupdate reservasi',
-    );
-
-    final data = response.data;
-
-    if (data == null) {
-      throw NotFoundException(
-        'Reservasi dengan ID ${reservationData.reservationId} tidak ditemukan',
+    // Validasi waktu reservasi
+    if (reservation.startDateTime != null && reservation.endDateTime != null) {
+      _validateReservationTime(
+        startDateTime: reservation.startDateTime!,
+        endDateTime: reservation.endDateTime!,
       );
     }
 
-    return data;
+    // Simpan ke Firestore
+    final client = await FirestoreClient.create(Reservation.collectionName);
+
+    final payload = reservation.toFirestore();
+
+    final docRef = await client.add(payload);
+
+    // Return reservation dengan ID baru
+    return reservation.copyWith(id: docRef.id);
+  }
+
+  /// Update reservasi (hanya untuk reservasi sendiri yang belum disetujui)
+  Future<Reservation> updateReservation(Reservation reservation) async {
+    if (reservation.id == null || reservation.id!.isEmpty) {
+      throw ValidationException('ID reservasi tidak boleh kosong');
+    }
+
+    // Validasi data
+    reservation.validate();
+
+    // Validasi waktu jika ada
+    if (reservation.startDateTime != null && reservation.endDateTime != null) {
+      _validateReservationTime(
+        startDateTime: reservation.startDateTime!,
+        endDateTime: reservation.endDateTime!,
+      );
+    }
+
+    // Validasi status - hanya bisa update jika masih pending
+    if (reservation.status != null &&
+        reservation.status != Reservation.statusPending) {
+      throw ValidationException(
+        'Hanya reservasi dengan status PENDING yang dapat diupdate',
+      );
+    }
+
+    // Simpan ke Firestore
+    final client = await FirestoreClient.create(Reservation.collectionName);
+
+    final payload = reservation.toFirestore();
+
+    await client.update(reservation.id!, payload);
+
+    return reservation;
   }
 
   /// Membatalkan reservasi
-  Future<bool> cancelReservation(String id) async {
+  Future<bool> cancelReservation(String id, String userId) async {
     if (id.isEmpty) {
       throw ValidationException('ID reservasi tidak boleh kosong');
     }
 
-    final builder = await ApiClient.create('Reservation.delete');
-    builder.addParameter('id', id);
+    // Ambil reservasi yang akan dibatalkan
+    final client = await FirestoreClient.create(Reservation.collectionName);
 
-    final response = await builder.delete<dynamic>(
-      errorMessage: 'Gagal membatalkan reservasi',
+    final doc = await client.get(id);
+
+    if (!doc.exists) {
+      throw NotFoundException('Reservasi tidak ditemukan');
+    }
+
+    final data = doc.data() ?? {};
+    final reservation = Reservation.fromFirestore(data, id);
+
+    // Validasi status - hanya bisa dibatalkan jika masih pending atau approved
+    if (reservation.status != Reservation.statusPending &&
+        reservation.status != Reservation.statusApproved) {
+      throw ValidationException(
+        'Hanya reservasi dengan status PENDING atau APPROVED yang dapat dibatalkan',
+      );
+    }
+
+    // Update status menjadi CANCELLED
+    final updatedReservation = reservation.copyWith(
+      status: Reservation.statusCancelled,
     );
 
-    return response.data != null;
+    // Prepare for update
+    updatedReservation.prepareForUpdate();
+
+    // Simpan ke Firestore
+    final payload = updatedReservation.toFirestore();
+    await client.update(id, payload);
+
+    return true;
   }
 
   /// Mendapatkan reservasi berdasarkan status

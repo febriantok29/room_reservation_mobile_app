@@ -4,11 +4,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 
 class Room extends BaseFirestoreModel {
+  static const String collectionName = 'm_rooms';
+
   final String? name;
   final num? capacity;
   final String? location;
   final String? description;
   final bool? isMaintenance;
+
+  @override
+  DocumentReference get reference {
+    return FirebaseFirestore.instance
+        .collection(collectionName)
+        .doc(id);
+  }
 
   Room({
     super.id,

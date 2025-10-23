@@ -55,7 +55,7 @@ class FirestoreClient {
   final FirebaseFirestore _firestore;
 
   /// Collection reference
-  final CollectionReference _collectionRef;
+  final CollectionReference<Map<String, dynamic>> _collectionRef;
 
   /// Collection path
   final String _collectionPath;
@@ -91,7 +91,7 @@ class FirestoreClient {
   }
 
   /// Get collection reference
-  CollectionReference getCollectionRef() {
+  CollectionReference<Map<String, dynamic>> getCollectionRef() {
     return _collectionRef;
   }
 
@@ -99,13 +99,15 @@ class FirestoreClient {
   String get collectionPath => _collectionPath;
 
   /// Get document reference for a specific document ID
-  DocumentReference document(String documentId) {
+  DocumentReference<Map<String, dynamic>> document(String documentId) {
     return _collectionRef.doc(documentId);
   }
 
   /// Create a new document in the collection with auto-generated ID
   /// Returns the document reference for the created document
-  Future<DocumentReference> add(Map<String, dynamic> data) async {
+  Future<DocumentReference<Map<String, dynamic>>> add(
+    Map<String, dynamic> data,
+  ) async {
     try {
       return await _collectionRef.add(data);
     } catch (e) {
@@ -153,7 +155,7 @@ class FirestoreClient {
 
   /// Get a document by ID
   /// Returns the document snapshot for the specified document ID
-  Future<DocumentSnapshot> get(String documentId) async {
+  Future<DocumentSnapshot<Map<String, dynamic>>> get(String documentId) async {
     try {
       return await _collectionRef.doc(documentId).get();
     } catch (e) {
@@ -164,7 +166,7 @@ class FirestoreClient {
 
   /// Get all documents in the collection
   /// Returns a query snapshot containing all documents in the collection
-  Future<QuerySnapshot> getAll() async {
+  Future<QuerySnapshot<Map<String, dynamic>>> getAll() async {
     try {
       return await _collectionRef.get();
     } catch (e) {
@@ -175,7 +177,7 @@ class FirestoreClient {
 
   /// Query documents with simple where condition
   /// Returns a query snapshot containing documents that match the condition
-  Future<QuerySnapshot> query({
+  Future<QuerySnapshot<Map<String, dynamic>>> query({
     required String field,
     dynamic isEqualTo,
     dynamic isNotEqualTo,
@@ -189,7 +191,7 @@ class FirestoreClient {
     List<dynamic>? whereNotIn,
   }) async {
     try {
-      Query query = _collectionRef;
+      Query<Map<String, dynamic>> query = _collectionRef;
 
       if (isEqualTo != null) {
         query = query.where(field, isEqualTo: isEqualTo);
@@ -234,26 +236,28 @@ class FirestoreClient {
 
   /// Stream all documents in the collection
   /// Returns a stream of query snapshots for real-time updates
-  Stream<QuerySnapshot> stream() {
+  Stream<QuerySnapshot<Map<String, dynamic>>> stream() {
     return _collectionRef.snapshots();
   }
 
   /// Stream a specific document
   /// Returns a stream of document snapshots for real-time updates
-  Stream<DocumentSnapshot> streamDocument(String documentId) {
+  Stream<DocumentSnapshot<Map<String, dynamic>>> streamDocument(
+    String documentId,
+  ) {
     return _collectionRef.doc(documentId).snapshots();
   }
 
   /// Query documents with multiple conditions
   /// This is a more advanced query method that allows multiple conditions
-  Future<QuerySnapshot> advancedQuery({
+  Future<QuerySnapshot<Map<String, dynamic>>> advancedQuery({
     required List<QueryCondition> conditions,
     String? orderBy,
     bool descending = false,
     int? limit,
   }) async {
     try {
-      Query query = _collectionRef;
+      Query<Map<String, dynamic>> query = _collectionRef;
 
       // Apply all conditions
       for (final condition in conditions) {
@@ -404,7 +408,7 @@ class FirestoreClient {
   ///   prefix: 'jo', // Will match 'john', 'joseph', etc.
   /// );
   /// ```
-  Future<QuerySnapshot> searchByPrefix({
+  Future<QuerySnapshot<Map<String, dynamic>>> searchByPrefix({
     required String field,
     required String prefix,
     int? limit,
@@ -423,7 +427,7 @@ class FirestoreClient {
 
       debugPrint('Searching $field with prefix: $prefix, end: $prefix\uf8ff');
 
-      Query query = _collectionRef
+      Query<Map<String, dynamic>> query = _collectionRef
           .where(field, isGreaterThanOrEqualTo: prefix)
           .where(field, isLessThanOrEqualTo: endPrefix);
 
@@ -462,7 +466,7 @@ class FirestoreClient {
   ///   limit: 10,
   /// );
   /// ```
-  Future<List<QuerySnapshot>> multiFieldPrefixSearch({
+  Future<List<QuerySnapshot<Map<String, dynamic>>>> multiFieldPrefixSearch({
     required List<String> fields,
     required String prefix,
     int? limit,
@@ -474,7 +478,7 @@ class FirestoreClient {
       }
 
       // Create a list to hold results from each field search
-      final results = <QuerySnapshot>[];
+      final results = <QuerySnapshot<Map<String, dynamic>>>[];
 
       // Search each field
       for (final field in fields) {

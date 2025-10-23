@@ -32,7 +32,7 @@ class ReservationRepository {
 
     _initCompleter = Completer<void>();
     try {
-      _service = await ReservationService.getInstance();
+      _service = ReservationService.getInstance();
       _isInitialized = true;
       _initCompleter!.complete();
     } catch (e) {
