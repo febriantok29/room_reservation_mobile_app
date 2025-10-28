@@ -75,14 +75,13 @@ class _RoomSelectorBottomSheetState extends State<RoomSelectorBottomSheet> {
       } else {
         // Jika waktu ditentukan, filter ruangan yang available pada waktu tersebut
         // Gunakan API untuk mendapatkan ruangan yang tersedia
-        final response = await _roomService.getRawAvailableRoom(
+        final availableRooms = await _roomService.getRawAvailableRoom(
           start: widget.startDateTime!,
           end: widget.endDateTime!,
         );
 
-        if (response.data != null) {
+        if (availableRooms.isNotEmpty) {
           // Filter dengan keyword jika ada
-          final availableRooms = response.data!;
 
           if (_searchKeyword.isNotEmpty) {
             final keyword = _searchKeyword.toLowerCase();

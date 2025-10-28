@@ -178,7 +178,7 @@ class FirestoreClient {
   /// Query documents with simple where condition
   /// Returns a query snapshot containing documents that match the condition
   Future<QuerySnapshot<Map<String, dynamic>>> query({
-    required String field,
+    required dynamic field,
     dynamic isEqualTo,
     dynamic isNotEqualTo,
     dynamic isLessThan,
@@ -191,6 +191,10 @@ class FirestoreClient {
     List<dynamic>? whereNotIn,
   }) async {
     try {
+      if (field == null) {
+        throw ArgumentError('Field parameter cannot be null');
+      }
+
       Query<Map<String, dynamic>> query = _collectionRef;
 
       if (isEqualTo != null) {

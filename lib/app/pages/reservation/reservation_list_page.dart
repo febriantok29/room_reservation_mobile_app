@@ -254,7 +254,7 @@ class _ReservationListPageState extends State<ReservationListPage> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Ruang: ${reservation.room?.name ?? "Tidak diketahui"}',
+                      reservation.room?.name ?? "Tidak diketahui",
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

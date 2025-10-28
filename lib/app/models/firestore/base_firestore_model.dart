@@ -5,6 +5,13 @@ import 'package:room_reservation_mobile_app/app/states/auth_state.dart';
 import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
 
 abstract class BaseFirestoreModel {
+  static const String createdByField = 'createdBy';
+  static const String updatedByField = 'updatedBy';
+  static const String deletedByField = 'deletedBy';
+  static const String createdAtField = 'createdAt';
+  static const String updatedAtField = 'updatedAt';
+  static const String deletedAtField = 'deletedAt';
+
   static final _dateFormat = DateFormat('EEEE, dd MMMM yyyy HH:mm:ss', 'id_ID');
 
   String? id;
@@ -48,23 +55,23 @@ abstract class BaseFirestoreModel {
 
   Map<String, dynamic> toMap() {
     return {
-      'createdBy': _getUserReference(createdBy?.id),
-      'updatedBy': _getUserReference(updatedBy?.id),
-      'deletedBy': _getUserReference(deletedBy?.id),
-      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
-      'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
-      'deletedAt': deletedAt != null ? Timestamp.fromDate(deletedAt!) : null,
+      createdByField: _getUserReference(createdBy?.id),
+      updatedByField: _getUserReference(updatedBy?.id),
+      deletedByField: _getUserReference(deletedBy?.id),
+      createdAtField: createdAt != null ? Timestamp.fromDate(createdAt!) : null,
+      updatedAtField: updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
+      deletedAtField: deletedAt != null ? Timestamp.fromDate(deletedAt!) : null,
     };
   }
 
   Map<String, dynamic> toJson() {
     final payload = {
-      'createdBy': _getUserReference(createdBy?.id),
-      'updatedBy': _getUserReference(updatedBy?.id),
-      'deletedBy': _getUserReference(deletedBy?.id),
-      'createdAt': createdAt?.millisecondsSinceEpoch,
-      'updatedAt': updatedAt?.millisecondsSinceEpoch,
-      'deletedAt': deletedAt?.millisecondsSinceEpoch,
+      createdByField: _getUserReference(createdBy?.id),
+      updatedByField: _getUserReference(updatedBy?.id),
+      deletedByField: _getUserReference(deletedBy?.id),
+      createdAtField: createdAt?.millisecondsSinceEpoch,
+      updatedAtField: updatedAt?.millisecondsSinceEpoch,
+      deletedAtField: deletedAt?.millisecondsSinceEpoch,
     };
 
     if (id != null) {
@@ -82,13 +89,13 @@ abstract class BaseFirestoreModel {
     id = documentId;
     reference = documentRef;
 
-    createdBy = _getUserReference(map['createdBy']);
-    updatedBy = _getUserReference(map['updatedBy']);
-    deletedBy = _getUserReference(map['deletedBy']);
+    createdBy = _getUserReference(map[createdByField]);
+    updatedBy = _getUserReference(map[updatedByField]);
+    deletedBy = _getUserReference(map[deletedByField]);
 
-    createdAt = DateFormatter.getDateTime(map['createdAt']);
-    updatedAt = DateFormatter.getDateTime(map['updatedAt']);
-    deletedAt = DateFormatter.getDateTime(map['deletedAt']);
+    createdAt = DateFormatter.getDateTime(map[createdAtField]);
+    updatedAt = DateFormatter.getDateTime(map[updatedAtField]);
+    deletedAt = DateFormatter.getDateTime(map[deletedAtField]);
   }
 
   DocumentReference? _getUserReference(dynamic user) {

@@ -17,22 +17,14 @@ class UserService {
   static final _cachedUsers = <Profile>[];
 
   static Future<List<Profile>> getAllUsers() async {
-    print('_cachedUsers gan: ${_cachedUsers.length}');
-
     if (_cachedUsers.isNotEmpty && _cachedUsers.length > 1) {
       return _cachedUsers.where((user) => user.role != UserRole.admin).toList();
     }
 
     final client = await FirestoreClient.create(Profile.collectionName);
 
-    final snapshot = await client.getAll();
-    //     .advancedQuery(
-    //   conditions: <QueryCondition>[
-    //     QueryCondition(field: 'role', isNotEqualTo: 'admin'),
-    //     QueryCondition(field: 'deletedAt', isEqualTo: null),
-    //   ],
-    // );
-    //     .query(field: 'role', isNotEqualTo: 'admin');
+    final snapshot = await client
+        .query(field: 'role', isNotEqualTo: UserRole.admin.name,);
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
@@ -106,49 +98,54 @@ class UserService {
     return profile;
   }
 
-  static Future<List<Profile>> getUserByEmployeeIds(
-    Set<String> employeeIds,
+  static Future<List<Profile>> getUserByDocIds(
+    Set<String> employeeDocIds,
   ) async {
+    if (employeeDocIds.isEmpty) {
+      return [];
+    }
+
     // Filter cached users that match requested IDs
     final cachedUsers = _cachedUsers
-        .where((user) => employeeIds.contains(user.employeeId))
+        .where((user) => employeeDocIds.contains(user.employeeId))
         .toList();
 
     // Return if we found all requested users in cache
-    if (cachedUsers.length == employeeIds.length) {
+    if (cachedUsers.length == employeeDocIds.length) {
       return cachedUsers;
     }
 
     // Get uncached employee IDs
-    final uncachedIds = employeeIds
-        .where((id) => !cachedUsers.any((user) => user.employeeId == id))
-        .toList();
+    final uncachedIds = employeeDocIds.difference(
+      cachedUsers.map((e) => e.employeeId).toSet(),
+    ).toList();
 
     // Query Firestore for missing users
-    final firestoreClient = await FirestoreClient.create(
-      Profile.collectionName,
+    final client = await FirestoreClient.create(
+      Profile.collectionName
     );
-    final snapshot = await firestoreClient.advancedQuery(
-      conditions: <QueryCondition>[
-        QueryCondition(field: 'employeeId', whereIn: uncachedIds),
-      ],
+    final snapshot = await client.query(
+        field: FieldPath.documentId, whereIn: uncachedIds
     );
 
-    final result = <Profile>[];
+    final fetchedRooms = <Profile>[];
 
     final documents = snapshot.docs;
 
     for (final doc in documents) {
+      if (!doc.exists) continue;
+
       final data = doc.data();
 
       final profile = Profile.fromJson(data, doc.id);
-      _cachedUsers.add(profile);
 
-      result.add(profile);
+      fetchedRooms.add(profile);
+
+      _updateCache(profile);
     }
 
     // Return combined results
-    return [...cachedUsers, ...result];
+    return [...cachedUsers, ...fetchedRooms];
   }
 
   static Future<void> generateSampleUsers() async {
@@ -160,6 +157,18 @@ class UserService {
       final user = Profile.random();
 
       await authService.register(user);
+    }
+  }
+
+  static void _updateCache(Profile profile) {
+    if (profile.id == null) return;
+
+    final index = _cachedUsers.indexWhere((u) => u.id == profile.id);
+
+    if (index >= 0) {
+      _cachedUsers[index] = profile;
+    } else {
+      _cachedUsers.add(profile);
     }
   }
 }

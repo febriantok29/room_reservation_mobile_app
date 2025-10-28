@@ -47,8 +47,6 @@ class Profile extends BaseFirestoreModel {
   });
 
   factory Profile.fromJson(Map<String, dynamic> json, String documentId) {
-    final foo = json['lastLoginAt'];
-
     final profile = Profile(
       employeeId: json['employeeId'],
       email: json['email'],

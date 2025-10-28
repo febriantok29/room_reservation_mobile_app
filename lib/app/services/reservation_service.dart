@@ -1,8 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
-import 'package:room_reservation_mobile_app/app/core/network/api_client.dart';
 import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
-import 'package:room_reservation_mobile_app/app/models/api_response.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
@@ -51,15 +49,19 @@ class ReservationService {
         .toSet();
 
     final roomService = RoomService.getInstance();
+
     final rooms = await roomService.getByIds(roomIds);
 
     for (final reservation in reservations) {
-      if (reservation.roomRef == null || reservation.roomRef!.id.isEmpty) {
+      final roomRef = reservation.roomRef;
+      if (roomRef == null || roomRef.id.isEmpty) {
         continue;
       }
 
+      final roomId = roomRef.id;
+
       reservation.room = rooms.firstWhere(
-        (room) => room.id == reservation.roomRef?.id,
+        (room) => room.id == roomId,
         orElse: () => Room(),
       );
     }
@@ -68,7 +70,7 @@ class ReservationService {
       reservations.map((res) => res.userRef?.id),
     );
 
-    final users = await UserService.getUserByEmployeeIds(userIds);
+    final users = await UserService.getUserByDocIds(userIds);
 
     for (final reservation in reservations) {
       final user = users.firstWhere(
@@ -82,23 +84,6 @@ class ReservationService {
     return reservations;
   }
 
-  /// Mendapatkan semua reservasi user yang sedang login
-  Future<ApiResponse<List<Reservation>>> getAllReservations({
-    int page = 1,
-    int limit = 10,
-  }) async {
-    final builder = await ApiClient.create('Reservation.getAll');
-
-    builder
-      ..addQuery('page', page.toString())
-      ..addQuery('limit', limit.toString());
-
-    return await builder.get<List<Reservation>>(
-      fromJson: (json) => (json as List)
-          .map((item) => Reservation.fromJson(item as Map<String, dynamic>))
-          .toList(),
-    );
-  }
 
   /// Mendapatkan reservasi berdasarkan ID
   Future<Reservation> getReservationById(String id) async {
@@ -236,136 +221,6 @@ class ReservationService {
     await client.update(id, payload);
 
     return true;
-  }
-
-  /// Mendapatkan reservasi berdasarkan status
-  Future<List<Reservation>> getReservationsByStatus(String status) async {
-    final validStatuses = ['pending', 'approved', 'rejected', 'cancelled'];
-    if (!validStatuses.contains(status.toLowerCase())) {
-      throw ValidationException(
-        'Status tidak valid. Status yang valid: ${validStatuses.join(', ')}',
-      );
-    }
-
-    final builder = await ApiClient.create('Reservation.getAll');
-    builder.addQuery('status', status.toLowerCase());
-
-    final response = await builder.get<List<Reservation>>(
-      fromJson: (json) => (json as List)
-          .map((item) => Reservation.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      errorMessage: 'Gagal memuat reservasi berdasarkan status',
-    );
-
-    return response.data ?? [];
-  }
-
-  /// Mendapatkan reservasi berdasarkan rentang tanggal
-  Future<List<Reservation>> getReservationsByDateRange({
-    required DateTime startDate,
-    required DateTime endDate,
-  }) async {
-    if (startDate.isAfter(endDate)) {
-      throw ValidationException(
-        'Tanggal mulai tidak boleh lebih besar dari tanggal selesai',
-      );
-    }
-
-    final builder = await ApiClient.create('Reservation.getAll');
-    builder.addQuery('startDate', startDate.toIso8601String());
-    builder.addQuery('endDate', endDate.toIso8601String());
-
-    final response = await builder.get<List<Reservation>>(
-      fromJson: (json) => (json as List)
-          .map((item) => Reservation.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      errorMessage: 'Gagal memuat reservasi berdasarkan tanggal',
-    );
-
-    return response.data ?? [];
-  }
-
-  /// Mendapatkan reservasi untuk ruangan tertentu
-  Future<List<Reservation>> getReservationsByRoom(String roomId) async {
-    if (roomId.isEmpty) {
-      throw ValidationException('ID ruangan tidak boleh kosong');
-    }
-
-    final builder = await ApiClient.create('Reservation.getAll');
-    builder.addQuery('roomId', roomId);
-
-    final response = await builder.get<List<Reservation>>(
-      fromJson: (json) => (json as List)
-          .map((item) => Reservation.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      errorMessage: 'Gagal memuat reservasi ruangan',
-    );
-
-    return response.data ?? [];
-  }
-
-  /// Approve reservasi (hanya untuk admin)
-  Future<Reservation> approveReservation(
-    String id, {
-    String? approvalNote,
-  }) async {
-    if (id.isEmpty) {
-      throw ValidationException('ID reservasi tidak boleh kosong');
-    }
-
-    final body = <String, dynamic>{'status': 'approved'};
-    if (approvalNote != null && approvalNote.trim().isNotEmpty) {
-      body['approvalNote'] = approvalNote.trim();
-    }
-
-    final builder = await ApiClient.create('Reservation.update');
-    builder.addParameter('id', id);
-
-    final response = await builder.patch<Reservation>(
-      body: body,
-      fromJson: Reservation.fromJson,
-      errorMessage: 'Gagal menyetujui reservasi',
-    );
-
-    final data = response.data;
-
-    if (data == null) {
-      throw NotFoundException('Reservasi dengan ID $id tidak ditemukan');
-    }
-
-    return data;
-  }
-
-  /// Reject reservasi (hanya untuk admin)
-  Future<Reservation> rejectReservation(
-    String id, {
-    String? rejectionNote,
-  }) async {
-    if (id.isEmpty) {
-      throw ValidationException('ID reservasi tidak boleh kosong');
-    }
-
-    final body = <String, dynamic>{'status': 'rejected'};
-    if (rejectionNote != null && rejectionNote.trim().isNotEmpty) {
-      body['approvalNote'] = rejectionNote.trim();
-    }
-
-    final builder = await ApiClient.create('Reservation.update');
-    builder.addParameter('id', id);
-
-    final response = await builder.patch<Reservation>(
-      body: body,
-      fromJson: Reservation.fromJson,
-      errorMessage: 'Gagal menolak reservasi',
-    );
-
-    final data = response.data;
-
-    if (data == null) {
-      throw NotFoundException('Reservasi dengan ID $id tidak ditemukan');
-    }
-
-    return data;
   }
 
   /// Validasi waktu reservasi

@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
+import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/request/user_register_request.dart';
 
@@ -21,44 +21,46 @@ class AuthService {
     required String credential,
     required String password,
   }) async {
-    final firestore = FirebaseFirestore.instance;
-    final firestoreClient = firestore.collection(Profile.collectionName);
+    final client = await FirestoreClient.create(Profile.collectionName);
 
     final isEmail = credential.contains('@');
     final fieldName = isEmail ? 'email' : 'employeeId';
 
     credential = isEmail ? credential.toLowerCase() : credential.toUpperCase();
 
-    final query = firestoreClient.where(fieldName, isEqualTo: credential);
+    final hashedPassword = _hashPassword(password);
 
-    final snapshot = await query.get();
+    final snapshot = await client.advancedQuery(
+      conditions: [
+        QueryCondition(field: fieldName, isEqualTo: credential),
+        QueryCondition(field: 'password', isEqualTo: hashedPassword),
+        QueryCondition(
+          field: BaseFirestoreModel.deletedAtField,
+          isEqualTo: null,
+        ),
+      ],
+    );
 
     if (snapshot.docs.isEmpty) {
       throw 'Akun tidak ditemukan, silakan periksa kembali No. Induk Pegawai/email, dan password Anda.';
     }
 
-    final doc = snapshot.docs.first;
-    final userData = doc.data();
+    final document = snapshot.docs.first;
 
-    final id = doc.id;
-
-    final profile = Profile.fromJson(userData, id);
-
-    final hashedPassword = _hashPassword(password);
-
-    if (profile.password != hashedPassword) {
+    if (!document.exists) {
       throw 'Akun tidak ditemukan, silakan periksa kembali No. Induk Pegawai/email, dan password Anda.';
     }
 
-    if (profile.deletedAt != null) {
-      throw 'Akun Anda telah dinonaktifkan. Silakan hubungi admin untuk informasi lebih lanjut.';
-    }
+    final user = document.data();
+    final id = document.id;
+
+    final profile = Profile.fromJson(user, id);
 
     profile.lastLoginAt = DateTime.now();
     profile.prepareForUpdate();
 
     final updatedData = profile.toJson();
-    firestoreClient.doc(id).update(updatedData);
+    client.update(id, updatedData);
 
     return profile;
   }
@@ -69,15 +71,16 @@ class AuthService {
     );
 
     request.validate();
+
     request.prepareForCreate();
     final newUserData = request.toJson();
 
     final hashedPassword = _hashPassword(request.password!);
-
     final employeeId = await _generateEmployeeId(request.dateOfBirth!);
 
     newUserData['employeeId'] = employeeId;
     newUserData['password'] = hashedPassword;
+
     await firestoreClient.set(employeeId, newUserData);
   }
 
@@ -109,43 +112,5 @@ class AuthService {
     final employeeId = '$yearPart$dobYearPart${sequencePart}HPI';
 
     return employeeId;
-  }
-
-  @Deprecated('In `Firebase` implementation, logout is managed by Firebase SDK')
-  Future logout() async {}
-
-  @Deprecated(
-    'In `Firebase` implementation, access token is managed by Firebase SDK',
-  )
-  bool isRefreshTokenExpired() {
-    return false;
-  }
-
-  @Deprecated(
-    'In `Firebase` implementation, access token is managed by Firebase SDK',
-  )
-  Future<bool> refreshTokenIfNeeded() async {
-    return false;
-  }
-
-  @Deprecated(
-    'In `Firebase` implementation, access token is managed by Firebase SDK',
-  )
-  Future<bool> ensureValidToken() async {
-    return true;
-  }
-
-  @Deprecated(
-    'In `Firebase` implementation, access token is managed by Firebase SDK',
-  )
-  String? getAccessToken() {
-    final random = Random();
-
-    final hasToken = random.nextBool();
-    if (!hasToken) {
-      return null;
-    }
-
-    return 'dummy_access_token';
   }
 }
