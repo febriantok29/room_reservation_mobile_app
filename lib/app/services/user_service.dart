@@ -23,14 +23,16 @@ class UserService {
 
     final client = await FirestoreClient.create(Profile.collectionName);
 
-    final snapshot = await client
-        .query(field: 'role', isNotEqualTo: UserRole.admin.name,);
+    final snapshot = await client.query(
+      field: 'role',
+      isNotEqualTo: UserRole.admin.name,
+    );
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
 
       final profile = Profile.fromJson(data, doc.id);
-      _cachedUsers.add(profile);
+      _updateCache(profile);
     }
 
     return _cachedUsers;
@@ -58,7 +60,7 @@ class UserService {
     final data = doc.data()!;
 
     final profile = Profile.fromJson(data, doc.id);
-    _cachedUsers.add(profile);
+    _updateCache(profile);
 
     return profile;
   }
@@ -93,7 +95,7 @@ class UserService {
     final data = doc.data();
 
     final profile = Profile.fromJson(data, doc.id);
-    _cachedUsers.add(profile);
+    _updateCache(profile);
 
     return profile;
   }
@@ -116,16 +118,15 @@ class UserService {
     }
 
     // Get uncached employee IDs
-    final uncachedIds = employeeDocIds.difference(
-      cachedUsers.map((e) => e.employeeId).toSet(),
-    ).toList();
+    final uncachedIds = employeeDocIds
+        .difference(cachedUsers.map((e) => e.employeeId).toSet())
+        .toList();
 
     // Query Firestore for missing users
-    final client = await FirestoreClient.create(
-      Profile.collectionName
-    );
+    final client = await FirestoreClient.create(Profile.collectionName);
     final snapshot = await client.query(
-        field: FieldPath.documentId, whereIn: uncachedIds
+      field: FieldPath.documentId,
+      whereIn: uncachedIds,
     );
 
     final fetchedRooms = <Profile>[];
@@ -146,6 +147,10 @@ class UserService {
 
     // Return combined results
     return [...cachedUsers, ...fetchedRooms];
+  }
+
+  static void logout(Profile profile) {
+    _cachedUsers.removeWhere((u) => u.id == profile.id);
   }
 
   static Future<void> generateSampleUsers() async {

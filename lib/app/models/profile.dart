@@ -80,7 +80,7 @@ class Profile extends BaseFirestoreModel {
       'dateOfBirth': dateOfBirth?.toIso8601String(),
       'lastLoginAt': lastLoginAt?.toIso8601String(),
       'address': address,
-      'role': role.toString(),
+      'role': (role ?? UserRole.user).name,
     };
 
     payload.addAll(super.toJson());
