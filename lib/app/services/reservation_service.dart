@@ -1,9 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
-import 'package:room_reservation_mobile_app/app/models/profile.dart';
+import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
-import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 import 'package:room_reservation_mobile_app/app/services/user_service.dart';
 
@@ -21,15 +20,39 @@ class ReservationService {
 
   Future<List<Reservation>> getReservationList({
     DocumentReference? userId,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool showDeleted = false,
   }) async {
+    if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+      throw 'Tanggal mulai tidak boleh lebih besar dari tanggal selesai.';
+    }
+
     final client = await FirestoreClient.create(Reservation.collectionName);
 
-    QuerySnapshot<Map<String, dynamic>> response;
+    Query<Map<String, dynamic>> query = client.getCollectionRef();
+
     if (userId != null) {
-      response = await client.query(field: 'userId', isEqualTo: userId);
-    } else {
-      response = await client.getAll();
+      query = query.where('userId', isEqualTo: userId);
     }
+
+    if (startDate != null) {
+      final startTimestamp = Timestamp.fromDate(startDate);
+
+      query = query.where('startTime', isGreaterThanOrEqualTo: startTimestamp);
+    }
+
+    if (endDate != null) {
+      final endTimestamp = Timestamp.fromDate(endDate);
+
+      query = query.where('endTime', isLessThanOrEqualTo: endTimestamp);
+    }
+
+    if (!showDeleted) {
+      query = query.where(BaseFirestoreModel.deletedAtField, isEqualTo: null);
+    }
+
+    final response = await query.get();
 
     final reservations = <Reservation>[];
 
@@ -60,10 +83,11 @@ class ReservationService {
 
       final roomId = roomRef.id;
 
-      reservation.room = rooms.firstWhere(
-        (room) => room.id == roomId,
-        orElse: () => Room(),
-      );
+      final room = rooms.where((room) => room.id == roomId);
+
+      if (room.isNotEmpty) {
+        reservation.room = room.first;
+      }
     }
 
     final userIds = Set<String>.from(
@@ -73,17 +97,15 @@ class ReservationService {
     final users = await UserService.getUserByDocIds(userIds);
 
     for (final reservation in reservations) {
-      final user = users.firstWhere(
-        (user) => user.id == reservation.userRef?.id,
-        orElse: () => Profile(),
-      );
+      final user = users.where((user) => user.id == reservation.userRef?.id);
 
-      reservation.user = user;
+      if (user.isNotEmpty) {
+        reservation.user = user.first;
+      }
     }
 
     return reservations;
   }
-
 
   /// Mendapatkan reservasi berdasarkan ID
   Future<Reservation> getReservationById(String id) async {
@@ -129,10 +151,10 @@ class ReservationService {
     reservation.validate();
 
     // Validasi waktu reservasi
-    if (reservation.startDateTime != null && reservation.endDateTime != null) {
+    if (reservation.startTime != null && reservation.endTime != null) {
       _validateReservationTime(
-        startDateTime: reservation.startDateTime!,
-        endDateTime: reservation.endDateTime!,
+        startDateTime: reservation.startTime!,
+        endDateTime: reservation.endTime!,
       );
     }
 
@@ -141,10 +163,18 @@ class ReservationService {
 
     final payload = reservation.toFirestore();
 
-    final docRef = await client.add(payload);
+    return await client.transaction<Reservation>((
+      Transaction transaction,
+    ) async {
+      final newDocRef = client.getCollectionRef().doc();
+      transaction.set(newDocRef, payload);
+      return reservation.copyWith(id: newDocRef.id);
+    });
 
-    // Return reservation dengan ID baru
-    return reservation.copyWith(id: docRef.id);
+    // final docRef = await client.add(payload);
+    //
+    // // Return reservation dengan ID baru
+    // return reservation.copyWith(id: docRef.id);
   }
 
   /// Update reservasi (hanya untuk reservasi sendiri yang belum disetujui)
@@ -157,18 +187,10 @@ class ReservationService {
     reservation.validate();
 
     // Validasi waktu jika ada
-    if (reservation.startDateTime != null && reservation.endDateTime != null) {
+    if (reservation.startTime != null && reservation.endTime != null) {
       _validateReservationTime(
-        startDateTime: reservation.startDateTime!,
-        endDateTime: reservation.endDateTime!,
-      );
-    }
-
-    // Validasi status - hanya bisa update jika masih pending
-    if (reservation.status != null &&
-        reservation.status != Reservation.statusPending) {
-      throw ValidationException(
-        'Hanya reservasi dengan status PENDING yang dapat diupdate',
+        startDateTime: reservation.startTime!,
+        endDateTime: reservation.endTime!,
       );
     }
 
@@ -200,17 +222,9 @@ class ReservationService {
     final data = doc.data() ?? {};
     final reservation = Reservation.fromFirestore(data, id);
 
-    // Validasi status - hanya bisa dibatalkan jika masih pending atau approved
-    if (reservation.status != Reservation.statusPending &&
-        reservation.status != Reservation.statusApproved) {
-      throw ValidationException(
-        'Hanya reservasi dengan status PENDING atau APPROVED yang dapat dibatalkan',
-      );
-    }
-
     // Update status menjadi CANCELLED
     final updatedReservation = reservation.copyWith(
-      status: Reservation.statusCancelled,
+      // status: Reservation.statusCancelled,
     );
 
     // Prepare for update

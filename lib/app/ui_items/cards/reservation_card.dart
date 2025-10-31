@@ -4,7 +4,6 @@ import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/theme/app_colors.dart';
 import 'package:room_reservation_mobile_app/app/theme/app_sizes.dart';
 import 'package:room_reservation_mobile_app/app/ui_items/app_card.dart';
-import 'package:room_reservation_mobile_app/app/ui_items/status_badge.dart';
 
 class ReservationCard extends StatelessWidget {
   final Reservation reservation;
@@ -39,12 +38,6 @@ class ReservationCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSizes.md),
-              StatusBadge(
-                text: reservation.formattedStatus,
-                color: Color(
-                  int.parse(reservation.statusColor.replaceFirst('#', '0xFF')),
-                ),
-              ),
             ],
           ),
           const SizedBox(height: AppSizes.md),

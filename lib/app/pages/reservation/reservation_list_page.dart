@@ -48,8 +48,6 @@ class _ReservationListPageState extends State<ReservationListPage> {
               const SizedBox(height: 8),
               Text('Tanggal: ${reservation.formattedRange}'),
               const SizedBox(height: 8),
-              Text('Status: ${reservation.status ?? "PENDING"}'),
-              const SizedBox(height: 8),
               Text('Tujuan: ${reservation.purpose ?? "-"}'),
               if (reservation.visitorCount != null) ...[
                 const SizedBox(height: 8),
@@ -219,24 +217,6 @@ class _ReservationListPageState extends State<ReservationListPage> {
   }
 
   Widget _buildCard(Reservation reservation) {
-    // Tentukan warna berdasarkan status
-    Color statusColor = Colors.grey;
-
-    switch (reservation.status) {
-      case Reservation.statusApproved:
-        statusColor = Colors.green;
-        break;
-      case Reservation.statusRejected:
-        statusColor = Colors.red;
-        break;
-      case Reservation.statusPending:
-        statusColor = Colors.orange;
-        break;
-      case Reservation.statusCancelled:
-        statusColor = Colors.grey;
-        break;
-    }
-
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       elevation: 3,
@@ -261,21 +241,6 @@ class _ReservationListPageState extends State<ReservationListPage> {
                       ),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: statusColor),
-                    ),
-                    child: Text(
-                      reservation.status ?? 'PENDING',
-                      style: TextStyle(color: statusColor, fontSize: 12),
-                    ),
-                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -294,23 +259,23 @@ class _ReservationListPageState extends State<ReservationListPage> {
               ],
               const SizedBox(height: 8),
               // Tombol aksi jika status PENDING
-              if (reservation.status == Reservation.statusPending)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => _editReservation(reservation),
-                      child: const Text('Edit'),
-                    ),
-                    TextButton(
-                      onPressed: () => _cancelReservation(reservation),
-                      child: const Text(
-                        'Batal',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  ],
-                ),
+              // if (reservation.status == Reservation.statusPending)
+              //   Row(
+              //     mainAxisAlignment: MainAxisAlignment.end,
+              //     children: [
+              //       TextButton(
+              //         onPressed: () => _editReservation(reservation),
+              //         child: const Text('Edit'),
+              //       ),
+              //       TextButton(
+              //         onPressed: () => _cancelReservation(reservation),
+              //         child: const Text(
+              //           'Batal',
+              //           style: TextStyle(color: Colors.red),
+              //         ),
+              //       ),
+              //     ],
+              //   ),
             ],
           ),
         ),

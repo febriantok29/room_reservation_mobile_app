@@ -71,8 +71,8 @@ class _ReservationModalBottomSheetState
 
     // Populate form if in edit mode
     if (_isEditMode) {
-      _startDateTime = widget.initialReservation!.startDateTime;
-      _endDateTime = widget.initialReservation!.endDateTime;
+      _startDateTime = widget.initialReservation!.startTime;
+      _endDateTime = widget.initialReservation!.endTime;
       _visitorCount = widget.initialReservation!.visitorCount ?? 1;
       _selectedRoom = widget.initialReservation!.room;
       _selectedUser = widget.initialReservation!.user;
@@ -106,8 +106,8 @@ class _ReservationModalBottomSheetState
             _buildErrorMessage(),
             // Tampilkan user selector hanya jika admin
             if (_isAdmin) _buildUserSelector(),
-            _buildRoomSelector(),
             _buildDateTimeSelectors(),
+            _buildRoomSelector(),
             _buildVisitorCounter(),
             _buildPurposeField(),
             _buildSubmitButton(),
@@ -336,11 +336,30 @@ class _ReservationModalBottomSheetState
       setState(() {
         _selectedUser = user;
       });
+
+      return;
+    }
+
+    if (widget.user.isAdmin) {
+      setState(() {
+        _selectedUser = widget.user;
+      });
     }
   }
 
   // Menampilkan selector ruangan
   void _showRoomSelector() async {
+    final startDateTime = _startDateTime;
+    final endDateTime = _endDateTime;
+
+    if (startDateTime == null || endDateTime == null) {
+      setState(() {
+        _errorMessage = 'Silakan pilih waktu mulai dan selesai terlebih dahulu';
+      });
+
+      return;
+    }
+
     final room = await RoomSelectorBottomSheet.show(
       context: context,
       startDateTime: _startDateTime,
@@ -434,11 +453,10 @@ class _ReservationModalBottomSheetState
         reservation = Reservation(
           userRef: userRef,
           roomRef: roomRef,
-          startTime: _startDateTime?.toIso8601String(),
-          endTime: _endDateTime?.toIso8601String(),
+          startTime: _startDateTime,
+          endTime: _endDateTime,
           visitorCount: _visitorCount,
           purpose: _purposeController.text.trim(),
-          status: Reservation.statusPending,
         );
 
         // Persiapkan untuk create

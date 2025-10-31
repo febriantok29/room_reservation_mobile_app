@@ -4,24 +4,17 @@ import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
+import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
 
 class Reservation extends BaseFirestoreModel {
   static const collectionName = 't_reservations';
 
-  // Status reservasi
-  static const String statusPending = 'PENDING';
-  static const String statusApproved = 'APPROVED';
-  static const String statusRejected = 'REJECTED';
-  static const String statusCancelled = 'CANCELLED';
-  static const String statusCompleted = 'COMPLETED';
-
   final DocumentReference? userRef;
   final DocumentReference? roomRef;
-  final String? startTime;
-  final String? endTime;
+  final DateTime? startTime;
+  final DateTime? endTime;
   final int? visitorCount;
   final String? purpose;
-  final String? status;
   final String? approvalNote;
   final String? approvedBy;
   final DateTime? approvedAt;
@@ -30,9 +23,8 @@ class Reservation extends BaseFirestoreModel {
   Profile? user;
 
   @override
-  DocumentReference get reference => FirebaseFirestore.instance
-      .collection(collectionName)
-      .doc(id);
+  DocumentReference get reference =>
+      FirebaseFirestore.instance.collection(collectionName).doc(id);
 
   Reservation({
     super.id,
@@ -43,7 +35,6 @@ class Reservation extends BaseFirestoreModel {
     this.visitorCount,
     this.approvalNote,
     this.purpose,
-    this.status,
     this.approvedBy,
     this.approvedAt,
     super.createdBy,
@@ -70,7 +61,6 @@ class Reservation extends BaseFirestoreModel {
       visitorCount: json['visitorCount'],
       approvalNote: json['approvalNote'],
       purpose: json['purpose'],
-      status: json['status'],
       approvedBy: json['approvedBy'],
       approvedAt: DateTime.tryParse('${json['approvedAt']}')?.toLocal(),
       createdBy: json['createdBy'],
@@ -91,12 +81,11 @@ class Reservation extends BaseFirestoreModel {
     final reservation = Reservation(
       userRef: data['userId'],
       roomRef: data['roomId'],
-      startTime: data['startTime'],
-      endTime: data['endTime'],
+      startTime: DateFormatter.getDateTime(data['startTime']),
+      endTime: DateFormatter.getDateTime(data['endTime']),
       visitorCount: data['visitorCount'],
       approvalNote: data['approvalNote'],
       purpose: data['purpose'],
-      status: data['status'],
       approvedBy: data['approvedBy'],
       approvedAt: data['approvedAt'] != null
           ? DateTime.tryParse('${data['approvedAt']}')?.toLocal()
@@ -112,10 +101,10 @@ class Reservation extends BaseFirestoreModel {
   static final _timeFormatter = DateFormat('HH:mm');
 
   String get formattedRange {
-    if (startTime == null || endTime == null) return '';
+    final start = startTime;
+    final end = endTime;
 
-    final start = DateTime.parse(startTime!);
-    final end = DateTime.parse(endTime!);
+    if (start == null || end == null) return '';
 
     if (start.year == end.year &&
         start.month == end.month &&
@@ -127,14 +116,6 @@ class Reservation extends BaseFirestoreModel {
       return '${_dateFormatter.format(start)} ${_timeFormatter.format(start)} - ${_dateFormatter.format(end)} ${_timeFormatter.format(end)}';
     }
   }
-
-  /// Mendapatkan DateTime dari string startTime
-  DateTime? get startDateTime =>
-      startTime != null ? DateTime.parse(startTime!) : null;
-
-  /// Mendapatkan DateTime dari string endTime
-  DateTime? get endDateTime =>
-      endTime != null ? DateTime.parse(endTime!) : null;
 
   /// Membuat salinan objek dengan nilai-nilai yang diperbarui
   Reservation copyWith({
@@ -162,16 +143,11 @@ class Reservation extends BaseFirestoreModel {
       id: id ?? this.id,
       userRef: userRef ?? this.userRef,
       roomRef: roomRef ?? this.roomRef,
-      startTime: startDateTime != null
-          ? startDateTime.toIso8601String()
-          : startTime,
-      endTime: endDateTime != null
-          ? endDateTime.toIso8601String()
-          : endTime,
+      startTime: startDateTime != null ? startDateTime.toLocal() : startTime,
+      endTime: endDateTime != null ? endDateTime.toLocal() : endTime,
       visitorCount: visitorCount ?? this.visitorCount,
       approvalNote: approvalNote ?? this.approvalNote,
       purpose: purpose ?? this.purpose,
-      status: status ?? this.status,
       approvedBy: approvedBy ?? this.approvedBy,
       approvedAt: approvedAt ?? this.approvedAt,
       createdBy: createdBy ?? this.createdBy,
@@ -190,11 +166,10 @@ class Reservation extends BaseFirestoreModel {
     final data = <String, dynamic>{
       'userId': userRef,
       'roomId': roomRef,
-      'startTime': startTime,
-      'endTime': endTime,
+      'startTime': startTime?.toUtc(),
+      'endTime': endTime?.toUtc(),
       'visitorCount': visitorCount,
       'purpose': purpose,
-      'status': status ?? statusPending,
     };
 
     if (approvedBy != null) data['approvedBy'] = approvedBy;
@@ -220,11 +195,11 @@ class Reservation extends BaseFirestoreModel {
       throw ValidationException('User ID harus diisi!');
     }
 
-    if (startTime == null || startTime!.isEmpty) {
+    if (startTime == null) {
       throw ValidationException('Waktu mulai harus diisi');
     }
 
-    if (endTime == null || endTime!.isEmpty) {
+    if (endTime == null) {
       throw ValidationException('Waktu selesai harus diisi');
     }
 
@@ -233,8 +208,8 @@ class Reservation extends BaseFirestoreModel {
     }
 
     // Validasi logika waktu
-    final start = startDateTime;
-    final end = endDateTime;
+    final start = startTime;
+    final end = endTime;
 
     if (start != null && end != null) {
       final now = DateTime.now();

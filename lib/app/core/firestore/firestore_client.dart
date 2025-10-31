@@ -177,7 +177,7 @@ class FirestoreClient {
 
   /// Query documents with simple where condition
   /// Returns a query snapshot containing documents that match the condition
-  Future<QuerySnapshot<Map<String, dynamic>>> query({
+  Query<Map<String, dynamic>> query({
     required dynamic field,
     dynamic isEqualTo,
     dynamic isNotEqualTo,
@@ -189,7 +189,7 @@ class FirestoreClient {
     List<dynamic>? arrayContainsAny,
     List<dynamic>? whereIn,
     List<dynamic>? whereNotIn,
-  }) async {
+  }) {
     try {
       if (field == null) {
         throw ArgumentError('Field parameter cannot be null');
@@ -231,7 +231,7 @@ class FirestoreClient {
         query = query.where(field, whereNotIn: whereNotIn);
       }
 
-      return await query.get();
+      return query;
     } catch (e) {
       debugPrint('Error querying documents: $e');
       rethrow;
@@ -254,12 +254,12 @@ class FirestoreClient {
 
   /// Query documents with multiple conditions
   /// This is a more advanced query method that allows multiple conditions
-  Future<QuerySnapshot<Map<String, dynamic>>> advancedQuery({
+  Query<Map<String, dynamic>> advancedQuery({
     required List<QueryCondition> conditions,
     String? orderBy,
     bool descending = false,
     int? limit,
-  }) async {
+  }) {
     try {
       Query<Map<String, dynamic>> query = _collectionRef;
 
@@ -290,7 +290,7 @@ class FirestoreClient {
         query = query.limit(limit);
       }
 
-      return await query.get();
+      return query;
     } catch (e) {
       debugPrint('Error with advanced query: $e');
       rethrow;

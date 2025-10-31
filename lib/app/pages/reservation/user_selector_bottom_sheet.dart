@@ -49,7 +49,7 @@ class _UserSelectorBottomSheetState extends State<UserSelectorBottomSheet> {
 
     try {
       // Ambil semua pengguna
-      final users = await UserService.getAllUsers();
+      final users = await UserService.getAllUsers(forceRefresh: true);
 
       // Filter berdasarkan keyword jika ada
       if (_searchKeyword.isNotEmpty) {

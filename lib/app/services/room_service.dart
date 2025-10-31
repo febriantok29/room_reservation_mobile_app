@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
+import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 
 /// Service untuk mengelola operasi terkait ruangan
 class RoomService {
@@ -28,17 +29,16 @@ class RoomService {
     bool forceRefresh = false,
   }) async {
     // Jika cache kosong atau dipaksa refresh, ambil data dari Firestore
-    if ( _cachedRooms.length <= 1 || forceRefresh) {
+    if (_cachedRooms.length <= 1 || forceRefresh) {
       final client = await FirestoreClient.create(Room.collectionName);
       QuerySnapshot<Map<String, dynamic>> response;
 
       if (showAll) {
         response = await client.getAll();
       } else {
-        response = await client.query(
-          field: 'isDeleted',
-          isEqualTo: null,
-        );
+        response = await client
+            .query(field: 'isDeleted', isEqualTo: null)
+            .get();
       }
 
       final docs = response.docs;
@@ -95,7 +95,9 @@ class RoomService {
       return [];
     }
 
-    final cachedRooms = _cachedRooms.where((room) => ids.contains(room.id)).toList();
+    final cachedRooms = _cachedRooms
+        .where((room) => ids.contains(room.id))
+        .toList();
 
     if (cachedRooms.length == ids.length) {
       return cachedRooms;
@@ -103,11 +105,14 @@ class RoomService {
 
     final unCachedIds = ids.difference(cachedRooms.map((e) => e.id).toSet());
 
+    if (unCachedIds.isEmpty) {
+      return cachedRooms;
+    }
+
     final client = await FirestoreClient.create(Room.collectionName);
-    final snapshot = await client.query(
-      field: FieldPath.documentId,
-      whereIn: unCachedIds.toList(),
-    );
+    final snapshot = await client
+        .query(field: FieldPath.documentId, whereIn: unCachedIds.toList())
+        .get();
 
     final fetchedRooms = <Room>[];
 
@@ -172,7 +177,7 @@ class RoomService {
   }
 
   /// Mendapatkan ruangan yang tersedia pada rentang waktu tertentu
-  Future<List<Room>> getRawAvailableRoom({
+  Future<List<Room>> getAvailableRoom({
     required DateTime start,
     required DateTime end,
   }) async {
@@ -182,53 +187,33 @@ class RoomService {
         throw 'Waktu mulai tidak boleh lebih besar dari waktu selesai';
       }
 
-      // Compare dates up to minutes for more accurate validation
-      final now = DateTime.now();
-      final currentTime = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        now.hour,
-        now.minute,
-      );
-      final startCompare = DateTime(
-        start.year,
-        start.month,
-        start.day,
-        start.hour,
-        start.minute,
+      final reservationService = ReservationService.getInstance();
+
+      final reservedRooms = await reservationService.getReservationList(
+        startDate: start,
+        endDate: end,
       );
 
-      if (startCompare.isBefore(currentTime)) {
-        throw 'Waktu mulai tidak boleh di masa lalu';
+      final reservedRoomIds = reservedRooms
+          .where((reservation) => reservation.roomRef != null)
+          .map((reservation) => reservation.roomRef!.id)
+          .toSet();
+
+      final allRooms = await getRoomList(showAll: false);
+
+      final result = allRooms
+          .where((room) => !reservedRoomIds.contains(room.id))
+          .toList();
+
+      // Remove duplicated, but keep one instance in cache
+      final uniqueResult = <String, Room>{};
+      for (final room in result) {
+        uniqueResult[room.id!] = room;
       }
 
-      final client = await FirestoreClient.create(Room.collectionName);
-
-      final response = await client.advancedQuery(
-        conditions: [
-          QueryCondition(field: 'isDeleted', isEqualTo: null),
-          QueryCondition(field: 'isMaintenance', isEqualTo: false),
-        ],
-      );
-
-      final result = <Room>[];
-
-      final docs = response.docs;
-
-      for (final doc in docs) {
-        if (!doc.exists) continue;
-
-        final data = doc.data();
-
-        final room = Room.fromFirestore(data, doc.id);
-        result.add(room);
-      }
-
-      return result;
-    } catch (e) {
-      if (e is ValidationException) rethrow;
-      throw ValidationException('Format waktu tidak valid');
+      return uniqueResult.values.toList();
+    } catch (_) {
+      rethrow;
     }
   }
 

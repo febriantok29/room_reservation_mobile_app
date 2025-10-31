@@ -55,9 +55,9 @@ abstract class BaseFirestoreModel {
 
   Map<String, dynamic> toMap() {
     return {
-      createdByField: _getUserReference(createdBy?.id),
-      updatedByField: _getUserReference(updatedBy?.id),
-      deletedByField: _getUserReference(deletedBy?.id),
+      createdByField: createdBy,
+      updatedByField: updatedBy,
+      deletedByField: deletedBy,
       createdAtField: createdAt != null ? Timestamp.fromDate(createdAt!) : null,
       updatedAtField: updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
       deletedAtField: deletedAt != null ? Timestamp.fromDate(deletedAt!) : null,
@@ -66,9 +66,9 @@ abstract class BaseFirestoreModel {
 
   Map<String, dynamic> toJson() {
     final payload = {
-      createdByField: _getUserReference(createdBy?.id),
-      updatedByField: _getUserReference(updatedBy?.id),
-      deletedByField: _getUserReference(deletedBy?.id),
+      createdByField: createdBy,
+      updatedByField: updatedBy,
+      deletedByField: deletedBy,
       createdAtField: createdAt?.millisecondsSinceEpoch,
       updatedAtField: updatedAt?.millisecondsSinceEpoch,
       deletedAtField: deletedAt?.millisecondsSinceEpoch,

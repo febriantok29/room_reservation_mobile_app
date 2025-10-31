@@ -16,17 +16,16 @@ class UserService {
 
   static final _cachedUsers = <Profile>[];
 
-  static Future<List<Profile>> getAllUsers() async {
-    if (_cachedUsers.isNotEmpty && _cachedUsers.length > 1) {
+  static Future<List<Profile>> getAllUsers({bool forceRefresh = false}) async {
+    if (forceRefresh == false && _cachedUsers.isNotEmpty) {
       return _cachedUsers.where((user) => user.role != UserRole.admin).toList();
     }
 
     final client = await FirestoreClient.create(Profile.collectionName);
 
-    final snapshot = await client.query(
-      field: 'role',
-      isNotEqualTo: UserRole.admin.name,
-    );
+    final snapshot = await client
+        .query(field: 'role', isNotEqualTo: UserRole.admin.name)
+        .get();
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
@@ -80,10 +79,9 @@ class UserService {
       Profile.collectionName,
     );
 
-    final snapshot = await firestoreClient.query(
-      field: 'employeeId',
-      isEqualTo: employeeId,
-    );
+    final snapshot = await firestoreClient
+        .query(field: 'employeeId', isEqualTo: employeeId)
+        .get();
 
     if (snapshot.docs.isEmpty) {
       throw 'Akun tidak ditemukan.';
@@ -124,10 +122,9 @@ class UserService {
 
     // Query Firestore for missing users
     final client = await FirestoreClient.create(Profile.collectionName);
-    final snapshot = await client.query(
-      field: FieldPath.documentId,
-      whereIn: uncachedIds,
-    );
+    final snapshot = await client
+        .query(field: FieldPath.documentId, whereIn: uncachedIds)
+        .get();
 
     final fetchedRooms = <Profile>[];
 
