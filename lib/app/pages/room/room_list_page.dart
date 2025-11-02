@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/pages/image_viewer_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/room/room_list_modal_bottom_sheet.dart';
 import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 
@@ -267,97 +266,97 @@ class _RoomListPageState extends State<RoomListPage> {
           ),
         ],
       ),
-      child: IntrinsicHeight(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Bagian gambar ruangan
-            Expanded(
-              flex: 1,
-              child: GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ImageViewerPage(
-                        imageProvider: NetworkImage(room.imageUrl),
-                      ),
-                    ),
-                  );
-                },
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(8.0),
-                    bottomLeft: Radius.circular(8.0),
-                  ),
-                  child: Image.network(
-                    room.imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.grey[200],
-                      alignment: Alignment.center,
-                      child: const Icon(Icons.meeting_room, size: 64),
-                    ),
-                  ),
-                ),
+            // Icon ruangan di sebelah kiri
+            Container(
+              padding: const EdgeInsets.all(12.0),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+              child: Icon(
+                Icons.meeting_room,
+                size: 32,
+                color: Colors.blue.shade700,
               ),
             ),
-            // Bagian informasi ruangan
+            const SizedBox(width: 16),
+
+            // Informasi ruangan
             Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Nama ruangan
-                    Text(
-                      room.name ?? '(Tanpa Nama)',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Nama ruangan
+                  Text(
+                    room.name ?? '(Tanpa Nama)',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(height: 10),
+                  ),
+                  const SizedBox(height: 6),
 
-                    // Informasi ruangan dengan ikon
-                    _buildRoomInfoRow(
-                      icon: Icons.location_on,
-                      value: room.location ?? '-',
-                    ),
-                    const SizedBox(height: 4),
-                    _buildRoomInfoRow(
-                      icon: Icons.people,
-                      value: '${room.capacity ?? '-'} orang',
-                    ),
+                  // Lokasi
+                  _buildRoomInfoRow(
+                    icon: Icons.location_on,
+                    value: room.location ?? '-',
+                  ),
+                  const SizedBox(height: 4),
 
-                    // Deskripsi jika ada
-                    if (room.description != null &&
-                        room.description!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6.0),
-                        child: _buildRoomInfoRow(
-                          icon: Icons.description,
-                          value: room.description ?? '',
-                        ),
-                      ),
+                  // Kapasitas
+                  _buildRoomInfoRow(
+                    icon: Icons.people,
+                    value: 'Kapasitas: ${room.capacity ?? '-'} orang',
+                  ),
 
-                    // Status maintenance
-                    if (room.isMaintenance == true)
-                      _buildStatusTag(
+                  // Status maintenance
+                  if (room.isMaintenance == true)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: _buildStatusTag(
                         Icons.build,
                         'DALAM PERAWATAN',
                         Colors.orange.shade800,
                       ),
+                    ),
 
-                    // Status hapus untuk admin
-                    if (room.deletedAt != null && widget.user.isAdmin)
-                      _buildStatusTag(
+                  // Status hapus untuk admin
+                  if (room.deletedAt != null && widget.user.isAdmin)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: _buildStatusTag(
                         Icons.delete,
                         'Dihapus pada ${room.deletedAtFormatted}',
                         Colors.red.shade800,
                       ),
-                  ],
+                    ),
+                ],
+              ),
+            ),
+
+            // Tombol Book di sebelah kanan
+            ElevatedButton(
+              onPressed: () {
+                // TODO: Implementasi navigasi ke halaman booking
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
                 ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              child: const Text(
+                'Book',
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -367,29 +366,16 @@ class _RoomListPageState extends State<RoomListPage> {
   }
 
   /// Widget untuk menampilkan baris informasi ruangan dengan ikon
-  Widget _buildRoomInfoRow({
-    required IconData icon,
-    required String value,
-    String? label,
-  }) {
+  Widget _buildRoomInfoRow({required IconData icon, required String value}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 18, color: Colors.grey[700]),
-        const SizedBox(width: 8),
+        Icon(icon, size: 16, color: Colors.grey[600]),
+        const SizedBox(width: 6),
         Expanded(
-          child: RichText(
-            text: TextSpan(
-              style: TextStyle(color: Colors.black87),
-              children: [
-                if (label != null && label.isNotEmpty)
-                  TextSpan(
-                    text: '$label: ',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                TextSpan(text: value),
-              ],
-            ),
+          child: Text(
+            value,
+            style: TextStyle(color: Colors.grey[700], fontSize: 13),
           ),
         ),
       ],
