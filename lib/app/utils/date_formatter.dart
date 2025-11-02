@@ -44,6 +44,10 @@ class DateFormatter {
     12: 'Desember',
   };
 
+  static String getMonthName(int month) {
+    return _monthNames[month] ?? '';
+  }
+
   /// Format: "Jumat, 31 Desember 2024"
   static String fullDate(DateTime date) {
     date = date.toLocal(); // Konversi ke timezone lokal
