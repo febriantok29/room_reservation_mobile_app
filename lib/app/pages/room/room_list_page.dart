@@ -46,7 +46,7 @@ class _RoomListPageState extends State<RoomListPage> {
   void _loadRooms({bool forceRefresh = false}) {
     setState(() {
       _rooms = _roomService.getRoomList(
-        showAll: _showAll,
+        showDeleted: _showAll,
         searchKeyword: _searchKeyword,
         forceRefresh: forceRefresh,
       );
