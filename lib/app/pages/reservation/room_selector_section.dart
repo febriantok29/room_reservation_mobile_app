@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 
-class RoomSelectorBottomSheet extends StatefulWidget {
+class RoomSelectorSection extends StatefulWidget {
   final DateTime? startDateTime;
   final DateTime? endDateTime;
   final String? selectedRoomId;
 
-  const RoomSelectorBottomSheet({
+  const RoomSelectorSection({
     super.key,
     this.startDateTime,
     this.endDateTime,
@@ -15,11 +15,10 @@ class RoomSelectorBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<RoomSelectorBottomSheet> createState() =>
-      _RoomSelectorBottomSheetState();
+  State<RoomSelectorSection> createState() => _RoomSelectorSectionState();
 
   /// Menampilkan bottom sheet untuk memilih ruangan
-  static Future<Room?> show({
+  static Future<Room?> showBottomSheet({
     required BuildContext context,
     DateTime? startDateTime,
     DateTime? endDateTime,
@@ -32,16 +31,36 @@ class RoomSelectorBottomSheet extends StatefulWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => RoomSelectorBottomSheet(
+      builder: (_) => RoomSelectorSection(
         startDateTime: startDateTime,
         endDateTime: endDateTime,
         selectedRoomId: selectedRoomId,
       ),
     );
   }
+
+  static Future<Room?> showPage({
+    required BuildContext context,
+    DateTime? startDateTime,
+    DateTime? endDateTime,
+    String? selectedRoomId,
+  }) {
+    return Navigator.of(context).push<Room>(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Pilih Ruangan')),
+          body: RoomSelectorSection(
+            startDateTime: startDateTime,
+            endDateTime: endDateTime,
+            selectedRoomId: selectedRoomId,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _RoomSelectorBottomSheetState extends State<RoomSelectorBottomSheet> {
+class _RoomSelectorSectionState extends State<RoomSelectorSection> {
   final _roomService = RoomService.getInstance();
 
   String _searchKeyword = '';
@@ -67,6 +86,7 @@ class _RoomSelectorBottomSheetState extends State<RoomSelectorBottomSheet> {
       if (widget.startDateTime == null || widget.endDateTime == null) {
         final rooms = await _roomService.getRoomList(
           searchKeyword: _searchKeyword,
+          showMaintenance: false,
         );
 
         setState(() {
@@ -80,26 +100,28 @@ class _RoomSelectorBottomSheetState extends State<RoomSelectorBottomSheet> {
           end: widget.endDateTime!,
         );
 
-        if (availableRooms.isNotEmpty) {
-          // Filter dengan keyword jika ada
-
-          if (_searchKeyword.isNotEmpty) {
-            final keyword = _searchKeyword.toLowerCase();
-            setState(() {
-              _rooms = availableRooms.where((room) {
-                final name = room.name?.toLowerCase() ?? '';
-                final location = room.location?.toLowerCase() ?? '';
-                return name.contains(keyword) || location.contains(keyword);
-              }).toList();
-            });
-          } else {
-            setState(() {
-              _rooms = availableRooms;
-            });
-          }
-        } else {
+        if (availableRooms.isEmpty) {
           setState(() {
             _errorMessage = 'Tidak dapat memuat ruangan yang tersedia';
+          });
+
+          return;
+        }
+
+        // Filter dengan keyword jika ada
+        if (_searchKeyword.isNotEmpty) {
+          final keyword = _searchKeyword.toLowerCase();
+
+          setState(() {
+            _rooms = availableRooms.where((room) {
+              final name = room.name?.toLowerCase() ?? '';
+              final location = room.location?.toLowerCase() ?? '';
+              return name.contains(keyword) || location.contains(keyword);
+            }).toList();
+          });
+        } else {
+          setState(() {
+            _rooms = availableRooms;
           });
         }
       }
@@ -128,14 +150,6 @@ class _RoomSelectorBottomSheetState extends State<RoomSelectorBottomSheet> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text(
-              'Pilih Ruangan',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-          ),
           _buildSearchField(),
           Expanded(child: _buildRoomList()),
         ],
@@ -158,6 +172,7 @@ class _RoomSelectorBottomSheetState extends State<RoomSelectorBottomSheet> {
           setState(() {
             _searchKeyword = value;
           });
+
           _loadRooms();
         },
       ),
