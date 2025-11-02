@@ -134,11 +134,9 @@ class UserService {
       if (!doc.exists) continue;
 
       final data = doc.data();
-
       final profile = Profile.fromJson(data, doc.id);
 
       fetchedRooms.add(profile);
-
       _updateCache(profile);
     }
 
