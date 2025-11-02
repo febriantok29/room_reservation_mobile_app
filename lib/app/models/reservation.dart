@@ -87,9 +87,7 @@ class Reservation extends BaseFirestoreModel {
       approvalNote: data['approvalNote'],
       purpose: data['purpose'],
       approvedBy: data['approvedBy'],
-      approvedAt: data['approvedAt'] != null
-          ? DateTime.tryParse('${data['approvedAt']}')?.toLocal()
-          : null,
+      approvedAt: DateFormatter.getDateTime(data['approvedAt']),
     );
 
     reservation.setCommonFields(data, documentId);
@@ -115,6 +113,33 @@ class Reservation extends BaseFirestoreModel {
       // Different days
       return '${_dateFormatter.format(start)} ${_timeFormatter.format(start)} - ${_dateFormatter.format(end)} ${_timeFormatter.format(end)}';
     }
+  }
+
+  /// Mendapatkan status reservasi berdasarkan kondisi field
+  String get status {
+    // Jika sudah dihapus
+    if (deletedAt != null) {
+      return 'CANCELLED';
+    }
+
+    // Jika sudah disetujui
+    if (approvedBy != null && approvedAt != null) {
+      // Cek apakah sudah selesai (endTime sudah lewat)
+      if (endTime != null && endTime!.isBefore(DateTime.now())) {
+        return 'COMPLETED';
+      }
+      return 'APPROVED';
+    }
+
+    // Jika approval note ada tapi approvedBy kosong, berarti ditolak
+    if (approvalNote != null &&
+        approvalNote!.isNotEmpty &&
+        approvedBy == null) {
+      return 'REJECTED';
+    }
+
+    // Default adalah pending
+    return 'PENDING';
   }
 
   /// Membuat salinan objek dengan nilai-nilai yang diperbarui
