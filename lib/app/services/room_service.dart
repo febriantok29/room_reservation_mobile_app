@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
+import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 
@@ -37,7 +38,7 @@ class RoomService {
         response = await client.getAll();
       } else {
         response = await client
-            .query(field: 'isDeleted', isEqualTo: null)
+            .query(field: BaseFirestoreModel.deletedAtField, isEqualTo: null)
             .get();
       }
 
@@ -208,6 +209,10 @@ class RoomService {
       // Remove duplicated, but keep one instance in cache
       final uniqueResult = <String, Room>{};
       for (final room in result) {
+        if (room.isMaintenance == true) {
+          continue;
+        }
+
         uniqueResult[room.id!] = room;
       }
 
