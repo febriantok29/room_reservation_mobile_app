@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/pages/reservation/room_selector_bottom_sheet.dart';
+import 'package:room_reservation_mobile_app/app/pages/reservation/room_selector_section.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/user_selector_bottom_sheet.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 
@@ -740,18 +740,20 @@ class _ReservationModalBottomSheetState
       return;
     }
 
-    final room = await RoomSelectorBottomSheet.show(
+    final room = await RoomSelectorSection.showPage(
       context: context,
       startDateTime: _startDateTime,
       endDateTime: _endDateTime,
       selectedRoomId: _selectedRoom?.id,
     );
 
-    if (room != null) {
-      setState(() {
-        _selectedRoom = room;
-      });
+    if (room == null) {
+      return;
     }
+
+    setState(() {
+      _selectedRoom = room;
+    });
   } // Handler untuk submit form
 
   void _handleSubmit() async {
@@ -839,8 +841,10 @@ class _ReservationModalBottomSheetState
           purpose: _purposeController.text.trim(),
         );
 
-        // Persiapkan untuk create
-        reservation.prepareForCreate();
+        if (_selectedRoom!.capacity != null &&
+            _visitorCount > _selectedRoom!.capacity!) {
+          throw 'Jumlah pengunjung melebihi kapasitas ruangan (${_selectedRoom!.capacity})';
+        }
 
         // Create reservation
         await _reservationService.createReservation(reservation);
