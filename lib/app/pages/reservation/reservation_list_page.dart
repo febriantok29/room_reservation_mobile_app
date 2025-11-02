@@ -217,67 +217,141 @@ class _ReservationListPageState extends State<ReservationListPage> {
   }
 
   Widget _buildCard(Reservation reservation) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.2),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: InkWell(
         onTap: () => _showReservationDetail(reservation),
         borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      reservation.room?.name ?? "Tidak diketahui",
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Nama ruangan dan status
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    reservation.room?.name ?? "Tidak diketahui",
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Tanggal: ${reservation.formattedRange}',
-                style: const TextStyle(fontSize: 14),
-              ),
-              if (reservation.purpose != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  'Tujuan: ${reservation.purpose}',
-                  style: const TextStyle(fontSize: 14),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(width: 8),
+                _buildStatusBadge(reservation.status),
               ],
-              const SizedBox(height: 8),
-              // Tombol aksi jika status PENDING
-              // if (reservation.status == Reservation.statusPending)
-              //   Row(
-              //     mainAxisAlignment: MainAxisAlignment.end,
-              //     children: [
-              //       TextButton(
-              //         onPressed: () => _editReservation(reservation),
-              //         child: const Text('Edit'),
-              //       ),
-              //       TextButton(
-              //         onPressed: () => _cancelReservation(reservation),
-              //         child: const Text(
-              //           'Batal',
-              //           style: TextStyle(color: Colors.red),
-              //         ),
-              //       ),
-              //     ],
-              //   ),
-            ],
+            ),
+            const SizedBox(height: 8),
+
+            // Tanggal dan waktu dengan icon
+            _buildInfoRow(
+              icon: Icons.calendar_today,
+              text: reservation.formattedRange,
+            ),
+
+            const SizedBox(height: 4),
+
+            _buildInfoRow(
+              icon: Icons.people,
+              text: '${reservation.visitorCount ?? 1} orang',
+            ),
+
+            const SizedBox(height: 4),
+
+            // Tujuan dengan icon
+            if (reservation.purpose != null && reservation.purpose!.isNotEmpty)
+              _buildInfoRow(
+                icon: Icons.edit_note,
+                text: reservation.purpose!,
+                maxLines: 2,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String text,
+    int? maxLines,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: Colors.grey[600]),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+            maxLines: maxLines,
+            overflow: maxLines != null ? TextOverflow.ellipsis : null,
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusBadge(String? status) {
+    Color backgroundColor;
+    Color textColor;
+    String label;
+
+    switch (status) {
+      case 'PENDING':
+        backgroundColor = Colors.orange.shade100;
+        textColor = Colors.orange.shade800;
+        label = 'PENDING';
+        break;
+      case 'APPROVED':
+        backgroundColor = Colors.green.shade100;
+        textColor = Colors.green.shade800;
+        label = 'APPROVED';
+        break;
+      case 'REJECTED':
+        backgroundColor = Colors.red.shade100;
+        textColor = Colors.red.shade800;
+        label = 'REJECTED';
+        break;
+      case 'CANCELLED':
+        backgroundColor = Colors.grey.shade100;
+        textColor = Colors.grey.shade800;
+        label = 'CANCELLED';
+        break;
+      default:
+        backgroundColor = Colors.grey.shade100;
+        textColor = Colors.grey.shade800;
+        label = status ?? 'UNKNOWN';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );
@@ -286,7 +360,8 @@ class _ReservationListPageState extends State<ReservationListPage> {
   Widget _buildAddButton() {
     return FloatingActionButton(
       onPressed: _createReservation,
-      child: const Icon(Icons.add),
+      backgroundColor: Colors.blue,
+      child: const Icon(Icons.add, color: Colors.white),
     );
   }
 

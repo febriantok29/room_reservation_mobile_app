@@ -6,7 +6,6 @@ import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/room_selector_bottom_sheet.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/user_selector_bottom_sheet.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
-import 'package:room_reservation_mobile_app/app/ui_items/date_time_field.dart';
 
 class ReservationModalBottomSheet extends StatefulWidget {
   final Profile user;
@@ -53,8 +52,9 @@ class _ReservationModalBottomSheetState
   final _reservationService = ReservationService.getInstance();
 
   // Form fields
-  DateTime? _startDateTime;
-  DateTime? _endDateTime;
+  DateTime? _selectedDate;
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
   int _visitorCount = 1;
   Room? _selectedRoom;
   Profile? _selectedUser;
@@ -65,14 +65,52 @@ class _ReservationModalBottomSheetState
   String _errorMessage = '';
   bool get _isEditMode => widget.initialReservation != null;
   bool get _isAdmin => widget.user.isAdmin;
+
+  // Getter untuk DateTime lengkap
+  DateTime? get _startDateTime {
+    if (_selectedDate == null || _startTime == null) return null;
+    return DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      _startTime!.hour,
+      _startTime!.minute,
+    );
+  }
+
+  DateTime? get _endDateTime {
+    if (_selectedDate == null || _endTime == null) return null;
+    return DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      _endTime!.hour,
+      _endTime!.minute,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
 
     // Populate form if in edit mode
     if (_isEditMode) {
-      _startDateTime = widget.initialReservation!.startTime;
-      _endDateTime = widget.initialReservation!.endTime;
+      final startTime = widget.initialReservation!.startTime;
+      final endTime = widget.initialReservation!.endTime;
+
+      if (startTime != null) {
+        _selectedDate = DateTime(
+          startTime.year,
+          startTime.month,
+          startTime.day,
+        );
+        _startTime = TimeOfDay(hour: startTime.hour, minute: startTime.minute);
+      }
+
+      if (endTime != null) {
+        _endTime = TimeOfDay(hour: endTime.hour, minute: endTime.minute);
+      }
+
       _visitorCount = widget.initialReservation!.visitorCount ?? 1;
       _selectedRoom = widget.initialReservation!.room;
       _selectedUser = widget.initialReservation!.user;
@@ -212,38 +250,380 @@ class _ReservationModalBottomSheetState
         ),
       ),
     );
-  } // Widget pemilihan waktu mulai dan selesai
+  }
 
+  // Widget pemilihan tanggal dan waktu
   Widget _buildDateTimeSelectors() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DateTimeField(
-          label: 'Waktu Mulai',
-          value: _startDateTime,
-          onChanged: (dateTime) {
-            setState(() {
-              _startDateTime = dateTime;
-            });
-          },
-          minDateTime: DateTime.now(),
-          enabled: !_isLoading,
+        // Pemilihan Tanggal
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: InkWell(
+            onTap: _isLoading ? null : _selectDate,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12.0,
+                vertical: 15.0,
+              ),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade400),
+                borderRadius: BorderRadius.circular(4.0),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_today, color: Colors.grey),
+                  const SizedBox(width: 12.0),
+                  Expanded(
+                    child: Text(
+                      _selectedDate != null
+                          ? _formatDate(_selectedDate!)
+                          : 'Pilih Tanggal',
+                      style: TextStyle(
+                        color: _selectedDate != null
+                            ? Colors.black
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                ],
+              ),
+            ),
+          ),
         ),
-        const SizedBox(height: 12.0),
-        DateTimeField(
-          label: 'Waktu Selesai',
-          value: _endDateTime,
-          onChanged: (dateTime) {
-            setState(() {
-              _endDateTime = dateTime;
-            });
-          },
-          minDateTime: _startDateTime ?? DateTime.now(),
-          enabled: !_isLoading && _startDateTime != null,
+
+        // Pemilihan Waktu Mulai dan Selesai
+        Row(
+          children: [
+            // Waktu Mulai
+            Expanded(
+              child: InkWell(
+                onTap: _isLoading || _selectedDate == null
+                    ? null
+                    : _selectStartTime,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12.0,
+                    vertical: 15.0,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade400),
+                    borderRadius: BorderRadius.circular(4.0),
+                    color: _selectedDate == null
+                        ? Colors.grey.shade100
+                        : Colors.white,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Waktu Mulai',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.access_time,
+                            color: Colors.grey,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _startTime != null
+                                ? _formatTime(_startTime!)
+                                : '--:--',
+                            style: TextStyle(
+                              color: _startTime != null
+                                  ? Colors.black
+                                  : Colors.grey.shade600,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Waktu Selesai
+            Expanded(
+              child: InkWell(
+                onTap: _isLoading || _selectedDate == null || _startTime == null
+                    ? null
+                    : _selectEndTime,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12.0,
+                    vertical: 15.0,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade400),
+                    borderRadius: BorderRadius.circular(4.0),
+                    color: _selectedDate == null || _startTime == null
+                        ? Colors.grey.shade100
+                        : Colors.white,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Waktu Selesai',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.access_time,
+                            color: Colors.grey,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _endTime != null ? _formatTime(_endTime!) : '--:--',
+                            style: TextStyle(
+                              color: _endTime != null
+                                  ? Colors.black
+                                  : Colors.grey.shade600,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16.0),
       ],
     );
+  }
+
+  // Helper function untuk format tanggal
+  String _formatDate(DateTime date) {
+    const months = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  // Helper function untuk format waktu
+  String _formatTime(TimeOfDay time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  // Function untuk memilih tanggal
+  Future<void> _selectDate() async {
+    final now = DateTime.now();
+    final firstDate = DateTime(now.year, now.month, now.day);
+    final lastDate = DateTime(now.year + 1, now.month, now.day);
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? firstDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      locale: const Locale('id', 'ID'),
+      helpText: 'Pilih Tanggal',
+      cancelText: 'Batal',
+      confirmText: 'OK',
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+
+        // Reset waktu jika tanggal berubah
+        if (_isEditMode == false) {
+          _startTime = null;
+          _endTime = null;
+
+          _resetSelectedRoom();
+        }
+      });
+
+      // Langsung buka dialog waktu mulai setelah memilih tanggal
+      if (mounted) {
+        await _selectStartTime();
+      }
+    }
+  }
+
+  // Function untuk memilih waktu mulai
+  Future<void> _selectStartTime() async {
+    final now = DateTime.now();
+
+    TimeOfDay initialTime =
+        _startTime ?? TimeOfDay(hour: now.hour + 1, minute: 0);
+
+    final isToday =
+        _selectedDate != null &&
+        _selectedDate!.year == now.year &&
+        _selectedDate!.month == now.month &&
+        _selectedDate!.day == now.day;
+
+    TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      initialEntryMode: TimePickerEntryMode.input,
+      helpText: 'Pilih Waktu Mulai',
+      cancelText: 'Batal',
+      confirmText: 'OK',
+      builder: (_, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+          child: child!,
+        );
+      },
+    );
+
+    picked ??= initialTime;
+
+    // Validasi: jika hari ini, waktu tidak boleh di masa lalu
+    if (isToday) {
+      final selectedDateTime = DateTime(
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        picked.hour,
+        picked.minute,
+      );
+
+      if (selectedDateTime.isBefore(now)) {
+        if (!mounted) return;
+
+        await showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Waktu Tidak Valid'),
+            content: const Text('Waktu mulai tidak boleh di masa lalu.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+
+        _selectStartTime();
+
+        return;
+      }
+    }
+
+    setState(() {
+      _startTime = picked;
+
+      if (_endTime != null && _isTimeAfter(_endTime!, picked!) == false) {
+        _endTime = null;
+      }
+
+      _resetSelectedRoom();
+    });
+
+    // Langsung buka dialog waktu selesai setelah memilih waktu mulai
+    if (!mounted) {
+      return;
+    }
+
+    _selectEndTime();
+  }
+
+  // Function untuk memilih waktu selesai
+  Future<void> _selectEndTime() async {
+    final now = DateTime.now();
+    TimeOfDay initialTime = TimeOfDay(hour: now.hour + 2, minute: 0);
+
+    if (_endTime != null) {
+      initialTime = _endTime!;
+    } else if (_startTime != null) {
+      initialTime = TimeOfDay(
+        hour: (_startTime!.hour + 1) % 24,
+        minute: _startTime!.minute,
+      );
+    }
+
+    TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      initialEntryMode: TimePickerEntryMode.input,
+      helpText: 'Pilih Waktu Selesai',
+      cancelText: 'Batal',
+      confirmText: 'OK',
+      builder: (_, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+          child: child!,
+        );
+      },
+    );
+
+    picked ??= initialTime;
+
+    // Validasi: waktu selesai harus setelah waktu mulai
+    if (_startTime != null && _isTimeAfter(picked, _startTime!) == false) {
+      if (!mounted) {
+        return;
+      }
+
+      await showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Waktu Tidak Valid'),
+          content: const Text('Waktu selesai harus setelah waktu mulai.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+
+      _selectEndTime();
+    }
+
+    setState(() {
+      _endTime = picked;
+
+      _resetSelectedRoom();
+    });
+  }
+
+  // Helper untuk membandingkan waktu
+  bool _isTimeAfter(TimeOfDay time1, TimeOfDay time2) {
+    if (time1.hour > time2.hour) return true;
+    if (time1.hour == time2.hour && time1.minute > time2.minute) return true;
+    return false;
   }
 
   // Widget counter jumlah pengunjung
@@ -481,6 +861,12 @@ class _ReservationModalBottomSheetState
         _isLoading = false;
         _errorMessage = 'Gagal menyimpan reservasi: ${e.toString()}';
       });
+    }
+  }
+
+  void _resetSelectedRoom() {
+    if (_selectedRoom != null) {
+      _selectedRoom = null;
     }
   }
 }
