@@ -579,32 +579,32 @@ Sistem menggunakan **tiga layer** untuk memastikan constraint satisfaction. Ini 
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Layer 1: UI Filtering (getAvailableRoom)                  │
-│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│  Layer 1: UI Filtering (getAvailableRoom)                   │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
 │  Location: room_service.dart                                │
 │  Purpose: UX optimization, reduce user confusion            │
-│  Type: Simple database query + in-memory filter            │
-│  Checks:                                                     │
+│  Type: Simple database query + in-memory filter             │
+│  Checks:                                                    │
 │    • Room not deleted                                       │
 │    • Room not in maintenance                                │
 │    • Room not overlapping with existing reservations        │
-│                                                              │
-│  Characteristics:                                            │
-│    ✓ Proactive filtering - Hide unavailable rooms          │
-│    ✓ Silent prevention - No error messages                 │
+│                                                             │
+│  Characteristics:                                           │
+│    ✓ Proactive filtering - Hide unavailable rooms           │
+│    ✓ Silent prevention - No error messages                  │
 │    ✗ No capacity check                                      │
-│    ✗ No global constraint check (max 99/day)               │
+│    ✗ No global constraint check (max 99/day)                │
 │    ✗ No alternative suggestions                             │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  Layer 2: CSP Validation (validateReservationWithCSP)      │
-│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-│  Location: reservation_service.dart + csp_solver.dart      │
+│  Layer 2: CSP Validation (validateReservationWithCSP)       │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
+│  Location: reservation_service.dart + csp_solver.dart       │
 │  Purpose: Formal constraint satisfaction guarantee          │
-│  Type: AI Algorithm (Forward Checking, Backtracking, AC-3) │
-│  ★ THIS IS THE CORE CSP IMPLEMENTATION ★                   │
-│                                                              │
+│  Type: AI Algorithm (Forward Checking, Backtracking, AC-3)  │
+│  ★ THIS IS THE CORE CSP IMPLEMENTATION ★                    │
+│                                                             │
 │  Checks (Complete CSP):                                     │
 │    • Unary Constraints:                                     │
 │      - Room availability (not booked)                       │
@@ -614,8 +614,8 @@ Sistem menggunakan **tiga layer** untuk memastikan constraint satisfaction. Ini 
 │      - Time overlap detection                               │
 │    • Global Constraints:                                    │
 │      - Max 99 reservations per day                          │
-│                                                              │
-│  Characteristics:                                            │
+│                                                             │
+│  Characteristics:                                           │
 │    ✓ Formal CSP algorithm                                   │
 │    ✓ Detailed constraint analysis                           │
 │    ✓ Alternative suggestions via backtracking               │
@@ -625,18 +625,18 @@ Sistem menggunakan **tiga layer** untuk memastikan constraint satisfaction. Ini 
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  Layer 3: Transaction (Firestore)                          │
-│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│  Layer 3: Transaction (Firestore)                           │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
 │  Location: createReservation() transaction block            │
-│  Purpose: ACID guarantee, ultimate safety net              │
-│  Type: Database-level locking and isolation                │
-│  Checks:                                                     │
+│  Purpose: ACID guarantee, ultimate safety net               │
+│  Type: Database-level locking and isolation                 │
+│  Checks:                                                    │
 │    • Atomic write operation                                 │
 │    • Concurrent booking prevention                          │
 │    • ID uniqueness guarantee                                │
 │    • Auto-retry on conflict (max 5x)                        │
-│                                                              │
-│  Characteristics:                                            │
+│                                                             │
+│  Characteristics:                                           │
 │    ✓ Database-level consistency                             │
 │    ✓ Prevents double booking 100%                           │
 │    ✓ Handles concurrent requests                            │
