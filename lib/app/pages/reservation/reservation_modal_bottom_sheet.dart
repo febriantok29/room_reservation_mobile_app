@@ -4,8 +4,9 @@ import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/room_selector_section.dart';
-import 'package:room_reservation_mobile_app/app/pages/reservation/user_selector_bottom_sheet.dart';
+import 'package:room_reservation_mobile_app/app/pages/reservation/user_selector_section.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
+import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
 
 class ReservationModalBottomSheet extends StatefulWidget {
   final Profile user;
@@ -278,7 +279,7 @@ class _ReservationModalBottomSheetState
                   Expanded(
                     child: Text(
                       _selectedDate != null
-                          ? _formatDate(_selectedDate!)
+                          ? DateFormatter.shortDate(_selectedDate!)
                           : 'Pilih Tanggal',
                       style: TextStyle(
                         color: _selectedDate != null
@@ -412,25 +413,6 @@ class _ReservationModalBottomSheetState
         const SizedBox(height: 16.0),
       ],
     );
-  }
-
-  // Helper function untuk format tanggal
-  String _formatDate(DateTime date) {
-    const months = [
-      'Januari',
-      'Februari',
-      'Maret',
-      'April',
-      'Mei',
-      'Juni',
-      'Juli',
-      'Agustus',
-      'September',
-      'Oktober',
-      'November',
-      'Desember',
-    ];
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
   // Helper function untuk format waktu
@@ -707,7 +689,7 @@ class _ReservationModalBottomSheetState
 
   // Menampilkan selector pengguna
   void _showUserSelector() async {
-    final user = await UserSelectorBottomSheet.show(
+    final user = await UserSelectorSection.showPage(
       context: context,
       selectedUserId: _selectedUser?.employeeId,
     );
@@ -720,7 +702,7 @@ class _ReservationModalBottomSheetState
       return;
     }
 
-    if (widget.user.isAdmin) {
+    if (_isAdmin) {
       setState(() {
         _selectedUser = widget.user;
       });
