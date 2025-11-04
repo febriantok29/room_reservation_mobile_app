@@ -23,9 +23,10 @@ class UserService {
 
     final client = await FirestoreClient.create(Profile.collectionName);
 
-    final snapshot = await client
-        .query(field: 'role', isNotEqualTo: UserRole.admin.name)
-        .get();
+    final snapshot = await client.query(
+      field: 'role',
+      isNotEqualTo: UserRole.admin.name,
+    );
 
     for (final doc in snapshot.docs) {
       final data = doc.data();
@@ -75,13 +76,12 @@ class UserService {
     }
 
     // Query Firestore
-    final firestoreClient = await FirestoreClient.create(
-      Profile.collectionName,
-    );
+    final client = await FirestoreClient.create(Profile.collectionName);
 
-    final snapshot = await firestoreClient
-        .query(field: 'employeeId', isEqualTo: employeeId)
-        .get();
+    final snapshot = await client.query(
+      field: 'employeeId',
+      isEqualTo: employeeId,
+    );
 
     if (snapshot.docs.isEmpty) {
       throw 'Akun tidak ditemukan.';
@@ -122,9 +122,10 @@ class UserService {
 
     // Query Firestore for missing users
     final client = await FirestoreClient.create(Profile.collectionName);
-    final snapshot = await client
-        .query(field: FieldPath.documentId, whereIn: uncachedIds)
-        .get();
+    final snapshot = await client.query(
+      field: FieldPath.documentId,
+      whereIn: uncachedIds,
+    );
 
     final fetchedRooms = <Profile>[];
 

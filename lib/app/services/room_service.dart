@@ -2,14 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
-import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 
 class RoomService {
   static final _cachedRooms = <Room>[];
-  // Flag untuk track apakah cache sudah lengkap
-  static bool _isFullyCached = false;
 
   static RoomService? _instance;
 
@@ -25,35 +22,21 @@ class RoomService {
     bool showMaintenance = true,
     String? searchKeyword,
     bool forceRefresh = false,
-    // Parameter baru untuk memastikan cache lengkap
-    bool ensureFullCache = false,
   }) async {
     // Fetch dari Firestore jika:
     // 1. Cache kosong, ATAU
     // 2. forceRefresh = true, ATAU
     // 3. ensureFullCache = true tapi cache belum lengkap
-    if (_cachedRooms.isEmpty ||
-        forceRefresh ||
-        (ensureFullCache && !_isFullyCached)) {
+    if (_cachedRooms.isEmpty || forceRefresh) {
       final client = await FirestoreClient.create(Room.collectionName);
-      Query<Map<String, dynamic>> query = client.getCollectionRef();
 
-      if (!showDeleted) {
-        query = query.where(BaseFirestoreModel.deletedAtField, isEqualTo: null);
-      }
-
-      if (!showMaintenance) {
-        query = query.where('isMaintenance', isEqualTo: false);
-      }
-
-      final response = await query.get();
+      final response = await client.getAll();
 
       final docs = response.docs;
 
       // Clear cache jika force refresh
       if (forceRefresh && _cachedRooms.isNotEmpty) {
         _cachedRooms.clear();
-        _isFullyCached = false;
       }
 
       for (final doc in docs) {
@@ -74,13 +57,6 @@ class RoomService {
           _cachedRooms.add(room);
         }
       }
-
-      // Tandai cache sebagai lengkap setelah fetch dari Firestore
-      _isFullyCached = true;
-
-      debugPrint(
-        'Room cache loaded: ${_cachedRooms.length} rooms (fully cached: $_isFullyCached)',
-      );
     }
 
     final result = <Room>[];
@@ -126,16 +102,19 @@ class RoomService {
       return cachedRooms;
     }
 
-    final unCachedIds = ids.difference(cachedRooms.map((e) => e.id).toSet());
+    final unCachedIds = ids
+        .difference(cachedRooms.map((e) => e.id).toSet())
+        .toList();
 
     if (unCachedIds.isEmpty) {
       return cachedRooms;
     }
 
     final client = await FirestoreClient.create(Room.collectionName);
-    final snapshot = await client
-        .query(field: FieldPath.documentId, whereIn: unCachedIds.toList())
-        .get();
+    final snapshot = await client.query(
+      field: FieldPath.documentId,
+      whereIn: unCachedIds,
+    );
 
     final fetchedRooms = <Room>[];
 
@@ -194,22 +173,15 @@ class RoomService {
   Future<List<Room>> getAvailableRoom({
     required DateTime start,
     required DateTime end,
+    String? searchKeyword,
+    bool forceRefresh = false,
   }) async {
     try {
       if (start.isAfter(end)) {
         throw 'Waktu mulai tidak boleh lebih besar dari waktu selesai';
       }
 
-      // PENTING: Pastikan cache terisi LENGKAP dengan semua ruangan dari Firestore
-      // ensureFullCache = true akan memaksa fetch jika cache belum lengkap
-      // Ini memastikan SEMUA ruangan dari master data (m_room) tersedia,
-      // bukan hanya ruangan yang sudah pernah ada di reservasi
-      await getRoomList(
-        showMaintenance: false,
-        ensureFullCache: true, // Parameter kunci untuk memastikan cache lengkap
-      );
-
-      debugPrint('Available rooms check - Cache size: ${_cachedRooms.length}');
+      await getRoomList(showMaintenance: false, forceRefresh: forceRefresh);
 
       final reservationService = ReservationService.getInstance();
 
@@ -227,24 +199,33 @@ class RoomService {
           .map((reservation) => reservation.roomRef!.id)
           .toSet();
 
-      debugPrint('Reserved room IDs: $reservedRoomIds');
-
       // Ambil dari cache (yang sudah lengkap berkat getRoomList di atas)
       final allRooms = _cachedRooms
           .where((room) => !room.isDeleted && room.isMaintenance != true)
           .toList();
 
-      debugPrint('All non-maintenance rooms: ${allRooms.length}');
-
       // Filter: ambil ruangan yang TIDAK ada di reservedRoomIds
-      final availableRooms = allRooms.where((room) {
+      List<Room> availableRooms = allRooms.where((room) {
         // Skip jika ruangan ada dalam daftar yang sudah direservasi
         if (reservedRoomIds.contains(room.id)) return false;
 
         return true;
       }).toList();
 
-      debugPrint('Available rooms after filter: ${availableRooms.length}');
+      // Filter dengan searchKeyword jika ada
+      if (searchKeyword != null && searchKeyword.trim().isNotEmpty) {
+        final keyword = searchKeyword.trim().toLowerCase();
+
+        availableRooms = availableRooms.where((room) {
+          final name = room.name?.toLowerCase() ?? '';
+          final location = room.location?.toLowerCase() ?? '';
+          final description = room.description?.toLowerCase() ?? '';
+
+          return name.contains(keyword) ||
+              location.contains(keyword) ||
+              description.contains(keyword);
+        }).toList();
+      }
 
       return availableRooms;
     } catch (_) {
@@ -311,9 +292,8 @@ class RoomService {
     _removeFromCache(roomId);
   }
 
-  Future<List<Room>> refreshCache() async {
-    _isFullyCached = false; // Reset flag
-    return getRoomList(forceRefresh: true, ensureFullCache: true);
+  Future<List<Room>> refreshCache() {
+    return getRoomList(forceRefresh: true);
   }
 
   void _removeFromCache(String roomId) {
@@ -328,10 +308,8 @@ class RoomService {
 
     if (index >= 0) {
       _cachedRooms[index] = room;
-      debugPrint('Room cache updated for ID: ${room.id}');
     } else {
       _cachedRooms.add(room);
-      debugPrint('Room added to cache with ID: ${room.id}');
     }
   }
 }

@@ -30,18 +30,16 @@ class AuthService {
 
     final hashedPassword = _hashPassword(password);
 
-    final snapshot = await client
-        .advancedQuery(
-          conditions: [
-            QueryCondition(field: fieldName, isEqualTo: credential),
-            QueryCondition(field: 'password', isEqualTo: hashedPassword),
-            QueryCondition(
-              field: BaseFirestoreModel.deletedAtField,
-              isEqualTo: null,
-            ),
-          ],
-        )
-        .get();
+    final snapshot = await client.advancedQuery(
+      conditions: [
+        QueryCondition(field: fieldName, isEqualTo: credential),
+        QueryCondition(field: 'password', isEqualTo: hashedPassword),
+        QueryCondition(
+          field: BaseFirestoreModel.deletedAtField,
+          isEqualTo: null,
+        ),
+      ],
+    );
 
     if (snapshot.docs.isEmpty) {
       throw 'Akun tidak ditemukan, silakan periksa kembali No. Induk Pegawai/email, dan password Anda.';

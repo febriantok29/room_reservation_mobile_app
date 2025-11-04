@@ -38,7 +38,7 @@ class ReservationService {
     }
 
     // Logika berbeda untuk checkOverlap
-    if (checkOverlap && startDate != null && endDate != null) {
+    if (checkOverlap && (startDate != null && endDate != null)) {
       // Untuk mengecek overlap, kita perlu ambil reservasi yang:
       // 1. startTime < endDate (reservasi dimulai sebelum waktu yang kita cari selesai)
       // 2. endTime > startDate (reservasi berakhir setelah waktu yang kita cari dimulai)
@@ -80,7 +80,7 @@ class ReservationService {
       final reservation = Reservation.fromFirestore(data, doc.id);
 
       // Filter tambahan untuk overlap check (karena Firestore limitation)
-      if (checkOverlap && startDate != null && endDate != null) {
+      if (checkOverlap && (startDate != null && endDate != null)) {
         // Skip jika reservasi tidak overlap dengan range yang dicari
         // Overlap terjadi jika: endTime > startDate
         if (reservation.endTime == null ||
