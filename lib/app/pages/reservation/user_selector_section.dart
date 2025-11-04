@@ -2,17 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/services/user_service.dart';
 
-class UserSelectorBottomSheet extends StatefulWidget {
+class UserSelectorSection extends StatefulWidget {
   final String? selectedUserId;
 
-  const UserSelectorBottomSheet({super.key, this.selectedUserId});
+  const UserSelectorSection({super.key, this.selectedUserId});
 
   @override
-  State<UserSelectorBottomSheet> createState() =>
-      _UserSelectorBottomSheetState();
+  State<UserSelectorSection> createState() => _UserSelectorSectionState();
 
   /// Menampilkan bottom sheet untuk memilih user
-  static Future<Profile?> show({
+  static Future<Profile?> showBottomSheet({
     required BuildContext context,
     String? selectedUserId,
   }) {
@@ -23,12 +22,26 @@ class UserSelectorBottomSheet extends StatefulWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => UserSelectorBottomSheet(selectedUserId: selectedUserId),
+      builder: (_) => UserSelectorSection(selectedUserId: selectedUserId),
+    );
+  }
+
+  static Future<Profile?> showPage({
+    required BuildContext context,
+    String? selectedUserId,
+  }) {
+    return Navigator.of(context).push<Profile>(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Pilih Pengguna')),
+          body: UserSelectorSection(selectedUserId: selectedUserId),
+        ),
+      ),
     );
   }
 }
 
-class _UserSelectorBottomSheetState extends State<UserSelectorBottomSheet> {
+class _UserSelectorSectionState extends State<UserSelectorSection> {
   String _searchKeyword = '';
   List<Profile> _users = [];
   bool _isLoading = true;
@@ -90,14 +103,6 @@ class _UserSelectorBottomSheetState extends State<UserSelectorBottomSheet> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text(
-              'Pilih Pengguna',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-          ),
           _buildSearchField(),
           Expanded(child: _buildUserList()),
         ],
