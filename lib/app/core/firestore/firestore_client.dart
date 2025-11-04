@@ -177,7 +177,7 @@ class FirestoreClient {
 
   /// Query documents with simple where condition
   /// Returns a query snapshot containing documents that match the condition
-  Query<Map<String, dynamic>> query({
+  Future<QuerySnapshot<Map<String, dynamic>>> query({
     required dynamic field,
     dynamic isEqualTo,
     dynamic isNotEqualTo,
@@ -231,7 +231,7 @@ class FirestoreClient {
         query = query.where(field, whereNotIn: whereNotIn);
       }
 
-      return query;
+      return query.get();
     } catch (e) {
       debugPrint('Error querying documents: $e');
       rethrow;
@@ -254,7 +254,7 @@ class FirestoreClient {
 
   /// Query documents with multiple conditions
   /// This is a more advanced query method that allows multiple conditions
-  Query<Map<String, dynamic>> advancedQuery({
+  Future<QuerySnapshot<Map<String, dynamic>>> advancedQuery({
     required List<QueryCondition> conditions,
     String? orderBy,
     bool descending = false,
@@ -290,7 +290,7 @@ class FirestoreClient {
         query = query.limit(limit);
       }
 
-      return query;
+      return query.get();
     } catch (e) {
       debugPrint('Error with advanced query: $e');
       rethrow;
@@ -429,8 +429,6 @@ class FirestoreClient {
       // and less than or equal to prefix + \uf8ff (high-value Unicode char)
       final endPrefix = '$prefix\uf8ff';
 
-      debugPrint('Searching $field with prefix: $prefix, end: $prefix\uf8ff');
-
       Query<Map<String, dynamic>> query = _collectionRef
           .where(field, isGreaterThanOrEqualTo: prefix)
           .where(field, isLessThanOrEqualTo: endPrefix);
@@ -449,7 +447,6 @@ class FirestoreClient {
       }
 
       final result = await query.get();
-      debugPrint('Prefix search results for $field: ${result.docs.length}');
 
       return result;
     } catch (e) {
