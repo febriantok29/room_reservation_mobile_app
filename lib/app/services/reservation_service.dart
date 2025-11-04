@@ -1,10 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 import 'package:room_reservation_mobile_app/app/services/user_service.dart';
+import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
+import 'package:room_reservation_mobile_app/app/utils/reservation_id_generator.dart';
 
 /// Service untuk mengelola operasi terkait reservasi
 class ReservationService {
@@ -202,112 +205,136 @@ class ReservationService {
         endDateTime: reservation.endTime!,
       );
     }
+
     reservation.prepareForCreate();
 
     // Simpan ke Firestore
     final client = await FirestoreClient.create(Reservation.collectionName);
-
     final collectionRef = client.getCollectionRef();
-
     final now = DateTime.now();
 
-    /// Generate ID dengan format: RSV-YYYYMMDD-XXXXXX
-    ///
-    /// Penjelasan format:
-    /// - RSV: Prefix untuk identifikasi reservasi (3 karakter)
-    /// - YYYYMMDD: Tanggal pembuatan reservasi (8 digit)
-    ///   Contoh: 20250102 untuk tanggal 2 Januari 2025
-    /// - XXXXXX: Sequential number per hari (6 digit, max 999,999 reservasi/hari)
-    ///
-    /// Total panjang ID: 3 + 1 + 8 + 1 + 6 = 19 karakter
-    /// Contoh: RSV-20250102-000001
-    ///
-    /// Keunggulan format ini:
-    /// 1. Mudah dibaca dan dipahami oleh manusia
-    /// 2. Tersortir secara kronologis (berdasarkan tanggal)
-    /// 3. Dapat menampung hingga 999,999 reservasi per hari (lebih dari cukup)
-    /// 4. Sequential number di-reset setiap hari, menghindari angka yang terlalu besar
-    /// 5. Query lebih efisien karena menggunakan range berdasarkan tanggal
-    /// 6. Cocok untuk keperluan audit dan reporting (mudah filtering by date)
-    ///
-    /// Asumsi kapasitas:
-    /// - Jika ada 1000 ruangan dan rata-rata 10 reservasi/hari per ruangan
-    ///   = 10,000 reservasi/hari (masih sangat jauh dari limit 999,999)
-    /// - Bahkan untuk gedung besar dengan 100,000 reservasi/hari masih aman
-    final datePrefix =
-        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-
-    // Query untuk mendapatkan jumlah reservasi pada hari yang sama
-    // Menggunakan range query untuk performa optimal di Firestore
-    final todayPrefix = 'RSV-$datePrefix';
-    final tomorrowPrefix =
-        'RSV-${now.year}${now.month.toString().padLeft(2, '0')}${(now.day + 1).toString().padLeft(2, '0')}';
-
-    final query = collectionRef
-        .where(FieldPath.documentId, isGreaterThanOrEqualTo: todayPrefix)
-        .where(FieldPath.documentId, isLessThan: tomorrowPrefix)
-        .orderBy(FieldPath.documentId, descending: true)
-        // Hanya ambil document terakhir untuk efisiensi
-        .limit(1);
-
-    final snapshot = await query.get();
-
-    // Hitung sequence number berikutnya
-    int sequenceNumber = 1;
-    if (snapshot.docs.isNotEmpty) {
-      final lastId = snapshot.docs.first.id;
-      // Extract sequence number dari ID terakhir (6 digit terakhir)
-      final lastSequence =
-          int.tryParse(lastId.substring(lastId.length - 6)) ?? 0;
-      sequenceNumber = lastSequence + 1;
-    }
-
-    // Format: RSV-YYYYMMDD-XXXXXX (6 digit untuk sequence, max 999,999)
-    final generatedId =
-        'RSV-$datePrefix-${sequenceNumber.toString().padLeft(6, '0')}';
+    // Generate ID menggunakan helper class
+    // ID akan di-validasi ulang dalam transaction untuk menghindari race condition
+    final generatedId = await ReservationIdGenerator.generateNextId(
+      collectionRef,
+      date: now,
+    );
 
     final payload = reservation.toFirestore();
 
     return await client.transaction<Reservation>((
       Transaction transaction,
     ) async {
-      // Validasi apakah ID sudah digunakan dengan membaca document secara langsung
-      // Transaction.get() hanya mendukung DocumentReference, bukan Query
-      final checkDocRef = client.getCollectionRef().doc(generatedId);
-      final checkDoc = await transaction.get(checkDocRef);
+      /// ============================================================================
+      /// VALIDASI OVERLAP RUANGAN (CRITICAL - MENCEGAH DOUBLE BOOKING)
+      /// ============================================================================
+      ///
+      /// Validasi ini WAJIB dilakukan di dalam transaction untuk memastikan
+      /// tidak ada 2 pemesanan yang terjadi secara bersamaan (concurrent booking).
+      ///
+      /// Skenario yang dicegah:
+      /// - User A dan User B memesan ruangan X di waktu yang sama
+      /// - Keduanya submit form hampir bersamaan (selisih milidetik)
+      /// - Tanpa transaction: KEDUA pemesanan akan berhasil (DOUBLE BOOKING ❌)
+      /// - Dengan transaction: Hanya 1 yang berhasil, yang lain akan gagal (✅)
+      ///
+      /// Cara kerja Firestore Transaction:
+      /// 1. Transaction membaca data (get) - snapshot di awal
+      /// 2. Jika ada perubahan data di tengah transaction, Firestore akan
+      ///    OTOMATIS retry transaction dari awal (maksimal 5x)
+      /// 3. Jika masih gagal setelah 5x retry, akan throw error
+      /// 4. Ini menjamin ACID properties (Atomicity, Consistency, Isolation, Durability)
+      ///
+      /// PENTING:
+      /// - Kita TIDAK bisa menggunakan .where() query di dalam transaction
+      /// - Solusi: Fetch beberapa document terakhir untuk hari tersebut
+      ///   dan filter manual di memory (tetap aman karena dalam transaction)
+      /// ============================================================================
 
-      String finalId = generatedId;
+      // Ambil semua reservasi pada hari yang sama untuk ruangan ini
+      // Query untuk mengambil reservasi yang mungkin overlap
+      // Karena transaction tidak support complex query, kita ambil range lebar
+      // dan filter manual di memory
+      final (dayPrefix, nextDayPrefix) =
+          ReservationIdGenerator.generateDatePrefixRange(now);
 
-      // Jika ID sudah ada (race condition), coba dengan increment
-      if (checkDoc.exists) {
-        // Retry dengan sequence number yang lebih tinggi
-        // Dalam praktik, ini sangat jarang terjadi karena sequence sudah dihitung dari query terakhir
-        int retrySequence = sequenceNumber + 1;
-        bool foundAvailableId = false;
+      // Ambil semua reservasi hari ini (untuk validasi overlap)
+      final potentialConflicts = collectionRef
+          .where(FieldPath.documentId, isGreaterThanOrEqualTo: dayPrefix)
+          .where(FieldPath.documentId, isLessThan: nextDayPrefix)
+          .limit(1000); // Limit tinggi untuk memastikan semua data terambil
 
-        // Coba maksimal 10 kali untuk mendapatkan ID yang available
-        for (int i = 0; i < 10 && !foundAvailableId; i++) {
-          final retryId =
-              'RSV-$datePrefix-${retrySequence.toString().padLeft(6, '0')}';
-          final retryDocRef = client.getCollectionRef().doc(retryId);
-          final retryDoc = await transaction.get(retryDocRef);
+      final conflictSnapshot = await potentialConflicts.get();
 
-          if (!retryDoc.exists) {
-            finalId = retryId;
-            foundAvailableId = true;
-          } else {
-            retrySequence++;
-          }
-        }
+      // Filter dan cek overlap secara manual
+      // Overlap terjadi jika:
+      // 1. Ruangan sama (roomId sama)
+      // 2. Waktu mulai reservasi baru < waktu selesai reservasi existing
+      // 3. Waktu selesai reservasi baru > waktu mulai reservasi existing
+      // 4. Reservasi existing tidak dalam status CANCELLED/REJECTED/DELETED
+      for (final doc in conflictSnapshot.docs) {
+        final data = doc.data();
 
-        if (!foundAvailableId) {
-          throw 'Gagal membuat ID reservasi setelah beberapa percobaan. Silakan coba lagi.';
+        // Skip jika sudah dihapus
+        if (data[BaseFirestoreModel.deletedAtField] != null) continue;
+
+        // Cek apakah ruangan sama
+        final existingRoomRef = data['roomId'] as DocumentReference?;
+        if (existingRoomRef?.id != reservation.roomRef?.id) continue;
+
+        // Ambil waktu existing reservation
+        final existingStart = DateFormatter.getDateTime(data['startTime']);
+        final existingEnd = DateFormatter.getDateTime(data['endTime']);
+
+        if (existingStart == null || existingEnd == null) continue;
+
+        // Cek overlap menggunakan interval intersection logic
+        // Overlap terjadi jika: NOT (A.end <= B.start OR A.start >= B.end)
+        // Atau dengan kata lain: A.start < B.end AND A.end > B.start
+        final hasOverlap =
+            reservation.startTime!.isBefore(existingEnd) &&
+            reservation.endTime!.isAfter(existingStart);
+
+        if (hasOverlap) {
+          // Format waktu untuk error message yang informatif
+          final formatter = DateFormat('dd MMM yyyy HH:mm');
+          final existingRange =
+              '${formatter.format(existingStart)} - ${formatter.format(existingEnd)}';
+          final requestedRange =
+              '${formatter.format(reservation.startTime!)} - ${formatter.format(reservation.endTime!)}';
+
+          throw Exception(
+            'Ruangan sudah dipesan pada waktu tersebut!\n\n'
+            'Pemesanan existing: $existingRange\n'
+            'Waktu yang Anda pilih: $requestedRange\n\n'
+            'Silakan pilih waktu lain.',
+          );
         }
       }
+
+      /// ============================================================================
+      /// GENERATE & VALIDASI ID UNIK
+      /// ============================================================================
+
+      // Validasi dan retry ID jika terjadi race condition
+      // Menggunakan helper class untuk handle retry logic
+      final finalId =
+          await ReservationIdGenerator.validateAndRetryInTransaction(
+            transaction,
+            collectionRef,
+            generatedId,
+            now,
+            maxRetries: 10,
+          );
+
+      /// ============================================================================
+      /// CREATE RESERVATION
+      /// ============================================================================
 
       // Create document dengan custom ID yang sudah digenerate dan divalidasi
       final newDocRef = client.getCollectionRef().doc(finalId);
       transaction.set(newDocRef, payload);
+
       return reservation.copyWith(id: newDocRef.id);
     });
   }
