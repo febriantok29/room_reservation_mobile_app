@@ -1,15 +1,22 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:room_reservation_mobile_app/app/algorithms/csp_room_reservation_solver.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
+import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 import 'package:room_reservation_mobile_app/app/services/user_service.dart';
 import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
 import 'package:room_reservation_mobile_app/app/utils/reservation_id_generator.dart';
 
 /// Service untuk mengelola operasi terkait reservasi
+///
+/// Menggunakan CSP (Constraint Satisfaction Problem) Algorithm untuk:
+/// - Validasi constraint (availability, capacity, time overlap)
+/// - Forward checking untuk optimasi
+/// - Backtracking search untuk alternatif ruangan
 class ReservationService {
   static ReservationService? _instance;
 
@@ -193,7 +200,118 @@ class ReservationService {
     return reservation;
   }
 
-  /// Membuat reservasi baru
+  /// ============================================================================
+  /// CSP (CONSTRAINT SATISFACTION PROBLEM) VALIDATION
+  /// ============================================================================
+
+  /// Validasi reservasi menggunakan CSP Algorithm
+  ///
+  /// **CSP Components:**
+  /// - Variables: Room pada time slot tertentu
+  /// - Domain: {Available, Booked}
+  /// - Constraints: Availability, Capacity, Time Overlap
+  ///
+  /// **Algorithm:**
+  /// 1. Forward Checking - Cek constraint paling murah dulu
+  /// 2. Constraint Propagation - Jika ada violation, fail fast
+  /// 3. Backtracking - Jika current room gagal, cari alternatif
+  ///
+  /// Throws: ValidationException jika constraint violated
+  Future<CSPSolutionResult> validateReservationWithCSP(
+    Reservation reservation,
+  ) async {
+    // Get room data
+    final roomService = RoomService.getInstance();
+    final room = await roomService.getRoomByDoc(reservation.roomRef!);
+
+    if (room == null) {
+      throw ValidationException('Ruangan tidak ditemukan');
+    }
+
+    // Get existing reservations untuk constraint checking
+    final existingReservations = await getReservationList(
+      startDate: reservation.startTime,
+      endDate: reservation.endTime,
+      checkOverlap: true,
+    );
+
+    // Create CSP Solver instance
+    final cspSolver = CSPRoomReservationSolver(
+      targetRoom: room,
+      requestedStartTime: reservation.startTime!,
+      requestedEndTime: reservation.endTime!,
+      existingReservations: existingReservations,
+      requestedCapacity: reservation.visitorCount ?? 1,
+    );
+
+    // Solve CSP - Check all constraints
+    final solution = cspSolver.solve();
+
+    // Jika constraint violated, throw exception dengan detail
+    if (!solution.isValid) {
+      throw ValidationException(
+        'Reservasi tidak memenuhi constraint:\n${solution.violations.join("\n")}',
+      );
+    }
+
+    return solution;
+  }
+
+  /// Find alternative rooms menggunakan CSP Backtracking Search
+  ///
+  /// **Backtracking Algorithm:**
+  /// 1. Try each available room
+  /// 2. Forward check constraints
+  /// 3. If satisfied, add to solutions
+  /// 4. If all fail, return empty
+  ///
+  /// Returns: List of rooms yang memenuhi semua constraint
+  Future<List<Room>> findAlternativeRoomsWithCSP({
+    required DateTime startTime,
+    required DateTime endTime,
+    required int capacity,
+  }) async {
+    // Get all available rooms
+    final roomService = RoomService.getInstance();
+    final allRooms = await roomService.getRoomList(
+      showDeleted: false,
+      showMaintenance: false,
+    );
+
+    // Get existing reservations
+    final existingReservations = await getReservationList(
+      startDate: startTime,
+      endDate: endTime,
+      checkOverlap: true,
+    );
+
+    // Use CSP Backtracking Search untuk find solutions
+    final solutionRooms = CSPRoomReservationSolver.backtrackingSearch(
+      availableRooms: allRooms,
+      startTime: startTime,
+      endTime: endTime,
+      capacity: capacity,
+      existingReservations: existingReservations,
+    );
+
+    return solutionRooms;
+  }
+
+  /// Membuat reservasi baru dengan CSP validation
+  ///
+  /// **Flow:**
+  /// 1. Basic validation (data & time)
+  /// 2. **CSP validation** - Validate all constraints using CSP algorithm
+  /// 3. Firestore transaction - Create reservation with overlap check
+  ///
+  /// **CSP ensures:**
+  /// - Room is available (not booked)
+  /// - Capacity constraint satisfied
+  /// - No time overlap with existing reservations
+  /// - Time slot is valid (working hours)
+  /// - Max reservations per day not exceeded
+  ///
+  /// Throws: ValidationException if any constraint violated
   Future<Reservation> createReservation(Reservation reservation) async {
     // Validasi data
     reservation.validate();
@@ -207,6 +325,54 @@ class ReservationService {
     }
 
     reservation.prepareForCreate();
+
+    /// ============================================================================
+    /// CSP VALIDATION (CRITICAL - BEFORE TRANSACTION)
+    /// ============================================================================
+    ///
+    /// Validate all constraints using CSP algorithm BEFORE entering transaction.
+    /// This provides:
+    /// 1. Early failure detection (fail fast)
+    /// 2. Meaningful error messages for users
+    /// 3. Alternative room suggestions if current room fails
+    /// 4. Reduced transaction conflicts
+    ///
+    /// CSP Constraints checked:
+    /// - Unary: Room availability, Capacity, Time validity
+    /// - Binary: Time overlap detection
+    /// - Global: Max reservations per day
+    /// ============================================================================
+
+    final cspResult = await validateReservationWithCSP(reservation);
+
+    if (!cspResult.isValid) {
+      // If CSP constraints not satisfied, provide helpful error with alternatives
+      String errorMessage = 'Reservasi tidak dapat dilakukan:\n\n';
+
+      for (final violation in cspResult.violations) {
+        errorMessage += '• $violation\n';
+      }
+
+      // Try to find alternative rooms using backtracking search
+      try {
+        final alternatives = await findAlternativeRoomsWithCSP(
+          startTime: reservation.startTime!,
+          endTime: reservation.endTime!,
+          capacity: reservation.visitorCount ?? 1,
+        );
+
+        if (alternatives.isNotEmpty) {
+          errorMessage += '\nRuangan alternatif yang tersedia:\n';
+          for (final room in alternatives.take(3)) {
+            errorMessage += '• ${room.name} (Kapasitas: ${room.capacity})\n';
+          }
+        }
+      } catch (e) {
+        // If finding alternatives fails, just show violation errors
+      }
+
+      throw ValidationException(errorMessage.trim());
+    }
 
     // Simpan ke Firestore
     final client = await FirestoreClient.create(Reservation.collectionName);
