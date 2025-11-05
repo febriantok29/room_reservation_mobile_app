@@ -32,20 +32,20 @@ class ReservationUpdateRequest {
 
   void validate() {
     if (reservationId.isEmpty) {
-      throw ValidationException('ID reservasi wajib diisi');
+      throw 'ID reservasi wajib diisi';
     }
 
     // Validate only provided fields
     if (roomId != null && roomId!.isEmpty) {
-      throw ValidationException('ID ruangan tidak valid');
+      throw 'ID ruangan tidak valid';
     }
 
     if (purpose != null && purpose!.trim().isEmpty) {
-      throw ValidationException('Tujuan reservasi tidak boleh kosong');
+      throw 'Tujuan reservasi tidak boleh kosong';
     }
 
     if (visitorCount != null && visitorCount! < 1) {
-      throw ValidationException('Jumlah pengunjung minimal 1 orang');
+      throw 'Jumlah pengunjung minimal 1 orang';
     }
 
     // Validate time if either is provided

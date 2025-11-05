@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
-import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 
@@ -282,7 +281,7 @@ class RoomService {
 
   Future<void> permanentDeleteRoom(String roomId) async {
     if (roomId.isEmpty) {
-      throw ValidationException('ID ruangan tidak boleh kosong');
+      throw 'ID ruangan tidak boleh kosong';
     }
 
     final client = await FirestoreClient.create(Room.collectionName);

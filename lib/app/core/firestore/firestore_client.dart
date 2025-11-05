@@ -192,7 +192,7 @@ class FirestoreClient {
   }) {
     try {
       if (field == null) {
-        throw ArgumentError('Field parameter cannot be null');
+        throw 'Field parameter cannot be null';
       }
 
       Query<Map<String, dynamic>> query = _collectionRef;

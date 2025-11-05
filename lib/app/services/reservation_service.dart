@@ -165,7 +165,7 @@ class ReservationService {
   /// Mendapatkan reservasi berdasarkan ID
   Future<Reservation> getReservationById(String id) async {
     if (id.isEmpty) {
-      throw ValidationException('ID reservasi tidak boleh kosong');
+      throw 'ID reservasi tidak boleh kosong';
     }
 
     // Ambil dari Firestore
@@ -174,7 +174,7 @@ class ReservationService {
     final doc = await client.get(id);
 
     if (!doc.exists) {
-      throw NotFoundException('Reservasi dengan ID $id tidak ditemukan');
+      throw 'Reservasi dengan ID $id tidak ditemukan';
     }
 
     final data = doc.data() ?? {};
@@ -225,7 +225,7 @@ class ReservationService {
     final room = await roomService.getRoomByDoc(reservation.roomRef!);
 
     if (room == null) {
-      throw ValidationException('Ruangan tidak ditemukan');
+      throw 'Ruangan tidak ditemukan';
     }
 
     // Get existing reservations untuk constraint checking
@@ -508,7 +508,7 @@ class ReservationService {
   /// Update reservasi (hanya untuk reservasi sendiri yang belum disetujui)
   Future<Reservation> updateReservation(Reservation reservation) async {
     if (reservation.id == null || reservation.id!.isEmpty) {
-      throw ValidationException('ID reservasi tidak boleh kosong');
+      throw 'ID reservasi tidak boleh kosong';
     }
 
     // Validasi data
@@ -535,7 +535,7 @@ class ReservationService {
   /// Membatalkan reservasi
   Future<bool> cancelReservation(String id, String userId) async {
     if (id.isEmpty) {
-      throw ValidationException('ID reservasi tidak boleh kosong');
+      throw 'ID reservasi tidak boleh kosong';
     }
 
     // Ambil reservasi yang akan dibatalkan
@@ -544,7 +544,7 @@ class ReservationService {
     final doc = await client.get(id);
 
     if (!doc.exists) {
-      throw NotFoundException('Reservasi tidak ditemukan');
+      throw 'Reservasi tidak ditemukan';
     }
 
     final data = doc.data() ?? {};
@@ -571,7 +571,7 @@ class ReservationService {
     required DateTime? endDateTime,
   }) {
     if (startDateTime == null || endDateTime == null) {
-      throw ValidationException('Waktu mulai dan selesai wajib diisi');
+      throw 'Waktu mulai dan selesai wajib diisi';
     }
 
     try {
@@ -582,22 +582,22 @@ class ReservationService {
       }
 
       if (startDateTime.isBefore(DateTime.now())) {
-        throw ValidationException('Waktu mulai tidak boleh di masa lalu');
+        throw 'Waktu mulai tidak boleh di masa lalu';
       }
 
       // Minimal durasi 30 menit
       if (endDateTime.difference(startDateTime).inMinutes < 30) {
-        throw ValidationException('Durasi reservasi minimal 30 menit');
+        throw 'Durasi reservasi minimal 30 menit';
       }
 
       // Maksimal durasi 8 jam
       // if (endDateTime.difference(startDateTime).inHours > 8) {
-      //   throw ValidationException('Durasi reservasi maksimal 8 jam');
+      //   throw 'Durasi reservasi maksimal 8 jam';
       // }
     } catch (e) {
       if (e is ValidationException) rethrow;
 
-      throw ValidationException('Format waktu tidak valid');
+      throw 'Format waktu tidak valid';
     }
   }
 }

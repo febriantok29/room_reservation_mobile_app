@@ -110,7 +110,7 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
 
       return rooms;
     } catch (e) {
-      throw Exception('Gagal memuat ruangan: ${e.toString()}');
+      throw 'Gagal memuat ruangan: ${e.toString()}';
     }
   }
 

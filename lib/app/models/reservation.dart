@@ -213,23 +213,23 @@ class Reservation extends BaseFirestoreModel {
   void validate() {
     // Validasi required fields
     if (roomRef == null) {
-      throw ValidationException('Ruangan harus dipilih');
+      throw 'Ruangan harus dipilih';
     }
 
     if (userRef == null) {
-      throw ValidationException('User ID harus diisi!');
+      throw 'User ID harus diisi!';
     }
 
     if (startTime == null) {
-      throw ValidationException('Waktu mulai harus diisi');
+      throw 'Waktu mulai harus diisi';
     }
 
     if (endTime == null) {
-      throw ValidationException('Waktu selesai harus diisi');
+      throw 'Waktu selesai harus diisi';
     }
 
     if (purpose == null || purpose!.isEmpty) {
-      throw ValidationException('Tujuan reservasi harus diisi');
+      throw 'Tujuan reservasi harus diisi';
     }
 
     // Validasi logika waktu
@@ -240,7 +240,7 @@ class Reservation extends BaseFirestoreModel {
       final now = DateTime.now();
 
       if (start.isBefore(now)) {
-        throw ValidationException('Waktu mulai tidak boleh di masa lalu');
+        throw 'Waktu mulai tidak boleh di masa lalu';
       }
 
       if (end.isBefore(start)) {

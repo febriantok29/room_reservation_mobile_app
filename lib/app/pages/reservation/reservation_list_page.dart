@@ -110,7 +110,7 @@ class _ReservationListPageState extends State<ReservationListPage> {
               try {
                 final userId = widget.user.id;
                 if (userId == null) {
-                  throw Exception('User ID tidak ditemukan');
+                  throw 'User ID tidak ditemukan';
                 }
 
                 // Tampilkan loading
