@@ -59,10 +59,8 @@ class ReservationIdGenerator {
 
     // Validasi: pastikan tidak melebihi max per hari
     if (nextSequence > maxReservationsPerDay) {
-      throw Exception(
-        'Maximum reservasi per hari ($maxReservationsPerDay) telah tercapai. '
-        'Tidak dapat membuat reservasi baru untuk tanggal ini.',
-      );
+      throw 'Maximum reservasi per hari ($maxReservationsPerDay) telah tercapai.\n'
+          'Tidak dapat membuat reservasi baru untuk tanggal ini.';
     }
 
     final sequenceStr = nextSequence.toString().padLeft(sequenceLength, '0');
@@ -230,10 +228,8 @@ class ReservationIdGenerator {
     }
 
     // Semua retry gagal
-    throw Exception(
-      'Gagal membuat ID reservasi setelah $maxRetries percobaan. '
-      'Sistem sedang sibuk, silakan coba lagi dalam beberapa saat.',
-    );
+    throw 'Gagal membuat ID reservasi setelah $maxRetries percobaan.\n'
+        'Sistem sedang sibuk, silakan coba lagi dalam beberapa saat.';
   }
 
   /// Format date menjadi YYYYMMDD

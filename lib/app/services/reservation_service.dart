@@ -466,12 +466,10 @@ class ReservationService {
           final requestedRange =
               '${formatter.format(reservation.startTime!)} - ${formatter.format(reservation.endTime!)}';
 
-          throw Exception(
-            'Ruangan sudah dipesan pada waktu tersebut!\n\n'
-            'Pemesanan existing: $existingRange\n'
-            'Waktu yang Anda pilih: $requestedRange\n\n'
-            'Silakan pilih waktu lain.',
-          );
+          throw 'Ruangan sudah dipesan pada waktu tersebut!\n\n'
+              'Pemesanan existing: $existingRange\n'
+              'Waktu yang Anda pilih: $requestedRange\n\n'
+              'Silakan pilih waktu lain.';
         }
       }
 
