@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:room_reservation_mobile_app/app/algorithms/csp_room_reservation_solver.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
-import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
@@ -249,9 +248,7 @@ class ReservationService {
 
     // Jika constraint violated, throw exception dengan detail
     if (!solution.isValid) {
-      throw ValidationException(
-        'Reservasi tidak memenuhi constraint:\n${solution.violations.join("\n")}',
-      );
+      throw 'Reservasi tidak memenuhi constraint:\n${solution.violations.join("\n")}';
     }
 
     return solution;
@@ -371,7 +368,7 @@ class ReservationService {
         // If finding alternatives fails, just show violation errors
       }
 
-      throw ValidationException(errorMessage.trim());
+      throw errorMessage.trim();
     }
 
     // Simpan ke Firestore
@@ -576,9 +573,7 @@ class ReservationService {
 
     try {
       if (startDateTime.isAfter(endDateTime)) {
-        throw ValidationException(
-          'Waktu mulai tidak boleh lebih besar dari waktu selesai',
-        );
+        throw 'Waktu mulai tidak boleh lebih besar dari waktu selesai';
       }
 
       if (startDateTime.isBefore(DateTime.now())) {
@@ -595,8 +590,6 @@ class ReservationService {
       //   throw 'Durasi reservasi maksimal 8 jam';
       // }
     } catch (e) {
-      if (e is ValidationException) rethrow;
-
       throw 'Format waktu tidak valid';
     }
   }

@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
 import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
@@ -244,9 +243,7 @@ class Reservation extends BaseFirestoreModel {
       }
 
       if (end.isBefore(start)) {
-        throw ValidationException(
-          'Waktu selesai tidak boleh lebih awal dari waktu mulai',
-        );
+        throw 'Waktu selesai tidak boleh lebih awal dari waktu mulai';
       }
     }
   }

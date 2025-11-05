@@ -1,5 +1,3 @@
-import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
-
 class ReservationUpdateRequest {
   final String reservationId; // Required for update
   String? roomId;
@@ -50,15 +48,11 @@ class ReservationUpdateRequest {
 
     // Validate time if either is provided
     if (startTime != null && endTime == null) {
-      throw ValidationException(
-        'Waktu selesai harus diisi jika mengubah waktu mulai',
-      );
+      throw 'Waktu selesai harus diisi jika mengubah waktu mulai';
     }
 
     if (endTime != null && startTime == null) {
-      throw ValidationException(
-        'Waktu mulai harus diisi jika mengubah waktu selesai',
-      );
+      throw 'Waktu mulai harus diisi jika mengubah waktu selesai';
     }
   }
 }
