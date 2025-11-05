@@ -8,18 +8,12 @@ class ReservationAppointment extends Appointment {
 
   ReservationAppointment({
     required this.reservation,
-    required DateTime startTime,
-    required DateTime endTime,
-    required String subject,
+    required super.startTime,
+    required super.endTime,
+    required super.subject,
     Color? color,
-    String? notes,
-  }) : super(
-         startTime: startTime,
-         endTime: endTime,
-         subject: subject,
-         color: color ?? _getColorByStatus(reservation.status),
-         notes: notes,
-       );
+    super.notes,
+  }) : super(color: color ?? _getColorByStatus(reservation.status));
 
   /// Factory constructor untuk membuat appointment dari reservation
   factory ReservationAppointment.fromReservation(Reservation reservation) {
