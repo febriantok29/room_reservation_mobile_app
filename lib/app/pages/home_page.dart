@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:room_reservation_mobile_app/app/models/home_statistics.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
+import 'package:room_reservation_mobile_app/app/models/reservation_count.dart';
+import 'package:room_reservation_mobile_app/app/pages/calendar/calendar_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/login_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/reservation_list_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/room/room_list_page.dart';
+import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
+import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 import 'package:room_reservation_mobile_app/app/services/user_service.dart';
 import 'package:room_reservation_mobile_app/app/states/auth_state.dart';
 import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
@@ -16,6 +21,54 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _now = DateTime.now();
+  final _roomService = RoomService.getInstance();
+  final _reservationService = ReservationService.getInstance();
+
+  late Future<HomeStatistics> _statisticsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _statisticsFuture = _loadStatistics();
+  }
+
+  /// Load semua statistik yang diperlukan
+  Future<HomeStatistics> _loadStatistics({bool forceRefresh = false}) async {
+    final user = AuthState.currentUser;
+    if (user?.reference == null) {
+      return HomeStatistics.empty();
+    }
+
+    try {
+      // Fetch data secara parallel
+      final results = await Future.wait([
+        _roomService.getAvailableRoomCount(forceRefresh: forceRefresh),
+        _reservationService.getReservationCountByStatus(
+          userId: user!.reference!,
+        ),
+      ]);
+
+      final availableRooms = results[0] as int;
+      final reservationCount = results[1] as ReservationCount;
+
+      return HomeStatistics(
+        availableRooms: availableRooms,
+        activeReservations: reservationCount.active,
+        pendingReservations: reservationCount.pending,
+        completedReservations: reservationCount.completed,
+      );
+    } catch (e) {
+      throw 'Gagal memuat statistik: ${e.toString()}';
+    }
+  }
+
+  /// Handle pull to refresh
+  Future<void> _onRefresh() async {
+    setState(() {
+      _statisticsFuture = _loadStatistics(forceRefresh: true);
+    });
+    await _statisticsFuture;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,15 +87,13 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          setState(() {});
-        },
+        onRefresh: _onRefresh,
         child: ListView(
           padding: const EdgeInsets.all(16.0),
           children: [
             _buildUserHeader(user),
             const SizedBox(height: 24),
-            _buildStatisticsSection(user),
+            _buildStatisticsSection(),
             const SizedBox(height: 24),
             _buildQuickActionsSection(user),
             const SizedBox(height: 24),
@@ -139,7 +190,70 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildStatisticsSection(Profile? user) {
+  Widget _buildStatisticsSection() {
+    return FutureBuilder<HomeStatistics>(
+      future: _statisticsFuture,
+      builder: (_, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoadingStatistics();
+        }
+
+        if (snapshot.hasError) {
+          return _buildErrorStatistics(snapshot.error.toString());
+        }
+
+        final stats = snapshot.data ?? HomeStatistics.empty();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Statistik Cepat',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 1.3,
+              children: [
+                _buildStatCard(
+                  icon: Icons.meeting_room,
+                  iconColor: Colors.green,
+                  value: '${stats.availableRooms}',
+                  label: 'Ruang Tersedia',
+                ),
+                _buildStatCard(
+                  icon: Icons.event_available,
+                  iconColor: Colors.blue,
+                  value: '${stats.activeReservations}',
+                  label: 'Reservasi Aktif',
+                ),
+                _buildStatCard(
+                  icon: Icons.pending_actions,
+                  iconColor: Colors.orange,
+                  value: '${stats.pendingReservations}',
+                  label: 'Pending',
+                ),
+                _buildStatCard(
+                  icon: Icons.calendar_today,
+                  iconColor: Colors.purple,
+                  value:
+                      '${_now.day} ${DateFormatter.getMonthName(_now.month)}',
+                  label: 'Hari Ini',
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildLoadingStatistics() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -155,32 +269,58 @@ class _HomePageState extends State<HomePage> {
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
           childAspectRatio: 1.3,
-          children: [
-            _buildStatCard(
-              icon: Icons.meeting_room,
-              iconColor: Colors.green,
-              value: '11',
-              label: 'Ruang Tersedia',
+          children: List.generate(
+            4,
+            (index) => Container(
+              padding: const EdgeInsets.all(12.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withValues(alpha: 0.2),
+                    spreadRadius: 1,
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Center(child: CircularProgressIndicator()),
             ),
-            _buildStatCard(
-              icon: Icons.event_available,
-              iconColor: Colors.blue,
-              value: '0',
-              label: 'Reservasi Aktif',
-            ),
-            _buildStatCard(
-              icon: Icons.pending_actions,
-              iconColor: Colors.orange,
-              value: '1',
-              label: 'Pending',
-            ),
-            _buildStatCard(
-              icon: Icons.calendar_today,
-              iconColor: Colors.purple,
-              value: '${_now.day} ${DateFormatter.getMonthName(_now.month)}',
-              label: 'Hari Ini',
-            ),
-          ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorStatistics(String error) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Statistik Cepat',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16.0),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(12.0),
+            border: Border.all(color: Colors.red.shade200),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red.shade700),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  error,
+                  style: TextStyle(color: Colors.red.shade700),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -281,6 +421,27 @@ class _HomePageState extends State<HomePage> {
                   );
                 },
               ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionCard(
+                icon: Icons.calendar_month,
+                iconColor: Colors.purple,
+                label: 'Kalender',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => CalendarPage(user: user)),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Container(), // Placeholder untuk simetri
             ),
           ],
         ),
