@@ -311,4 +311,15 @@ class RoomService {
       _cachedRooms.add(room);
     }
   }
+
+  /// Mendapatkan jumlah ruangan yang tersedia (tidak maintenance, tidak deleted)
+  Future<int> getAvailableRoomCount({bool forceRefresh = false}) async {
+    final rooms = await getRoomList(
+      showDeleted: false,
+      showMaintenance: false,
+      forceRefresh: forceRefresh,
+    );
+
+    return rooms.where((room) => room.isMaintenance != true).length;
+  }
 }

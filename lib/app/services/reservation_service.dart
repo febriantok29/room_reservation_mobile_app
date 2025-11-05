@@ -4,6 +4,7 @@ import 'package:room_reservation_mobile_app/app/algorithms/csp_room_reservation_
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
+import 'package:room_reservation_mobile_app/app/models/reservation_count.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 import 'package:room_reservation_mobile_app/app/services/user_service.dart';
@@ -589,6 +590,58 @@ class ReservationService {
       // }
     } catch (e) {
       throw 'Format waktu tidak valid';
+    }
+  }
+
+  /// Mendapatkan jumlah reservasi berdasarkan status untuk user tertentu
+  Future<ReservationCount> getReservationCountByStatus({
+    required DocumentReference userId,
+  }) async {
+    try {
+      final client = await FirestoreClient.create(Reservation.collectionName);
+
+      Query<Map<String, dynamic>> query = client.getCollectionRef();
+      query = query.where('userId', isEqualTo: userId);
+      query = query.where(BaseFirestoreModel.deletedAtField, isNull: true);
+
+      final response = await query.get();
+
+      int activeCount = 0; // APPROVED dan belum selesai
+      int pendingCount = 0; // PENDING
+      int completedCount = 0; // COMPLETED
+
+      final now = DateTime.now();
+
+      for (final doc in response.docs) {
+        if (!doc.exists) continue;
+
+        final data = doc.data();
+        final reservation = Reservation.fromFirestore(data, doc.id);
+
+        final status = reservation.status;
+
+        if (status == 'PENDING') {
+          pendingCount++;
+        } else if (status == 'APPROVED') {
+          // Cek apakah sudah selesai (endTime sudah lewat)
+          if (reservation.endTime != null &&
+              reservation.endTime!.isBefore(now)) {
+            completedCount++;
+          } else {
+            activeCount++;
+          }
+        } else if (status == 'COMPLETED') {
+          completedCount++;
+        }
+      }
+
+      return ReservationCount(
+        active: activeCount,
+        pending: pendingCount,
+        completed: completedCount,
+      );
+    } catch (e) {
+      throw 'Gagal mengambil statistik reservasi: ${e.toString()}';
     }
   }
 }
