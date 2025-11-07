@@ -2,7 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:room_reservation_mobile_app/app/algorithms/csp_room_reservation_solver.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
+import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
 import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
+import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation_count.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
@@ -159,7 +161,49 @@ class ReservationService {
       reservation.user = user.first;
     }
 
-    return reservations;
+    // ============================================================================
+    // AUTO-UPDATE STATUS (On-Demand)
+    // ============================================================================
+    // Update status berdasarkan waktu saat ini
+    // Status akan otomatis berubah: CONFIRMED → UPCOMING → ONGOING → COMPLETED
+    // ============================================================================
+
+    final updatedReservations = <Reservation>[];
+
+    for (final reservation in reservations) {
+      // Compute status based on current time
+      final computedStatus = reservation.getComputedStatus();
+
+      // If status changed, update in Firestore (async, don't wait)
+      if (computedStatus != reservation.status) {
+        // Update status in background
+        _updateReservationStatus(reservation.id!, computedStatus).catchError((
+          e,
+        ) {
+          // Silent fail - status will be updated on next fetch
+        });
+
+        // Return updated reservation for UI
+        updatedReservations.add(reservation.copyWith(status: computedStatus));
+      } else {
+        updatedReservations.add(reservation);
+      }
+    }
+
+    return updatedReservations;
+  }
+
+  /// Update status reservasi (internal helper)
+  Future<void> _updateReservationStatus(
+    String reservationId,
+    ReservationStatus newStatus,
+  ) async {
+    final client = await FirestoreClient.create(Reservation.collectionName);
+
+    await client.update(reservationId, {
+      'status': newStatus.toFirestoreString(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// Mendapatkan reservasi berdasarkan ID
@@ -528,37 +572,190 @@ class ReservationService {
     return reservation;
   }
 
-  /// Membatalkan reservasi
-  Future<bool> cancelReservation(String id, String userId) async {
-    if (id.isEmpty) {
+  /// Membatalkan reservasi dengan reason
+  /// Available untuk status: CONFIRMED, UPCOMING
+  Future<Reservation> cancelReservation(
+    String reservationId,
+    String reason,
+    Profile user,
+  ) async {
+    if (reservationId.isEmpty) {
       throw 'ID reservasi tidak boleh kosong';
     }
 
-    // Ambil reservasi yang akan dibatalkan
-    final client = await FirestoreClient.create(Reservation.collectionName);
+    final userId = user.id;
 
-    final doc = await client.get(id);
-
-    if (!doc.exists) {
-      throw 'Reservasi tidak ditemukan';
+    if (userId == null || userId.isEmpty) {
+      throw 'User ID tidak ditemukan';
     }
 
-    final data = doc.data() ?? {};
-    final reservation = Reservation.fromFirestore(data, id);
+    // Ambil reservasi
+    final reservation = await getReservationById(reservationId);
 
-    // Update status menjadi CANCELLED
-    final updatedReservation = reservation.copyWith(
-      // status: Reservation.statusCancelled,
+    // Validasi: hanya bisa cancel jika CONFIRMED atau UPCOMING
+    if (!reservation.status.canBeCancelled) {
+      throw 'Reservasi dengan status ${reservation.status.displayName} tidak dapat dibatalkan';
+    }
+
+    // Validasi: hanya user yang buat atau admin yang bisa cancel
+    if (reservation.userRef?.id != userId && !user.isAdmin) {
+      throw 'Anda tidak memiliki izin untuk membatalkan reservasi ini';
+    }
+
+    // Cancel menggunakan helper method dari model
+    final cancelled = reservation.cancel(reason, userId);
+    cancelled.prepareForUpdate();
+
+    // Update ke Firestore
+    final client = await FirestoreClient.create(Reservation.collectionName);
+    await client.update(reservationId, cancelled.toFirestore());
+
+    return cancelled;
+  }
+
+  /// Reschedule reservasi
+  /// Available untuk status: CONFIRMED only
+  Future<Reservation> rescheduleReservation(
+    String reservationId,
+    DateTime newStartTime,
+    DateTime newEndTime,
+    String userId, {
+    String? adminNote,
+    bool isAdmin = false,
+  }) async {
+    if (reservationId.isEmpty) {
+      throw 'ID reservasi tidak boleh kosong';
+    }
+
+    // Validasi waktu
+    _validateReservationTime(
+      startDateTime: newStartTime,
+      endDateTime: newEndTime,
     );
 
-    // Prepare for update
-    updatedReservation.prepareForUpdate();
+    // Ambil reservasi
+    final reservation = await getReservationById(reservationId);
 
-    // Simpan ke Firestore
-    final payload = updatedReservation.toFirestore();
-    await client.update(id, payload);
+    // Validasi: hanya bisa reschedule jika CONFIRMED
+    if (!reservation.status.canBeRescheduled) {
+      throw 'Reservasi dengan status ${reservation.status.displayName} tidak dapat di-reschedule. '
+          'Reschedule hanya dapat dilakukan untuk reservasi yang terkonfirmasi.';
+    }
 
-    return true;
+    // Validasi permission
+    if (!isAdmin && reservation.userRef?.id != userId) {
+      throw 'Anda tidak memiliki izin untuk reschedule reservasi ini';
+    }
+
+    // Create temp reservation with new time for CSP validation
+    final tempReservation = reservation.copyWith(
+      startDateTime: newStartTime,
+      endDateTime: newEndTime,
+    );
+
+    // CSP validation untuk waktu baru
+    final cspResult = await validateReservationWithCSP(tempReservation);
+
+    if (!cspResult.isValid) {
+      String errorMessage = 'Tidak dapat reschedule ke waktu tersebut:\n\n';
+
+      for (final violation in cspResult.violations) {
+        errorMessage += '• $violation\n';
+      }
+
+      // Suggest alternatives
+      try {
+        final alternatives = await findAlternativeRoomsWithCSP(
+          startTime: newStartTime,
+          endTime: newEndTime,
+          capacity: reservation.visitorCount ?? 1,
+        );
+
+        if (alternatives.isNotEmpty) {
+          errorMessage += '\nRuangan alternatif yang tersedia:\n';
+          for (final room in alternatives.take(3)) {
+            errorMessage += '• ${room.name} (Kapasitas: ${room.capacity})\n';
+          }
+        }
+      } catch (e) {
+        // Ignore if alternative search fails
+      }
+
+      throw errorMessage.trim();
+    }
+
+    // CSP passed, proceed with reschedule
+    final note =
+        adminNote ?? (isAdmin ? 'Reschedule by admin' : 'Reschedule by user');
+    final rescheduled = reservation.reschedule(newStartTime, newEndTime, note);
+    rescheduled.prepareForUpdate();
+
+    // Update ke Firestore
+    final client = await FirestoreClient.create(Reservation.collectionName);
+    await client.update(reservationId, rescheduled.toFirestore());
+
+    return rescheduled;
+  }
+
+  /// Extend reservasi (perpanjang waktu) - Admin only
+  /// Available untuk status: ONGOING only
+  Future<Reservation> extendReservation(
+    String reservationId,
+    DateTime newEndTime,
+    String reason,
+  ) async {
+    if (reservationId.isEmpty) {
+      throw 'ID reservasi tidak boleh kosong';
+    }
+
+    // Ambil reservasi
+    final reservation = await getReservationById(reservationId);
+
+    // Validasi: hanya bisa extend jika ONGOING
+    if (!reservation.status.canBeExtended) {
+      throw 'Reservasi dengan status ${reservation.status.displayName} tidak dapat diperpanjang. '
+          'Extension hanya dapat dilakukan untuk reservasi yang sedang berlangsung.';
+    }
+
+    // Validasi: newEndTime harus lebih besar dari endTime saat ini
+    if (reservation.endTime != null &&
+        !newEndTime.isAfter(reservation.endTime!)) {
+      throw 'Waktu baru harus lebih besar dari waktu selesai saat ini';
+    }
+
+    // CRITICAL: CSP validation untuk waktu tambahan
+    // Pastikan tidak ada reservasi lain yang bentrok
+    final tempReservation = reservation.copyWith(endDateTime: newEndTime);
+
+    final cspResult = await validateReservationWithCSP(tempReservation);
+
+    if (!cspResult.isValid) {
+      String errorMessage = 'Tidak dapat memperpanjang waktu:\n\n';
+
+      for (final violation in cspResult.violations) {
+        errorMessage += '• $violation\n';
+      }
+
+      // Calculate safe extension duration
+      if (reservation.endTime != null) {
+        final requestedExtension = newEndTime.difference(reservation.endTime!);
+        errorMessage +=
+            '\n\nPerpanjangan yang diminta: ${requestedExtension.inMinutes} menit';
+        errorMessage += '\nHarap periksa jadwal reservasi lain di ruangan ini.';
+      }
+
+      throw errorMessage.trim();
+    }
+
+    // CSP passed, safe to extend
+    final extended = reservation.extend(newEndTime, reason);
+    extended.prepareForUpdate();
+
+    // Update ke Firestore
+    final client = await FirestoreClient.create(Reservation.collectionName);
+    await client.update(reservationId, extended.toFirestore());
+
+    return extended;
   }
 
   /// Validasi waktu reservasi
@@ -606,11 +803,9 @@ class ReservationService {
 
       final response = await query.get();
 
-      int activeCount = 0; // APPROVED dan belum selesai
-      int pendingCount = 0; // PENDING
+      int activeCount = 0; // CONFIRMED, UPCOMING, ONGOING
+      int pendingCount = 0; // (No longer used - auto-confirmed)
       int completedCount = 0; // COMPLETED
-
-      final now = DateTime.now();
 
       for (final doc in response.docs) {
         if (!doc.exists) continue;
@@ -618,26 +813,27 @@ class ReservationService {
         final data = doc.data();
         final reservation = Reservation.fromFirestore(data, doc.id);
 
-        final status = reservation.status;
+        // Auto-update status if needed
+        final currentStatus = reservation.getComputedStatus();
 
-        if (status == 'PENDING') {
-          pendingCount++;
-        } else if (status == 'APPROVED') {
-          // Cek apakah sudah selesai (endTime sudah lewat)
-          if (reservation.endTime != null &&
-              reservation.endTime!.isBefore(now)) {
-            completedCount++;
-          } else {
+        switch (currentStatus) {
+          case ReservationStatus.confirmed:
+          case ReservationStatus.upcoming:
+          case ReservationStatus.ongoing:
             activeCount++;
-          }
-        } else if (status == 'COMPLETED') {
-          completedCount++;
+            break;
+          case ReservationStatus.completed:
+            completedCount++;
+            break;
+          case ReservationStatus.cancelled:
+            // Don't count cancelled reservations
+            break;
         }
       }
 
       return ReservationCount(
         active: activeCount,
-        pending: pendingCount,
+        pending: pendingCount, // Always 0 (auto-confirm system)
         completed: completedCount,
       );
     } catch (e) {
