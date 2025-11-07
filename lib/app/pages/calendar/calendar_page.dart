@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
@@ -188,9 +189,14 @@ class _CalendarPageState extends State<CalendarPage> {
                       }
                     },
                     onViewChanged: (ViewChangedDetails details) {
-                      setState(() {
-                        _selectedDate = details
-                            .visibleDates[details.visibleDates.length ~/ 2];
+                      // Use addPostFrameCallback to avoid setState during build
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          setState(() {
+                            _selectedDate = details
+                                .visibleDates[details.visibleDates.length ~/ 2];
+                          });
+                        }
                       });
                     },
                   ),
@@ -205,8 +211,16 @@ class _CalendarPageState extends State<CalendarPage> {
 
   /// Info panel di atas kalender
   Widget _buildInfoPanel(List<Reservation> reservations) {
-    final approved = reservations.where((r) => r.status == 'APPROVED').length;
-    final pending = reservations.where((r) => r.status == 'PENDING').length;
+    // Update status dan hitung berdasarkan enum
+    final active = reservations
+        .where((r) => r.getComputedStatus().isActive)
+        .length;
+    final completed = reservations
+        .where((r) => r.getComputedStatus() == ReservationStatus.completed)
+        .length;
+    final cancelled = reservations
+        .where((r) => r.getComputedStatus() == ReservationStatus.cancelled)
+        .length;
     final total = reservations.length;
 
     return Container(
@@ -226,15 +240,21 @@ class _CalendarPageState extends State<CalendarPage> {
           ),
           _buildInfoItem(
             icon: Icons.check_circle,
-            label: 'Disetujui',
-            value: '$approved',
+            label: 'Aktif',
+            value: '$active',
             color: Colors.green,
           ),
           _buildInfoItem(
-            icon: Icons.pending,
-            label: 'Pending',
-            value: '$pending',
-            color: Colors.orange,
+            icon: Icons.done_all,
+            label: 'Selesai',
+            value: '$completed',
+            color: Colors.grey,
+          ),
+          _buildInfoItem(
+            icon: Icons.cancel,
+            label: 'Batal',
+            value: '$cancelled',
+            color: Colors.red,
           ),
         ],
       ),
@@ -352,6 +372,7 @@ class _CalendarPageState extends State<CalendarPage> {
     ReservationAppointment appointment,
   ) {
     final reservation = appointment.reservation;
+    final currentStatus = reservation.getComputedStatus();
     final room = reservation.room;
     final user = reservation.user;
 
@@ -390,22 +411,16 @@ class _CalendarPageState extends State<CalendarPage> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: appointment.color,
+                      color: currentStatus.color,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          ReservationAppointment.getIconByStatus(
-                            reservation.status,
-                          ),
-                          size: 16,
-                          color: Colors.white,
-                        ),
+                        Icon(currentStatus.icon, size: 16, color: Colors.white),
                         const SizedBox(width: 4),
                         Text(
-                          reservation.status,
+                          currentStatus.displayName,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -463,32 +478,166 @@ class _CalendarPageState extends State<CalendarPage> {
                 reservation.purpose ?? 'Tidak ada keterangan',
                 style: const TextStyle(fontSize: 16),
               ),
-              // Approval info jika ada
-              if (reservation.approvedBy != null) ...[
+
+              // Cancellation info jika ada
+              if (reservation.cancellationReason != null) ...[
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.info,
+                            color: Colors.red.shade700,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Alasan Pembatalan:',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red.shade700,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        reservation.cancellationReason!,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.red.shade600,
+                        ),
+                      ),
+                      if (reservation.cancelledAt != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Dibatalkan pada: ${DateFormatter.shortDateTime(reservation.cancelledAt!)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.red.shade500,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+
+              // Admin notes jika ada
+              if (reservation.adminNotes != null &&
+                  reservation.adminNotes!.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.admin_panel_settings,
+                        color: Colors.blue.shade700,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Catatan Admin:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue.shade700,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              reservation.adminNotes!,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              // Confirmation info
+              if (reservation.confirmedAt != null) ...[
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 8),
                 Text(
-                  'Disetujui oleh: ${reservation.approvedBy ?? 'Unknown'}',
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                  'Dikonfirmasi pada: ${DateFormatter.shortDateTime(reservation.confirmedAt!)}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),
-                if (reservation.approvedAt != null)
-                  Text(
-                    'Pada: ${DateFormatter.shortDateTime(reservation.approvedAt!)}',
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                  ),
-                if (reservation.approvalNote != null &&
-                    reservation.approvalNote!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Catatan: ${reservation.approvalNote}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
+              ],
+
+              // Modification flags
+              if (reservation.wasRescheduled || reservation.wasExtended) ...[
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (reservation.wasRescheduled)
+                      Chip(
+                        avatar: Icon(
+                          Icons.event_repeat,
+                          size: 14,
+                          color: Colors.orange.shade700,
+                        ),
+                        label: const Text(
+                          'Di-reschedule',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                        backgroundColor: Colors.orange.shade50,
+                        side: BorderSide(color: Colors.orange.shade200),
+                        visualDensity: VisualDensity.compact,
                       ),
-                    ),
-                  ),
+                    if (reservation.wasExtended)
+                      Chip(
+                        avatar: Icon(
+                          Icons.timer,
+                          size: 14,
+                          color: Colors.blue.shade700,
+                        ),
+                        label: const Text(
+                          'Diperpanjang',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                        backgroundColor: Colors.blue.shade50,
+                        side: BorderSide(color: Colors.blue.shade200),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                  ],
+                ),
               ],
             ],
           ),
