@@ -32,7 +32,4 @@ extension ReservationX on Reservation {
 
   String get formattedCreatedAt =>
       createdAt != null ? DateFormatter.timeAgo(createdAt!) : '-';
-
-  String get formattedApprovedAt =>
-      approvedAt != null ? DateFormatter.fullDateTime(approvedAt!) : '-';
 }
