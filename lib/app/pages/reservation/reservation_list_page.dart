@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/reservation_modal_bottom_sheet.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
+import 'package:room_reservation_mobile_app/app/ui_items/reservation_status_badge.dart';
+import 'package:room_reservation_mobile_app/app/ui_items/cards/reservation_card.dart';
 
 class ReservationListPage extends StatefulWidget {
   final Profile user;
@@ -18,6 +21,7 @@ class _ReservationListPageState extends State<ReservationListPage> {
 
   final _service = ReservationService.getInstance();
   late Future<List<Reservation>> _reservations;
+  ReservationStatus? _filterStatus;
 
   @override
   void initState() {
@@ -33,150 +37,52 @@ class _ReservationListPageState extends State<ReservationListPage> {
     });
   }
 
-  // Menampilkan detail reservasi
-  void _showReservationDetail(Reservation reservation) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Detail Reservasi'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Ruangan: ${reservation.room?.name ?? "Tidak diketahui"}'),
-              const SizedBox(height: 8),
-              Text('Tanggal: ${reservation.formattedRange}'),
-              const SizedBox(height: 8),
-              Text('Tujuan: ${reservation.purpose ?? "-"}'),
-              if (reservation.visitorCount != null) ...[
-                const SizedBox(height: 8),
-                Text('Jumlah Pengunjung: ${reservation.visitorCount} orang'),
-              ],
-              if (reservation.approvedBy != null) ...[
-                const SizedBox(height: 8),
-                Text('Disetujui oleh: ${reservation.approvedBy}'),
-              ],
-              if (reservation.approvalNote != null) ...[
-                const SizedBox(height: 8),
-                Text('Catatan: ${reservation.approvalNote}'),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Tutup'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Edit reservasi
-  void _editReservation(Reservation reservation) async {
-    final bool? needRefresh = await ReservationModalBottomSheet.show(
-      context: context,
-      user: widget.user,
-      reservation: reservation,
-      onSuccess: _loadReservations,
-    );
-
-    if (needRefresh == true) {
-      _loadReservations();
-    }
-  }
-
-  // Batalkan reservasi
-  void _cancelReservation(Reservation reservation) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Batalkan Reservasi'),
-        content: const Text(
-          'Apakah Anda yakin ingin membatalkan reservasi ini?'
-          ' Tindakan ini tidak dapat dibatalkan.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Tidak'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-
-              try {
-                final userId = widget.user.id;
-                if (userId == null) {
-                  throw 'User ID tidak ditemukan';
-                }
-
-                // Tampilkan loading
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (_) => const AlertDialog(
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Membatalkan reservasi...'),
-                      ],
-                    ),
-                  ),
-                );
-
-                // Batalkan reservasi
-                await _service.cancelReservation(reservation.id!, userId);
-
-                if (!mounted) return;
-
-                // Tutup dialog loading
-                if (mounted) Navigator.of(context).pop();
-
-                // Refresh data
-                _loadReservations();
-
-                // Tampilkan notifikasi sukses
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Reservasi berhasil dibatalkan'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              } catch (e) {
-                // Tutup dialog loading jika masih terbuka
-                if (mounted) Navigator.of(context).pop();
-
-                // Tampilkan error
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Gagal membatalkan reservasi: ${e.toString()}',
-                      ),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('Ya', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
+  List<Reservation> _applyFilter(List<Reservation> reservations) {
+    if (_filterStatus == null) return reservations;
+    return reservations
+        .where((r) => r.getComputedStatus() == _filterStatus)
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Daftar Reservasi')),
+      appBar: AppBar(
+        title: Text(widget.user.isAdmin ? 'Semua Reservasi' : 'Reservasi Saya'),
+        actions: [
+          // Filter button
+          PopupMenuButton<ReservationStatus?>(
+            icon: const Icon(Icons.filter_list),
+            tooltip: 'Filter Status',
+            onSelected: (status) {
+              setState(() => _filterStatus = status);
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: null,
+                child: Row(
+                  children: [
+                    Icon(
+                      _filterStatus == null
+                          ? Icons.check_circle
+                          : Icons.circle_outlined,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('Semua Status'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              _buildFilterMenuItem(ReservationStatus.confirmed),
+              _buildFilterMenuItem(ReservationStatus.upcoming),
+              _buildFilterMenuItem(ReservationStatus.ongoing),
+              _buildFilterMenuItem(ReservationStatus.completed),
+              _buildFilterMenuItem(ReservationStatus.cancelled),
+            ],
+          ),
+        ],
+      ),
       floatingActionButton: _buildAddButton(),
       body: RefreshIndicator(
         key: _refreshIndicatorKey,
@@ -191,23 +97,77 @@ class _ReservationListPageState extends State<ReservationListPage> {
             }
 
             if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Terjadi Kesalahan',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Error: ${snapshot.error}',
+                      style: TextStyle(color: Colors.grey[600]),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: _loadReservations,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Coba Lagi'),
+                    ),
+                  ],
+                ),
+              );
             }
 
-            final reservations = snapshot.data ?? [];
+            final allReservations = snapshot.data ?? [];
+            final reservations = _applyFilter(allReservations);
+
+            if (allReservations.isEmpty) {
+              return _buildEmptyState(
+                icon: Icons.event_busy,
+                title: 'Belum Ada Reservasi',
+                message: widget.user.isAdmin
+                    ? 'Belum ada reservasi yang dibuat oleh pengguna'
+                    : 'Anda belum memiliki reservasi.\nBuat reservasi pertama Anda!',
+              );
+            }
 
             if (reservations.isEmpty) {
-              return const Center(
-                child: Text('Tidak ada reservasi ditemukan.'),
+              return _buildEmptyState(
+                icon: Icons.filter_list_off,
+                title: 'Tidak Ada Hasil',
+                message:
+                    'Tidak ada reservasi dengan status ${_filterStatus?.displayName ?? ""}',
+                showClearFilter: true,
               );
             }
 
             return ListView.builder(
               itemCount: reservations.length,
+              padding: const EdgeInsets.only(top: 8),
               itemBuilder: (_, index) {
                 final reservation = reservations[index];
+                final isLast = index == reservations.length - 1;
 
-                return _buildCard(reservation);
+                Widget card = _buildCard(reservation);
+
+                if (isLast) {
+                  card = Padding(
+                    padding: const EdgeInsets.only(bottom: 80.0),
+                    child: card,
+                  );
+                }
+
+                return card;
               },
             );
           },
@@ -216,144 +176,79 @@ class _ReservationListPageState extends State<ReservationListPage> {
     );
   }
 
-  Widget _buildCard(Reservation reservation) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.2),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+  PopupMenuItem<ReservationStatus> _buildFilterMenuItem(
+    ReservationStatus status,
+  ) {
+    return PopupMenuItem(
+      value: status,
+      child: Row(
+        children: [
+          Icon(
+            _filterStatus == status
+                ? Icons.check_circle
+                : Icons.circle_outlined,
+            size: 20,
+            color: status.color,
           ),
+          const SizedBox(width: 12),
+          ReservationStatusChip(status: status),
         ],
       ),
-      child: InkWell(
-        onTap: () => _showReservationDetail(reservation),
-        borderRadius: BorderRadius.circular(8),
+    );
+  }
+
+  Widget _buildEmptyState({
+    required IconData icon,
+    required String title,
+    required String message,
+    bool showClearFilter = false,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Nama ruangan dan status
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    reservation.room?.name ?? "Tidak diketahui",
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _buildStatusBadge(reservation.status),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // Tanggal dan waktu dengan icon
-            _buildInfoRow(
-              icon: Icons.calendar_today,
-              text: reservation.formattedRange,
-            ),
-
-            const SizedBox(height: 4),
-
-            _buildInfoRow(
-              icon: Icons.people,
-              text: '${reservation.visitorCount ?? 1} orang',
-            ),
-
-            const SizedBox(height: 4),
-
-            // Tujuan dengan icon
-            if (reservation.purpose != null && reservation.purpose!.isNotEmpty)
-              _buildInfoRow(
-                icon: Icons.edit_note,
-                text: reservation.purpose!,
-                maxLines: 2,
+            Icon(icon, size: 80, color: Colors.grey[300]),
+            const SizedBox(height: 24),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
               ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+            if (showClearFilter) ...[
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                onPressed: () {
+                  setState(() => _filterStatus = null);
+                },
+                icon: const Icon(Icons.clear),
+                label: const Text('Hapus Filter'),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoRow({
-    required IconData icon,
-    required String text,
-    int? maxLines,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 16, color: Colors.grey[600]),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-            maxLines: maxLines,
-            overflow: maxLines != null ? TextOverflow.ellipsis : null,
-          ),
-        ),
-      ],
-    );
-  }
+  Widget _buildCard(Reservation reservation) {
+    // Update status if needed
 
-  Widget _buildStatusBadge(String? status) {
-    Color backgroundColor;
-    Color textColor;
-    String label;
-
-    switch (status) {
-      case 'PENDING':
-        backgroundColor = Colors.orange.shade100;
-        textColor = Colors.orange.shade800;
-        label = 'PENDING';
-        break;
-      case 'APPROVED':
-        backgroundColor = Colors.green.shade100;
-        textColor = Colors.green.shade800;
-        label = 'APPROVED';
-        break;
-      case 'REJECTED':
-        backgroundColor = Colors.red.shade100;
-        textColor = Colors.red.shade800;
-        label = 'REJECTED';
-        break;
-      case 'CANCELLED':
-        backgroundColor = Colors.grey.shade100;
-        textColor = Colors.grey.shade800;
-        label = 'CANCELLED';
-        break;
-      default:
-        backgroundColor = Colors.grey.shade100;
-        textColor = Colors.grey.shade800;
-        label = status ?? 'UNKNOWN';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+    return ReservationCard(
+      reservation: reservation,
+      user: widget.user,
+      service: _service,
+      onDeleteCompleted: _loadReservations,
     );
   }
 
