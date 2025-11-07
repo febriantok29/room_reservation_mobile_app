@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
 import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
@@ -12,11 +13,36 @@ class Reservation extends BaseFirestoreModel {
   final DocumentReference? roomRef;
   final DateTime? startTime;
   final DateTime? endTime;
+
+  /// Waktu asli sebelum di-extend (untuk tracking)
+  final DateTime? originalEndTime;
+
   final int? visitorCount;
   final String? purpose;
-  final String? approvalNote;
-  final String? approvedBy;
-  final DateTime? approvedAt;
+
+  /// Status reservasi (full-otomatis)
+  ReservationStatus status;
+
+  /// Alasan pembatalan (jika status = cancelled)
+  final String? cancellationReason;
+
+  /// Catatan dari admin (untuk extension, reschedule, dll)
+  final String? adminNotes;
+
+  /// Waktu konfirmasi otomatis (saat pertama kali dibuat)
+  DateTime? confirmedAt;
+
+  /// Waktu dibatalkan (jika ada)
+  final DateTime? cancelledAt;
+
+  /// User yang membatalkan (userId)
+  final String? cancelledBy;
+
+  /// Apakah pernah di-reschedule
+  final bool wasRescheduled;
+
+  /// Apakah pernah di-extend
+  final bool wasExtended;
 
   Room? room;
   Profile? user;
@@ -31,11 +57,17 @@ class Reservation extends BaseFirestoreModel {
     this.roomRef,
     this.startTime,
     this.endTime,
+    this.originalEndTime,
     this.visitorCount,
-    this.approvalNote,
     this.purpose,
-    this.approvedBy,
-    this.approvedAt,
+    this.status = ReservationStatus.confirmed,
+    this.cancellationReason,
+    this.adminNotes,
+    this.confirmedAt,
+    this.cancelledAt,
+    this.cancelledBy,
+    this.wasRescheduled = false,
+    this.wasExtended = false,
     super.createdBy,
     super.updatedBy,
     super.deletedBy,
@@ -57,19 +89,25 @@ class Reservation extends BaseFirestoreModel {
       roomRef: json['roomId'],
       startTime: json['startTime'],
       endTime: json['endTime'],
+      originalEndTime: json['originalEndTime'],
       visitorCount: json['visitorCount'],
-      approvalNote: json['approvalNote'],
       purpose: json['purpose'],
-      approvedBy: json['approvedBy'],
-      approvedAt: DateTime.tryParse('${json['approvedAt']}')?.toLocal(),
+      status: json['status'] != null
+          ? ReservationStatusExtension.fromString(json['status'])
+          : ReservationStatus.confirmed,
+      cancellationReason: json['cancellationReason'],
+      adminNotes: json['adminNotes'],
+      confirmedAt: DateTime.tryParse('${json['confirmedAt']}')?.toLocal(),
+      cancelledAt: DateTime.tryParse('${json['cancelledAt']}')?.toLocal(),
+      cancelledBy: json['cancelledBy'],
+      wasRescheduled: json['wasRescheduled'] ?? false,
+      wasExtended: json['wasExtended'] ?? false,
       createdBy: json['createdBy'],
       updatedBy: json['updatedBy'],
       deletedBy: json['deletedBy'],
       createdAt: DateTime.tryParse('${json['createdAt']}')?.toLocal(),
       updatedAt: DateTime.tryParse('${json['updatedAt']}')?.toLocal(),
       deletedAt: DateTime.tryParse('${json['deletedAt']}')?.toLocal(),
-      // room: json['room'] != null ? Room.fromJson(json['room']) : null,
-      // user: json['user'] != null ? User.fromJson(json['user']) : null,
     );
   }
 
@@ -82,11 +120,19 @@ class Reservation extends BaseFirestoreModel {
       roomRef: data['roomId'],
       startTime: DateFormatter.getDateTime(data['startTime']),
       endTime: DateFormatter.getDateTime(data['endTime']),
+      originalEndTime: DateFormatter.getDateTime(data['originalEndTime']),
       visitorCount: data['visitorCount'],
-      approvalNote: data['approvalNote'],
       purpose: data['purpose'],
-      approvedBy: data['approvedBy'],
-      approvedAt: DateFormatter.getDateTime(data['approvedAt']),
+      status: data['status'] != null
+          ? ReservationStatusExtension.fromString(data['status'])
+          : ReservationStatus.confirmed,
+      cancellationReason: data['cancellationReason'],
+      adminNotes: data['adminNotes'],
+      confirmedAt: DateFormatter.getDateTime(data['confirmedAt']),
+      cancelledAt: DateFormatter.getDateTime(data['cancelledAt']),
+      cancelledBy: data['cancelledBy'],
+      wasRescheduled: data['wasRescheduled'] ?? false,
+      wasExtended: data['wasExtended'] ?? false,
     );
 
     reservation.setCommonFields(data, documentId);
@@ -114,32 +160,42 @@ class Reservation extends BaseFirestoreModel {
     }
   }
 
-  /// Mendapatkan status reservasi berdasarkan kondisi field
-  String get status {
-    // Jika sudah dihapus
-    if (deletedAt != null) {
-      return 'CANCELLED';
+  /// Auto-update status berdasarkan waktu
+  /// Dipanggil saat getReservationList() atau detail
+  ReservationStatus getComputedStatus() {
+    // Jika sudah cancelled, tetap cancelled
+    if (status == ReservationStatus.cancelled) {
+      return ReservationStatus.cancelled;
     }
 
-    // Jika sudah disetujui
-    if (approvedBy != null && approvedAt != null) {
-      // Cek apakah sudah selesai (endTime sudah lewat)
-      if (endTime != null && endTime!.isBefore(DateTime.now())) {
-        return 'COMPLETED';
+    final now = DateTime.now();
+
+    // Jika waktu selesai sudah lewat → COMPLETED
+    if (endTime != null && endTime!.isBefore(now)) {
+      return ReservationStatus.completed;
+    }
+
+    // Jika sudah mulai → ONGOING
+    if (startTime != null && startTime!.isBefore(now)) {
+      return ReservationStatus.ongoing;
+    }
+
+    // Jika 30 menit sebelum mulai → UPCOMING
+    if (startTime != null) {
+      final diff = startTime!.difference(now);
+      if (diff.inMinutes <= 30 && diff.inMinutes >= 0) {
+        return ReservationStatus.upcoming;
       }
-      return 'APPROVED';
     }
 
-    // Jika approval note ada tapi approvedBy kosong, berarti ditolak
-    if (approvalNote != null &&
-        approvalNote!.isNotEmpty &&
-        approvedBy == null) {
-      return 'REJECTED';
-    }
-
-    // Default adalah pending
-    return 'PENDING';
+    // Default: CONFIRMED (menunggu waktu)
+    return ReservationStatus.confirmed;
   }
+
+  /// Helper untuk display status dengan warna
+  String get statusDisplayName => status.displayName;
+  String get statusDescription => status.description;
+  String get statusColorHex => status.colorHex;
 
   /// Membuat salinan objek dengan nilai-nilai yang diperbarui
   Reservation copyWith({
@@ -148,10 +204,18 @@ class Reservation extends BaseFirestoreModel {
     DocumentReference? roomRef,
     DateTime? startDateTime,
     DateTime? endDateTime,
+    DateTime? originalEndTime,
     int? visitorCount,
-    String? approvalNote,
     String? purpose,
-    String? status,
+    ReservationStatus? status,
+    String? cancellationReason,
+    String? adminNotes,
+    DateTime? confirmedAt,
+    DateTime? cancelledAt,
+    String? cancelledBy,
+    bool? wasRescheduled,
+    bool? wasExtended,
+    String? approvalNote,
     String? approvedBy,
     DateTime? approvedAt,
     Room? room,
@@ -169,11 +233,17 @@ class Reservation extends BaseFirestoreModel {
       roomRef: roomRef ?? this.roomRef,
       startTime: startDateTime != null ? startDateTime.toLocal() : startTime,
       endTime: endDateTime != null ? endDateTime.toLocal() : endTime,
+      originalEndTime: originalEndTime ?? this.originalEndTime,
       visitorCount: visitorCount ?? this.visitorCount,
-      approvalNote: approvalNote ?? this.approvalNote,
       purpose: purpose ?? this.purpose,
-      approvedBy: approvedBy ?? this.approvedBy,
-      approvedAt: approvedAt ?? this.approvedAt,
+      status: status ?? this.status,
+      cancellationReason: cancellationReason ?? this.cancellationReason,
+      adminNotes: adminNotes ?? this.adminNotes,
+      confirmedAt: confirmedAt ?? this.confirmedAt,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
+      cancelledBy: cancelledBy ?? this.cancelledBy,
+      wasRescheduled: wasRescheduled ?? this.wasRescheduled,
+      wasExtended: wasExtended ?? this.wasExtended,
       createdBy: createdBy ?? this.createdBy,
       updatedBy: updatedBy ?? this.updatedBy,
       deletedBy: deletedBy ?? this.deletedBy,
@@ -194,11 +264,22 @@ class Reservation extends BaseFirestoreModel {
       'endTime': endTime?.toUtc(),
       'visitorCount': visitorCount,
       'purpose': purpose,
+      'status': status.toFirestoreString(),
     };
 
-    if (approvedBy != null) data['approvedBy'] = approvedBy;
-    if (approvedAt != null) data['approvedAt'] = approvedAt?.toIso8601String();
-    if (approvalNote != null) data['approvalNote'] = approvalNote;
+    // Optional fields
+    if (originalEndTime != null) {
+      data['originalEndTime'] = originalEndTime?.toUtc();
+    }
+    if (cancellationReason != null) {
+      data['cancellationReason'] = cancellationReason;
+    }
+    if (adminNotes != null) data['adminNotes'] = adminNotes;
+    if (confirmedAt != null) data['confirmedAt'] = confirmedAt?.toUtc();
+    if (cancelledAt != null) data['cancelledAt'] = cancelledAt?.toUtc();
+    if (cancelledBy != null) data['cancelledBy'] = cancelledBy;
+    data['wasRescheduled'] = wasRescheduled;
+    data['wasExtended'] = wasExtended;
 
     // Tambahkan base fields
     final baseFields = toMap();
@@ -246,5 +327,69 @@ class Reservation extends BaseFirestoreModel {
         throw 'Waktu selesai tidak boleh lebih awal dari waktu mulai';
       }
     }
+  }
+
+  /// Set status ke CONFIRMED saat pertama kali dibuat (auto-approve)
+  @override
+  void prepareForCreate() {
+    super.prepareForCreate();
+    // Auto-confirm reservation setelah pass CSP validation
+    (this).confirmedAt = DateTime.now();
+    (this).status = ReservationStatus.confirmed;
+  }
+
+  /// Helper method: Cancel reservation
+  Reservation cancel(String reason, String userId) {
+    if (!status.canBeCancelled) {
+      throw 'Reservasi dengan status ${status.displayName} tidak dapat dibatalkan';
+    }
+
+    return copyWith(
+      status: ReservationStatus.cancelled,
+      cancellationReason: reason,
+      cancelledAt: DateTime.now(),
+      cancelledBy: userId,
+    );
+  }
+
+  /// Helper method: Reschedule reservation
+  Reservation reschedule(DateTime newStart, DateTime newEnd, String adminNote) {
+    if (!status.canBeRescheduled) {
+      throw 'Reservasi dengan status ${status.displayName} tidak dapat di-reschedule';
+    }
+
+    return copyWith(
+      startDateTime: newStart,
+      endDateTime: newEnd,
+      wasRescheduled: true,
+      adminNotes: adminNote,
+    );
+  }
+
+  /// Helper method: Extend reservation (perpanjang waktu)
+  Reservation extend(DateTime newEndTime, String adminNote) {
+    if (!status.canBeExtended) {
+      throw 'Reservasi dengan status ${status.displayName} tidak dapat di-extend';
+    }
+
+    return copyWith(
+      originalEndTime:
+          originalEndTime ?? endTime, // Save original if first extend
+      endDateTime: newEndTime,
+      wasExtended: true,
+      adminNotes: adminNote,
+    );
+  }
+
+  /// Helper method: Update status based on current time
+  /// Should be called when fetching reservations
+  Reservation updateStatusIfNeeded() {
+    final computedStatus = getComputedStatus();
+
+    if (computedStatus != status) {
+      return copyWith(status: computedStatus);
+    }
+
+    return this;
   }
 }
