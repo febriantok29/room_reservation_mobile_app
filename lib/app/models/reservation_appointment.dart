@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 
@@ -13,7 +14,7 @@ class ReservationAppointment extends Appointment {
     required super.subject,
     Color? color,
     super.notes,
-  }) : super(color: color ?? _getColorByStatus(reservation.status));
+  }) : super(color: color ?? reservation.status.color);
 
   /// Factory constructor untuk membuat appointment dari reservation
   factory ReservationAppointment.fromReservation(Reservation reservation) {
@@ -36,44 +37,8 @@ Status: ${reservation.status}
           reservation.endTime ?? DateTime.now().add(const Duration(hours: 1)),
       subject: subject,
       notes: notes,
-      color: _getColorByStatus(reservation.status),
+      color: reservation.status.color,
     );
-  }
-
-  /// Mendapatkan warna berdasarkan status reservasi
-  static Color _getColorByStatus(String status) {
-    switch (status) {
-      case 'APPROVED':
-        return Colors.green;
-      case 'PENDING':
-        return Colors.orange;
-      case 'REJECTED':
-        return Colors.red;
-      case 'CANCELLED':
-        return Colors.grey;
-      case 'COMPLETED':
-        return Colors.blue;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  /// Mendapatkan icon berdasarkan status reservasi
-  static IconData getIconByStatus(String status) {
-    switch (status) {
-      case 'APPROVED':
-        return Icons.check_circle;
-      case 'PENDING':
-        return Icons.pending;
-      case 'REJECTED':
-        return Icons.cancel;
-      case 'CANCELLED':
-        return Icons.block;
-      case 'COMPLETED':
-        return Icons.done_all;
-      default:
-        return Icons.event;
-    }
   }
 }
 
