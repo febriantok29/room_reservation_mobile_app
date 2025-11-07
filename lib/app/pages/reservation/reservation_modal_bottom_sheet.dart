@@ -847,6 +847,8 @@ class _ReservationModalBottomSheetState
         _isLoading = false;
         _errorMessage = 'Gagal menyimpan reservasi: ${e.toString()}';
       });
+
+      rethrow;
     }
   }
 
