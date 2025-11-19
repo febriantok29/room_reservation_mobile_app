@@ -11,12 +11,11 @@ class Room extends BaseFirestoreModel {
   final String? location;
   final String? description;
   final bool? isMaintenance;
+  final List<String>? facilityIds;
 
   @override
   DocumentReference get reference {
-    return FirebaseFirestore.instance
-        .collection(collectionName)
-        .doc(id);
+    return FirebaseFirestore.instance.collection(collectionName).doc(id);
   }
 
   Room({
@@ -26,6 +25,7 @@ class Room extends BaseFirestoreModel {
     this.location,
     this.description,
     this.isMaintenance,
+    this.facilityIds,
     super.createdBy,
     super.updatedBy,
     super.deletedBy,
@@ -46,6 +46,9 @@ class Room extends BaseFirestoreModel {
       location: json['location'],
       description: json['description'],
       isMaintenance: json['isMaintenance'],
+      facilityIds: json['facilityIds'] != null
+          ? List<String>.from(json['facilityIds'])
+          : null,
       createdBy: json['createdBy'],
       updatedBy: json['updatedBy'],
       deletedBy: json['deletedBy'],
@@ -75,6 +78,9 @@ class Room extends BaseFirestoreModel {
       location: data['location'],
       description: data['description'],
       isMaintenance: data['isMaintenance'] ?? false,
+      facilityIds: data['facilityIds'] != null
+          ? List<String>.from(data['facilityIds'])
+          : null,
     );
 
     room.setCommonFields(data, documentId);
@@ -91,6 +97,7 @@ class Room extends BaseFirestoreModel {
       'location': location,
       'description': description,
       'isMaintenance': maintenanceValue,
+      'facilityIds': facilityIds ?? [],
     };
 
     map.addAll(super.toMap());
@@ -106,6 +113,7 @@ class Room extends BaseFirestoreModel {
     String? location,
     String? description,
     bool? isMaintenance,
+    List<String>? facilityIds,
     DocumentReference? createdBy,
     DocumentReference? updatedBy,
     DocumentReference? deletedBy,
@@ -120,6 +128,7 @@ class Room extends BaseFirestoreModel {
       location: location ?? this.location,
       description: description ?? this.description,
       isMaintenance: isMaintenance ?? this.isMaintenance,
+      facilityIds: facilityIds ?? this.facilityIds,
       createdBy: createdBy ?? this.createdBy,
       updatedBy: updatedBy ?? this.updatedBy,
       deletedBy: deletedBy ?? this.deletedBy,
