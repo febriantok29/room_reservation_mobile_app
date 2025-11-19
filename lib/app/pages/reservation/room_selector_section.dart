@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
+import 'package:room_reservation_mobile_app/app/models/room_facility.dart';
 import 'package:room_reservation_mobile_app/app/services/room_service.dart';
+import 'package:room_reservation_mobile_app/app/services/room_facility_service.dart';
+import 'package:room_reservation_mobile_app/app/ui_items/room_facility_filter.dart';
+import 'package:room_reservation_mobile_app/app/ui_items/room_facility_chips.dart';
 
 class RoomSelectorSection extends StatefulWidget {
   final DateTime? startDateTime;
@@ -63,9 +67,12 @@ class RoomSelectorSection extends StatefulWidget {
 
 class _RoomSelectorSectionState extends State<RoomSelectorSection> {
   final _roomService = RoomService.getInstance();
+  final _facilityService = RoomFacilityService.getInstance();
   final _searchController = TextEditingController();
 
   String _searchKeyword = '';
+  List<String> _selectedFacilityIds = [];
+  List<RoomFacility> _availableFacilities = [];
   late Future<List<Room>> _roomsFuture;
   Timer? _debounceTimer;
 
@@ -73,6 +80,7 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
   void initState() {
     super.initState();
     _roomsFuture = _loadRooms();
+    _loadFacilities();
   }
 
   @override
@@ -80,6 +88,24 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
     _searchController.dispose();
     _debounceTimer?.cancel();
     super.dispose();
+  }
+
+  /// Load daftar fasilitas yang tersedia
+  Future<void> _loadFacilities({bool forceRefresh = false}) async {
+    try {
+      final facilities = await _facilityService.getAllFacilities(
+        forceRefresh: forceRefresh,
+      );
+
+      if (mounted) {
+        setState(() {
+          _availableFacilities = facilities;
+        });
+      }
+    } catch (e) {
+      // Gagal load facilities tidak fatal, cukup log saja
+      debugPrint('Failed to load facilities: $e');
+    }
   }
 
   /// Load daftar ruangan yang tersedia
@@ -92,6 +118,9 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
         rooms = await _roomService.getRoomList(
           searchKeyword: _searchKeyword,
           showMaintenance: false,
+          facilityIds: _selectedFacilityIds.isNotEmpty
+              ? _selectedFacilityIds
+              : null,
           forceRefresh: forceRefresh,
         );
 
@@ -99,12 +128,15 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
         rooms = rooms.where((room) => room.isMaintenance != true).toList();
       } else {
         // Jika waktu ditentukan, filter ruangan yang available pada waktu tersebut
-        // Sekarang bisa langsung pass searchKeyword ke getAvailableRoom
+        // Sekarang bisa langsung pass searchKeyword dan facilityIds ke getAvailableRoom
         rooms = await _roomService.getAvailableRoom(
           start: widget.startDateTime!,
           end: widget.endDateTime!,
           forceRefresh: forceRefresh,
           searchKeyword: _searchKeyword,
+          facilityIds: _selectedFacilityIds.isNotEmpty
+              ? _selectedFacilityIds
+              : null,
         );
       }
 
@@ -128,12 +160,20 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
     });
   }
 
+  /// Handle perubahan facility filter
+  void _onFacilityFilterChanged(List<String> selectedIds) {
+    setState(() {
+      _selectedFacilityIds = selectedIds;
+      _roomsFuture = _loadRooms();
+    });
+  }
+
   /// Handle pull to refresh
   Future<void> _onRefresh() async {
     setState(() {
       _roomsFuture = _loadRooms(forceRefresh: true);
     });
-    await _roomsFuture;
+    await Future.wait([_roomsFuture, _loadFacilities(forceRefresh: true)]);
   }
 
   @override
@@ -147,6 +187,15 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
         mainAxisSize: MainAxisSize.min,
         children: [
           _buildSearchField(),
+          if (_availableFacilities.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            RoomFacilityFilter(
+              availableFacilities: _availableFacilities,
+              selectedFacilityIds: _selectedFacilityIds,
+              onChanged: _onFacilityFilterChanged,
+            ),
+            const SizedBox(height: 8),
+          ],
           Expanded(child: _buildContent()),
         ],
       ),
@@ -270,6 +319,7 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
       itemBuilder: (_, index) {
         final room = rooms[index];
         final isSelected = room.id == widget.selectedRoomId;
+        final facilities = _facilityService.getFacilitiesFromRoom(room);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 8.0),
@@ -323,6 +373,10 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
                       'Kapasitas: ${room.capacity} orang',
                       style: const TextStyle(fontSize: 14.0),
                     ),
+                  ],
+                  if (facilities.isNotEmpty) ...[
+                    const SizedBox(height: 8.0),
+                    RoomFacilityChips(facilities: facilities),
                   ],
                 ],
               ),

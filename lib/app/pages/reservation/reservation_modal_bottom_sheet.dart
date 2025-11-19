@@ -610,12 +610,26 @@ class _ReservationModalBottomSheetState
 
   // Widget counter jumlah pengunjung
   Widget _buildVisitorCounter() {
+    final roomCapacity = _selectedRoom?.capacity;
+    final isOverCapacity = roomCapacity != null && _visitorCount > roomCapacity;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Jumlah Pengunjung'),
+          Row(
+            children: [
+              const Text('Jumlah Pengunjung'),
+              if (roomCapacity != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '(Kapasitas: $roomCapacity)',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ],
+          ),
           const SizedBox(height: 8.0),
           Row(
             children: [
@@ -629,7 +643,15 @@ class _ReservationModalBottomSheetState
                 child: Text(
                   '$_visitorCount orang',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 16),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: isOverCapacity
+                        ? Colors.orange.shade700
+                        : Colors.black,
+                    fontWeight: isOverCapacity
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
                 ),
               ),
               IconButton(
@@ -640,6 +662,36 @@ class _ReservationModalBottomSheetState
               ),
             ],
           ),
+          if (isOverCapacity) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 18,
+                    color: Colors.orange.shade700,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Jumlah pengunjung melebihi kapasitas ruangan ($_visitorCount/$roomCapacity orang)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.orange.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -822,11 +874,6 @@ class _ReservationModalBottomSheetState
           visitorCount: _visitorCount,
           purpose: _purposeController.text.trim(),
         );
-
-        if (_selectedRoom!.capacity != null &&
-            _visitorCount > _selectedRoom!.capacity!) {
-          throw 'Jumlah pengunjung melebihi kapasitas ruangan (${_selectedRoom!.capacity})';
-        }
 
         // Create reservation
         await _reservationService.createReservation(reservation);
