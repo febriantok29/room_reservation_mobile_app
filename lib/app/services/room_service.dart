@@ -20,6 +20,7 @@ class RoomService {
     bool showDeleted = false,
     bool showMaintenance = true,
     String? searchKeyword,
+    List<String>? facilityIds,
     bool forceRefresh = false,
   }) async {
     // Fetch dari Firestore jika:
@@ -78,6 +79,22 @@ class RoomService {
         if (!name.contains(keyword) &&
             !location.contains(keyword) &&
             !description.contains(keyword)) {
+          continue;
+        }
+      }
+
+      // Filter berdasarkan fasilitas (AND logic)
+      if (facilityIds != null && facilityIds.isNotEmpty) {
+        if (room.facilityIds == null || room.facilityIds!.isEmpty) {
+          continue;
+        }
+
+        // Room harus punya SEMUA fasilitas yang dipilih
+        final hasAllFacilities = facilityIds.every(
+          (selectedId) => room.facilityIds!.contains(selectedId),
+        );
+
+        if (!hasAllFacilities) {
           continue;
         }
       }
@@ -173,6 +190,7 @@ class RoomService {
     required DateTime start,
     required DateTime end,
     String? searchKeyword,
+    List<String>? facilityIds,
     bool forceRefresh = false,
   }) async {
     try {
@@ -223,6 +241,20 @@ class RoomService {
           return name.contains(keyword) ||
               location.contains(keyword) ||
               description.contains(keyword);
+        }).toList();
+      }
+
+      // Filter berdasarkan fasilitas (AND logic)
+      if (facilityIds != null && facilityIds.isNotEmpty) {
+        availableRooms = availableRooms.where((room) {
+          if (room.facilityIds == null || room.facilityIds!.isEmpty) {
+            return false;
+          }
+
+          // Room harus punya SEMUA fasilitas yang dipilih
+          return facilityIds.every(
+            (selectedId) => room.facilityIds!.contains(selectedId),
+          );
         }).toList();
       }
 
