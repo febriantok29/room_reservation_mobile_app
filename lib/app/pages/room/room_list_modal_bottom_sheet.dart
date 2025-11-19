@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
+import 'package:room_reservation_mobile_app/app/models/room_facility.dart';
 import 'package:room_reservation_mobile_app/app/services/room_service.dart';
+import 'package:room_reservation_mobile_app/app/services/room_facility_service.dart';
 
 /// Widget untuk menampilkan bottom sheet penambahan/edit ruangan
 class RoomListModalBottomSheet extends StatefulWidget {
@@ -46,17 +48,24 @@ class RoomListModalBottomSheet extends StatefulWidget {
 
 class _RoomListModalBottomSheetState extends State<RoomListModalBottomSheet> {
   final _roomService = RoomService.getInstance();
+  final _facilityService = RoomFacilityService.getInstance();
 
   // Controllers untuk form fields
   late final TextEditingController _nameController;
   late final TextEditingController _locationController;
   late final TextEditingController _capacityController;
   late final TextEditingController _descriptionController;
+  final TextEditingController _facilityInputController =
+      TextEditingController();
 
   // Status form
   bool _isMaintenance = false;
   bool _isLoading = false;
   String _errorMessage = '';
+
+  // Facility management
+  List<String> _selectedFacilityIds = [];
+  List<RoomFacility> _availableFacilities = [];
 
   // Mode edit atau tambah baru
   bool get _isEditing => widget.room != null;
@@ -76,6 +85,10 @@ class _RoomListModalBottomSheetState extends State<RoomListModalBottomSheet> {
 
     // Set status maintenance awal
     _isMaintenance = widget.room?.isMaintenance ?? false;
+
+    // Initialize facilities
+    _selectedFacilityIds = List.from(widget.room?.facilityIds ?? []);
+    _loadAvailableFacilities();
   }
 
   @override
@@ -85,7 +98,23 @@ class _RoomListModalBottomSheetState extends State<RoomListModalBottomSheet> {
     _locationController.dispose();
     _capacityController.dispose();
     _descriptionController.dispose();
+    _facilityInputController.dispose();
     super.dispose();
+  }
+
+  /// Load daftar fasilitas yang tersedia dari room lain
+  Future<void> _loadAvailableFacilities() async {
+    try {
+      final facilities = await _facilityService.getAllFacilities();
+      if (mounted) {
+        setState(() {
+          _availableFacilities = facilities;
+        });
+      }
+    } catch (e) {
+      // Tidak fatal jika gagal load suggestions
+      debugPrint('Failed to load available facilities: $e');
+    }
   }
 
   @override
@@ -110,6 +139,7 @@ class _RoomListModalBottomSheetState extends State<RoomListModalBottomSheet> {
             _buildLocationField(),
             _buildCapacityField(),
             _buildDescriptionField(),
+            _buildFacilityInput(),
             _buildMaintenanceSwitch(),
             _buildSubmitButton(),
           ],
@@ -213,6 +243,98 @@ class _RoomListModalBottomSheetState extends State<RoomListModalBottomSheet> {
         enabled: !_isLoading,
       ),
     );
+  }
+
+  // Field fasilitas dengan autocomplete
+  Widget _buildFacilityInput() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Autocomplete<RoomFacility>(
+            optionsBuilder: (TextEditingValue textEditingValue) {
+              if (textEditingValue.text.isEmpty) {
+                return _availableFacilities;
+              }
+              final keyword = textEditingValue.text.toLowerCase();
+              return _availableFacilities.where((facility) {
+                return facility.name.toLowerCase().contains(keyword);
+              });
+            },
+            displayStringForOption: (RoomFacility facility) => facility.name,
+            fieldViewBuilder:
+                (context, controller, focusNode, onFieldSubmitted) {
+                  _facilityInputController.text = controller.text;
+                  return TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    decoration: InputDecoration(
+                      labelText: 'Fasilitas',
+                      hintText: 'Ketik untuk menambah (misal: AC, Proyektor)',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.add_circle_outline),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.add),
+                        onPressed: () {
+                          _addFacility(controller.text);
+                          controller.clear();
+                        },
+                      ),
+                    ),
+                    enabled: !_isLoading,
+                    onSubmitted: (value) {
+                      _addFacility(value);
+                      controller.clear();
+                    },
+                  );
+                },
+            onSelected: (RoomFacility facility) {
+              _addFacility(facility.name);
+              _facilityInputController.clear();
+            },
+          ),
+          if (_selectedFacilityIds.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _selectedFacilityIds.map((facilityId) {
+                final facility = RoomFacility.fromString(facilityId);
+                return Chip(
+                  avatar: facility.icon != null
+                      ? Icon(facility.icon, size: 18)
+                      : null,
+                  label: Text(facility.name),
+                  onDeleted: _isLoading
+                      ? null
+                      : () {
+                          setState(() {
+                            _selectedFacilityIds.remove(facilityId);
+                          });
+                        },
+                  deleteIcon: const Icon(Icons.close, size: 18),
+                );
+              }).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Menambahkan fasilitas ke daftar
+  void _addFacility(String facilityName) {
+    final trimmed = facilityName.trim();
+    if (trimmed.isEmpty) return;
+
+    final normalizedId = trimmed.toLowerCase();
+
+    if (!_selectedFacilityIds.contains(normalizedId)) {
+      setState(() {
+        _selectedFacilityIds.add(normalizedId);
+      });
+    }
   }
 
   // Switch maintenance mode
@@ -321,6 +443,9 @@ class _RoomListModalBottomSheetState extends State<RoomListModalBottomSheet> {
           capacity: capacity,
           description: _descriptionController.text.trim(),
           isMaintenance: _isMaintenance,
+          facilityIds: _selectedFacilityIds.isNotEmpty
+              ? _selectedFacilityIds
+              : null,
         );
 
         // Siapkan data untuk update
@@ -336,6 +461,9 @@ class _RoomListModalBottomSheetState extends State<RoomListModalBottomSheet> {
           capacity: capacity,
           description: _descriptionController.text.trim(),
           isMaintenance: _isMaintenance,
+          facilityIds: _selectedFacilityIds.isNotEmpty
+              ? _selectedFacilityIds
+              : null,
         );
 
         // Tambahkan room ke Firestore
