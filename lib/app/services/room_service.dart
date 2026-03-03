@@ -1,11 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:room_reservation_mobile_app/app/core/config/app_feature_flags.dart';
 import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
+import 'package:room_reservation_mobile_app/app/services/room_api_service.dart';
 
 class RoomService {
   static final _cachedRooms = <Room>[];
+  static final RoomApiService _roomApiService = RoomApiService();
 
   static RoomService? _instance;
 
@@ -23,11 +26,22 @@ class RoomService {
     List<String>? facilityIds,
     bool forceRefresh = false,
   }) async {
+    if (AppFeatureFlags.useApi) {
+      final apiRooms = await _roomApiService.getRoomList(
+        search: searchKeyword,
+        availableOnly: showMaintenance ? null : true,
+      );
+
+      if (forceRefresh || _cachedRooms.isEmpty) {
+        _replaceCache(apiRooms);
+      }
+    }
+
     // Fetch dari Firestore jika:
     // 1. Cache kosong, ATAU
     // 2. forceRefresh = true, ATAU
     // 3. ensureFullCache = true tapi cache belum lengkap
-    if (_cachedRooms.isEmpty || forceRefresh) {
+    if (!AppFeatureFlags.useApi && (_cachedRooms.isEmpty || forceRefresh)) {
       final client = await FirestoreClient.create(Room.collectionName);
 
       final response = await client.getAll();
@@ -126,6 +140,15 @@ class RoomService {
       return cachedRooms;
     }
 
+    if (AppFeatureFlags.useApi) {
+      await getRoomList(forceRefresh: false);
+
+      final rooms = _cachedRooms
+          .where((room) => ids.contains(room.id))
+          .toList();
+      return rooms;
+    }
+
     final client = await FirestoreClient.create(Room.collectionName);
     final snapshot = await client.query(
       field: FieldPath.documentId,
@@ -152,6 +175,23 @@ class RoomService {
     bool forceRefresh = false,
   }) async {
     final roomId = roomRef.id;
+
+    if (AppFeatureFlags.useApi) {
+      if (!forceRefresh) {
+        final cachedRoom = _cachedRooms.where((room) => room.id == roomId);
+        if (cachedRoom.isNotEmpty) {
+          return cachedRoom.first;
+        }
+      }
+
+      try {
+        final room = await _roomApiService.getRoomDetail(roomId);
+        _updateCache(room);
+        return room;
+      } catch (_) {
+        return null;
+      }
+    }
 
     if (roomId.isEmpty) {
       return null;
@@ -265,6 +305,10 @@ class RoomService {
   }
 
   Future<Room> createRoom(Room room) async {
+    if (AppFeatureFlags.useApi) {
+      throw 'Mode API saat ini read-only untuk room. Operasi create belum diaktifkan.';
+    }
+
     final client = await FirestoreClient.create(Room.collectionName);
 
     room.prepareForCreate();
@@ -280,6 +324,10 @@ class RoomService {
   }
 
   Future<Room> updateRoom(Room room) async {
+    if (AppFeatureFlags.useApi) {
+      throw 'Mode API saat ini read-only untuk room. Operasi update belum diaktifkan.';
+    }
+
     if (room.id == null) {
       throw 'Silakan pilih ruangan yang akan diperbarui terlebih dahulu';
     }
@@ -297,6 +345,10 @@ class RoomService {
   }
 
   Future<void> deleteRoom(Room room) async {
+    if (AppFeatureFlags.useApi) {
+      throw 'Mode API saat ini read-only untuk room. Operasi delete belum diaktifkan.';
+    }
+
     if (room.id == null) {
       throw 'Silakan pilih ruangan yang akan dihapus terlebih dahulu';
     }
@@ -312,6 +364,10 @@ class RoomService {
   }
 
   Future<void> permanentDeleteRoom(String roomId) async {
+    if (AppFeatureFlags.useApi) {
+      throw 'Mode API saat ini read-only untuk room. Operasi delete permanen belum diaktifkan.';
+    }
+
     if (roomId.isEmpty) {
       throw 'ID ruangan tidak boleh kosong';
     }
@@ -342,6 +398,12 @@ class RoomService {
     } else {
       _cachedRooms.add(room);
     }
+  }
+
+  void _replaceCache(List<Room> rooms) {
+    _cachedRooms
+      ..clear()
+      ..addAll(rooms);
   }
 
   /// Mendapatkan jumlah ruangan yang tersedia (tidak maintenance, tidak deleted)

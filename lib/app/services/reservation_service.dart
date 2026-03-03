@@ -30,6 +30,9 @@ class ReservationService {
     return _instance!;
   }
 
+  @Deprecated(
+    'Gunakan reservationListByQueryProvider untuk read path baru berbasis Riverpod/API. Method ini dipertahankan untuk kompatibilitas legacy.',
+  )
   Future<List<Reservation>> getReservationList({
     DocumentReference? userId,
     DateTime? startDate,
@@ -207,6 +210,9 @@ class ReservationService {
   }
 
   /// Mendapatkan reservasi berdasarkan ID
+  @Deprecated(
+    'Gunakan ReservationApiService.getReservationDetail pada mode API atau provider domain yang baru. Method ini dipertahankan untuk kompatibilitas legacy.',
+  )
   Future<Reservation> getReservationById(String id) async {
     if (id.isEmpty) {
       throw 'ID reservasi tidak boleh kosong';
