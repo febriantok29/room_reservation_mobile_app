@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:room_reservation_mobile_app/app/pages/home_page.dart';
-import 'package:room_reservation_mobile_app/app/states/auth_state.dart';
+import 'package:room_reservation_mobile_app/app/providers/auth_providers.dart';
 import 'package:room_reservation_mobile_app/app/theme/app_colors.dart';
 import 'package:room_reservation_mobile_app/app/theme/app_sizes.dart';
 import 'package:room_reservation_mobile_app/app/utils/mounted_state_mixin.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Halaman login untuk aplikasi reservasi ruangan
-class LoginPage extends StatefulWidget {
+class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> with MountedStateMixin {
+class _LoginPageState extends ConsumerState<LoginPage> with MountedStateMixin {
   final _formKey = GlobalKey<FormState>();
 
   // Controllers untuk form
@@ -32,7 +34,8 @@ class _LoginPageState extends State<LoginPage> with MountedStateMixin {
   }
 
   Future<void> _loadLastLoggedInUser() async {
-    final lastUser = await AuthState.getLastLoggedInUser();
+    final prefs = await SharedPreferences.getInstance();
+    final lastUser = prefs.getString('employeeId');
     if (lastUser == null || lastUser.isEmpty) {
       return;
     }
@@ -193,16 +196,24 @@ class _LoginPageState extends State<LoginPage> with MountedStateMixin {
     });
 
     try {
-      final user = await AuthState.login(
-        credential: credential,
-        password: password,
-      );
+      await ref
+          .read(authSessionProvider.notifier)
+          .login(login: credential, password: password);
+
+      final user = ref.read(authSessionProvider).valueOrNull;
 
       if (user == null) {
-        throw 'Gagal mendapatkan data user setelah login';
+        throw 'Sesi login tidak terbentuk';
       }
 
-      // Clear form
+      final prefs = await SharedPreferences.getInstance();
+
+      if (user.employeeId != null) {
+        await prefs.setString('employeeId', user.employeeId!);
+      }
+
+      await prefs.setInt('lastLoginAt', DateTime.now().millisecondsSinceEpoch);
+
       _credentialController.clear();
       _passwordController.clear();
 
