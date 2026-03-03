@@ -1,33 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation_appointment.dart';
-import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
+import 'package:room_reservation_mobile_app/app/providers/auth_providers.dart';
+import 'package:room_reservation_mobile_app/app/providers/reservation_providers.dart';
 import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
 
-class CalendarPage extends StatefulWidget {
-  final Profile? user;
+class CalendarPage extends ConsumerStatefulWidget {
+  final Profile user;
 
-  const CalendarPage({super.key, this.user});
+  const CalendarPage({super.key, required this.user});
 
   @override
-  State<CalendarPage> createState() => _CalendarPageState();
+  ConsumerState<CalendarPage> createState() => _CalendarPageState();
 }
 
-class _CalendarPageState extends State<CalendarPage> {
-  final _reservationService = ReservationService.getInstance();
+class _CalendarPageState extends ConsumerState<CalendarPage> {
   final CalendarController _calendarController = CalendarController();
 
-  late Future<List<Reservation>> _reservationsFuture;
   CalendarView _currentView = CalendarView.month;
   DateTime _selectedDate = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    _reservationsFuture = _loadReservations();
   }
 
   @override
@@ -36,32 +35,22 @@ class _CalendarPageState extends State<CalendarPage> {
     super.dispose();
   }
 
-  /// Load reservasi dari service
-  Future<List<Reservation>> _loadReservations({
-    bool forceRefresh = false,
-  }) async {
-    try {
-      // Ambil semua reservasi (tidak filter by user jika admin)
-      final reservations = await _reservationService.getReservationList(
-        showDeleted: false,
-      );
-
-      return reservations;
-    } catch (e) {
-      throw 'Gagal memuat reservasi: ${e.toString()}';
-    }
-  }
-
   /// Handle pull to refresh
   Future<void> _onRefresh() async {
-    setState(() {
-      _reservationsFuture = _loadReservations(forceRefresh: true);
-    });
-    await _reservationsFuture;
+    ref.invalidate(
+      reservationListByQueryProvider(ReservationListQuery(user: widget.user)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final sessionUser = ref.watch(authSessionProvider).valueOrNull;
+    final activeUser = sessionUser ?? widget.user;
+
+    final reservationState = ref.watch(
+      reservationListByQueryProvider(ReservationListQuery(user: activeUser)),
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Kalender Reservasi'),
@@ -125,24 +114,14 @@ class _CalendarPageState extends State<CalendarPage> {
           ),
         ],
       ),
-      body: FutureBuilder<List<Reservation>>(
-        future: _reservationsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return _buildErrorState(snapshot.error.toString());
-          }
-
-          final reservations = snapshot.data ?? [];
-
+      body: reservationState.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stack) => _buildErrorState(error.toString()),
+        data: (reservations) {
           if (reservations.isEmpty) {
             return _buildEmptyState();
           }
 
-          // Convert reservations to appointments
           final appointments = reservations
               .map((r) => ReservationAppointment.fromReservation(r))
               .toList();
@@ -153,16 +132,14 @@ class _CalendarPageState extends State<CalendarPage> {
             onRefresh: _onRefresh,
             child: Column(
               children: [
-                // Info panel
                 _buildInfoPanel(reservations),
-                // Calendar
                 Expanded(
                   child: SfCalendar(
                     view: _currentView,
                     controller: _calendarController,
                     dataSource: dataSource,
                     initialSelectedDate: _selectedDate,
-                    firstDayOfWeek: 1, // Monday
+                    firstDayOfWeek: 1,
                     showNavigationArrow: true,
                     showDatePickerButton: true,
                     allowViewNavigation: true,
@@ -189,7 +166,6 @@ class _CalendarPageState extends State<CalendarPage> {
                       }
                     },
                     onViewChanged: (ViewChangedDetails details) {
-                      // Use addPostFrameCallback to avoid setState during build
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (mounted) {
                           setState(() {
