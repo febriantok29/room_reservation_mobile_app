@@ -1,43 +1,45 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:room_reservation_mobile_app/app/core/config/app_feature_flags.dart';
 import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/reservation_modal_bottom_sheet.dart';
+import 'package:room_reservation_mobile_app/app/providers/reservation_providers.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 import 'package:room_reservation_mobile_app/app/ui_items/reservation_status_badge.dart';
 import 'package:room_reservation_mobile_app/app/ui_items/cards/reservation_card.dart';
 
-class ReservationListPage extends StatefulWidget {
+class ReservationListPage extends ConsumerStatefulWidget {
   final Profile user;
 
   const ReservationListPage({super.key, required this.user});
 
   @override
-  State<ReservationListPage> createState() => _ReservationListPageState();
+  ConsumerState<ReservationListPage> createState() =>
+      _ReservationListPageState();
 }
 
-class _ReservationListPageState extends State<ReservationListPage> {
+class _ReservationListPageState extends ConsumerState<ReservationListPage> {
   final _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
 
   final _service = ReservationService.getInstance();
-  late Future<List<Reservation>> _reservations;
   ReservationStatus? _filterStatus;
 
   @override
   void initState() {
-    _loadReservations();
     super.initState();
   }
 
   void _loadReservations() {
-    setState(() {
-      _reservations = _service.getReservationList(
-        userId: widget.user.isAdmin ? null : widget.user.reference,
-      );
-    });
+    setState(() {});
   }
 
   List<Reservation> _applyFilter(List<Reservation> reservations) {
+    if (AppFeatureFlags.useApi) {
+      return reservations;
+    }
+
     if (_filterStatus == null) return reservations;
     return reservations
         .where((r) => r.getComputedStatus() == _filterStatus)
@@ -88,86 +90,99 @@ class _ReservationListPageState extends State<ReservationListPage> {
         key: _refreshIndicatorKey,
         onRefresh: () async {
           _loadReservations();
+          ref.invalidate(
+            reservationListByQueryProvider(
+              ReservationListQuery(user: widget.user, status: _filterStatus),
+            ),
+          );
         },
-        child: FutureBuilder<List<Reservation>>(
-          future: _reservations,
-          builder: (_, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        child: Consumer(
+          builder: (context, ref, _) {
+            final reservationState = ref.watch(
+              reservationListByQueryProvider(
+                ReservationListQuery(user: widget.user, status: _filterStatus),
+              ),
+            );
 
-            if (snapshot.hasError) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Terjadi Kesalahan',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[700],
+            return reservationState.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, stack) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: Colors.red[300],
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Error: ${snapshot.error}',
-                      style: TextStyle(color: Colors.grey[600]),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: _loadReservations,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Coba Lagi'),
-                    ),
-                  ],
-                ),
-              );
-            }
+                      const SizedBox(height: 16),
+                      Text(
+                        'Terjadi Kesalahan',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Error: $error',
+                        style: TextStyle(color: Colors.grey[600]),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: _loadReservations,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Coba Lagi'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              data: (allReservations) {
+                final reservations = _applyFilter(allReservations);
 
-            final allReservations = snapshot.data ?? [];
-            final reservations = _applyFilter(allReservations);
-
-            if (allReservations.isEmpty) {
-              return _buildEmptyState(
-                icon: Icons.event_busy,
-                title: 'Belum Ada Reservasi',
-                message: widget.user.isAdmin
-                    ? 'Belum ada reservasi yang dibuat oleh pengguna'
-                    : 'Anda belum memiliki reservasi.\nBuat reservasi pertama Anda!',
-              );
-            }
-
-            if (reservations.isEmpty) {
-              return _buildEmptyState(
-                icon: Icons.filter_list_off,
-                title: 'Tidak Ada Hasil',
-                message:
-                    'Tidak ada reservasi dengan status ${_filterStatus?.displayName ?? ""}',
-                showClearFilter: true,
-              );
-            }
-
-            return ListView.builder(
-              itemCount: reservations.length,
-              padding: const EdgeInsets.only(top: 8),
-              itemBuilder: (_, index) {
-                final reservation = reservations[index];
-                final isLast = index == reservations.length - 1;
-
-                Widget card = _buildCard(reservation);
-
-                if (isLast) {
-                  card = Padding(
-                    padding: const EdgeInsets.only(bottom: 80.0),
-                    child: card,
+                if (allReservations.isEmpty) {
+                  return _buildEmptyState(
+                    icon: Icons.event_busy,
+                    title: 'Belum Ada Reservasi',
+                    message: widget.user.isAdmin
+                        ? 'Belum ada reservasi yang dibuat oleh pengguna'
+                        : 'Anda belum memiliki reservasi.\nBuat reservasi pertama Anda!',
                   );
                 }
 
-                return card;
+                if (reservations.isEmpty) {
+                  return _buildEmptyState(
+                    icon: Icons.filter_list_off,
+                    title: 'Tidak Ada Hasil',
+                    message:
+                        'Tidak ada reservasi dengan status ${_filterStatus?.displayName ?? ""}',
+                    showClearFilter: true,
+                  );
+                }
+
+                return ListView.builder(
+                  itemCount: reservations.length,
+                  padding: const EdgeInsets.only(top: 8),
+                  itemBuilder: (_, index) {
+                    final reservation = reservations[index];
+                    final isLast = index == reservations.length - 1;
+
+                    Widget card = _buildCard(reservation);
+
+                    if (isLast) {
+                      card = Padding(
+                        padding: const EdgeInsets.only(bottom: 80.0),
+                        child: card,
+                      );
+                    }
+
+                    return card;
+                  },
+                );
               },
             );
           },
@@ -248,11 +263,16 @@ class _ReservationListPageState extends State<ReservationListPage> {
       reservation: reservation,
       user: widget.user,
       service: _service,
+      readOnly: AppFeatureFlags.useApi,
       onDeleteCompleted: _loadReservations,
     );
   }
 
-  Widget _buildAddButton() {
+  Widget? _buildAddButton() {
+    if (AppFeatureFlags.useApi) {
+      return null;
+    }
+
     return FloatingActionButton(
       onPressed: _createReservation,
       backgroundColor: Colors.blue,
