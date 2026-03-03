@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/states/auth_state.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:room_reservation_mobile_app/app/providers/auth_providers.dart';
 import 'package:room_reservation_mobile_app/app/theme/app_colors.dart';
 import 'package:room_reservation_mobile_app/app/theme/app_sizes.dart';
 
@@ -7,14 +8,14 @@ import 'home_page.dart';
 import 'login_page.dart';
 
 /// Halaman splash yang mengecek status autentikasi pengguna
-class SplashPage extends StatefulWidget {
+class SplashPage extends ConsumerStatefulWidget {
   const SplashPage({super.key});
 
   @override
-  State<SplashPage> createState() => _SplashPageState();
+  ConsumerState<SplashPage> createState() => _SplashPageState();
 }
 
-class _SplashPageState extends State<SplashPage>
+class _SplashPageState extends ConsumerState<SplashPage>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _opacityAnimation;
@@ -61,7 +62,8 @@ class _SplashPageState extends State<SplashPage>
     try {
       await Future.delayed(const Duration(seconds: 2));
 
-      final isLoggedIn = await AuthState.isLoggedIn();
+      final profile = await ref.read(authSessionProvider.notifier).bootstrap();
+      final isLoggedIn = profile != null;
 
       if (!mounted) {
         return;
