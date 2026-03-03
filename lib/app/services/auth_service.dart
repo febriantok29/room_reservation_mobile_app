@@ -1,495 +1,380 @@
-// Copyright 2025 The Room Reservation App Authors
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
-import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
-import 'package:jwt_decoder/jwt_decoder.dart';
-import 'package:room_reservation_mobile_app/app/core/network/api_client.dart';
-import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
-import 'package:room_reservation_mobile_app/app/models/login_response.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
+import 'package:room_reservation_mobile_app/app/core/auth/auth_token_manager.dart';
+import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
+import 'package:room_reservation_mobile_app/app/enums/user_role.dart';
+import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/models/refresh_token_response.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:room_reservation_mobile_app/app/models/request/user_register_request.dart';
+import 'package:room_reservation_mobile_app/app/network/route_builder.dart';
 
-/// Status autentikasi pengguna
-enum AuthStatus {
-  /// Pengguna belum terautentikasi
-  unauthenticated,
-
-  /// Pengguna sudah terautentikasi
-  authenticated,
-
-  /// Token sedang di-refresh
-  refreshing,
-
-  /// Terjadi error saat autentikasi
-  error,
-}
-
-/// Event untuk perubahan status autentikasi
-class AuthStateChange {
-  final AuthStatus status;
-  final String? message;
-  final dynamic error;
-
-  AuthStateChange(this.status, {this.message, this.error});
-}
-
-/// Service untuk menangani autentikasi pengguna
 class AuthService {
-  /// Toleransi waktu sebelum token benar-benar expired (dalam detik)
-  static const int _tokenExpiryTolerance = 4;
+  AuthService._() {
+    _tokenManager.configureRefreshHandler((refreshToken) async {
+      return refreshTokenFromApi(refreshToken: refreshToken);
+    });
+  }
 
-  /// Key untuk menyimpan data di SharedPreferences
-  static const String _accessTokenKey = 'access_token';
-  static const String _refreshTokenKey = 'refresh_token';
-  static const String _userDataKey = 'user_data';
-  static const String _accessTokenExpiresAtKey = 'access_token_expires_at';
-  static const String _refreshTokenExpiresAtKey = 'refresh_token_expires_at';
-
-  /// Singleton instance
   static AuthService? _instance;
+  final AuthTokenManager _tokenManager = AuthTokenManager.instance;
 
-  /// SharedPreferences instance
-  late SharedPreferences _prefs;
-
-  /// Stream controller untuk status autentikasi
-  final _authStateController = StreamController<AuthStateChange>.broadcast();
-
-  /// Stream untuk mendengarkan perubahan status autentikasi
-  Stream<AuthStateChange> get authStateChanges => _authStateController.stream;
-
-  /// Status autentikasi saat ini
-  AuthStatus _currentStatus = AuthStatus.unauthenticated;
-  AuthStatus get currentStatus => _currentStatus;
-
-  /// Private constructor
-  AuthService._();
-
-  /// Factory untuk mendapatkan instance AuthService
-  static Future<AuthService> getInstance() async {
-    if (_instance == null) {
-      _instance = AuthService._();
-      await _instance!._initialize();
-    }
+  factory AuthService.getInstance() {
+    _instance ??= AuthService._();
     return _instance!;
   }
 
-  /// Inisialisasi service
-  Future<void> _initialize() async {
-    _prefs = await SharedPreferences.getInstance();
-    _updateAuthStatus();
+  String? get accessToken => _tokenManager.accessToken;
+  String? get refreshToken => _tokenManager.refreshToken;
+
+  Future<void> restoreApiSession() {
+    return _tokenManager.ensureLoaded();
   }
 
-  /// Update status autentikasi dan broadcast ke listeners
-  void _updateAuthStatus([String? message, dynamic error]) {
-    final newStatus = _determineAuthStatus();
+  Future<AuthTokenPayload> loginToApi({
+    required String login,
+    required String password,
+  }) async {
+    final router = RouteBuilder.noAuth(
+      'Auth.login',
+      tokenManager: _tokenManager,
+    );
 
-    if (_currentStatus != newStatus) {
-      _currentStatus = newStatus;
-      _authStateController.add(
-        AuthStateChange(newStatus, message: message, error: error),
+    final response = await router.post({'login': login, 'password': password});
+
+    final json = _readJsonMap(response);
+
+    if (!response.isSuccess || json['success'] != true) {
+      throw AuthApiException.fromJson(
+        statusCode: response.statusCode,
+        payload: json,
       );
     }
+
+    final payload = AuthTokenPayload.fromJson(
+      _readJsonMapFrom(json, key: 'data'),
+    );
+
+    await _tokenManager.saveTokens(
+      accessToken: payload.accessToken,
+      refreshToken: payload.refreshToken,
+      expiresInSeconds: payload.expiresIn,
+    );
+
+    return payload;
   }
 
-  /// Menentukan status autentikasi berdasarkan kondisi saat ini
-  AuthStatus _determineAuthStatus() {
-    if (_isRefreshing) return AuthStatus.refreshing;
-    if (!isLoggedIn()) return AuthStatus.unauthenticated;
-    return AuthStatus.authenticated;
-  }
+  Future<AuthTokenData?> refreshTokenFromApi({String? refreshToken}) async {
+    final tokenToRefresh = refreshToken ?? _tokenManager.refreshToken;
 
-  /// Menyimpan data login ke local storage
-  Future<void> saveLoginData(LoginResponse loginResponse) async {
-    try {
-      await Future.wait([
-        _prefs.setString(_accessTokenKey, loginResponse.accessToken ?? ''),
-        _prefs.setString(_refreshTokenKey, loginResponse.refreshToken ?? ''),
-        _prefs.setString(
-          _userDataKey,
-          jsonEncode(loginResponse.userData.toJson()),
-        ),
-        _prefs.setString(
-          _accessTokenExpiresAtKey,
-          loginResponse.accessTokenExpiresAt?.toIso8601String() ?? '',
-        ),
-        _prefs.setString(
-          _refreshTokenExpiresAtKey,
-          loginResponse.refreshTokenExpiresAt?.toIso8601String() ?? '',
-        ),
-      ]);
-      _updateAuthStatus('Login berhasil');
-    } catch (e) {
-      _updateAuthStatus('Gagal menyimpan data login', e);
-      throw StateError('Gagal menyimpan data login: ${e.toString()}');
+    if (tokenToRefresh == null || tokenToRefresh.isEmpty) {
+      return null;
     }
-  }
 
-  /// Menyimpan data refresh token ke local storage
-  Future<void> saveRefreshTokenData(
-    RefreshTokenResponse refreshResponse,
-  ) async {
-    try {
-      await Future.wait([
-        _prefs.setString(_accessTokenKey, refreshResponse.accessToken ?? ''),
-        _prefs.setString(_refreshTokenKey, refreshResponse.refreshToken ?? ''),
-        if (refreshResponse.accessTokenExpiresAt != null)
-          _prefs.setString(
-            _accessTokenExpiresAtKey,
-            refreshResponse.accessTokenExpiresAt!.toIso8601String(),
-          ),
-        if (refreshResponse.refreshTokenExpiresAt != null)
-          _prefs.setString(
-            _refreshTokenExpiresAtKey,
-            refreshResponse.refreshTokenExpiresAt!.toIso8601String(),
-          ),
-      ]);
-      _updateAuthStatus('Token berhasil diperbarui');
-    } catch (e) {
-      _updateAuthStatus('Gagal menyimpan data refresh token', e);
-      throw StateError('Gagal menyimpan data refresh token: ${e.toString()}');
+    final response = await RouteBuilder.noAuth(
+      'Auth.refresh',
+      tokenManager: _tokenManager,
+    ).post({'refresh_token': tokenToRefresh});
+
+    final json = _readJsonMap(response);
+
+    if (!response.isSuccess || json['success'] != true) {
+      await _tokenManager.clear();
+      throw AuthApiException.fromJson(
+        statusCode: response.statusCode,
+        payload: json,
+      );
     }
+
+    final payload = AuthTokenPayload.fromJson(
+      _readJsonMapFrom(json, key: 'data'),
+    );
+
+    final resolvedRefreshToken = payload.refreshToken ?? tokenToRefresh;
+
+    await _tokenManager.saveTokens(
+      accessToken: payload.accessToken,
+      refreshToken: resolvedRefreshToken,
+      expiresInSeconds: payload.expiresIn,
+    );
+
+    return AuthTokenData(
+      accessToken: payload.accessToken,
+      refreshToken: resolvedRefreshToken,
+      expiresAt: DateTime.now().add(Duration(seconds: payload.expiresIn)),
+    );
   }
 
-  /// Login user dengan credential dan password
-  Future<LoginResponse> login({
+  Future<AuthMeResponse> getMeFromApi() async {
+    final response = await RouteBuilder(
+      'Auth.me',
+      tokenManager: _tokenManager,
+    ).get();
+    final json = _readJsonMap(response);
+
+    if (!response.isSuccess || json['success'] != true) {
+      throw AuthApiException.fromJson(
+        statusCode: response.statusCode,
+        payload: json,
+      );
+    }
+
+    return AuthMeResponse.fromJson(_readJsonMapFrom(json, key: 'data'));
+  }
+
+  Future<Profile> getMyProfileFromApi() async {
+    final me = await getMeFromApi();
+    return me.toProfile();
+  }
+
+  Future<void> logoutApiSession() {
+    return _logoutAndClearToken();
+  }
+
+  Future<void> _logoutAndClearToken() async {
+    await _tokenManager.ensureLoaded();
+
+    if (_tokenManager.hasAccessToken) {
+      try {
+        await RouteBuilder(
+          'Auth.logout',
+          tokenManager: _tokenManager,
+          enableAutoRefreshToken: false,
+        ).post(<String, dynamic>{});
+      } catch (_) {}
+    }
+
+    await _tokenManager.clear();
+  }
+
+  Future<Profile> login({
     required String credential,
     required String password,
   }) async {
-    try {
-      final builder = await ApiClient.create('Auth.Login');
-      final response = await builder.post<LoginResponse>(
-        body: {'credential': credential, 'password': password},
-        fromJson: LoginResponse.fromJson,
-        requiresAuth: false,
-      );
+    final client = await FirestoreClient.create(Profile.collectionName);
 
-      final data = response.data;
+    final isEmail = credential.contains('@');
+    final fieldName = isEmail ? 'email' : 'employeeId';
 
-      if (data == null) {
-        throw ValidationException('User tidak ditemukan atau password salah');
-      }
+    credential = isEmail ? credential.toLowerCase() : credential.toUpperCase();
 
-      if (data.accessToken == null || data.refreshToken == null) {
-        throw ValidationException('Token tidak valid dari server');
-      }
+    final hashedPassword = _hashPassword(password);
 
-      await saveLoginData(data);
+    final snapshot = await client.advancedQuery(
+      conditions: [
+        QueryCondition(field: fieldName, isEqualTo: credential),
+        QueryCondition(field: 'password', isEqualTo: hashedPassword),
+        QueryCondition(
+          field: BaseFirestoreModel.deletedAtField,
+          isEqualTo: null,
+        ),
+      ],
+    );
+
+    if (snapshot.docs.isEmpty) {
+      throw 'Akun tidak ditemukan, silakan periksa kembali No. Induk Pegawai/email, dan password Anda.';
+    }
+
+    final document = snapshot.docs.first;
+
+    if (!document.exists) {
+      throw 'Akun tidak ditemukan, silakan periksa kembali No. Induk Pegawai/email, dan password Anda.';
+    }
+
+    final user = document.data();
+    final id = document.id;
+
+    final profile = Profile.fromJson(user, id);
+
+    profile.lastLoginAt = DateTime.now();
+    profile.prepareForUpdate();
+
+    final updatedData = profile.toJson();
+    client.update(id, updatedData);
+
+    return profile;
+  }
+
+  Future<void> register(UserRegisterRequest request) async {
+    final firestoreClient = await FirestoreClient.create(
+      Profile.collectionName,
+    );
+
+    request.validate();
+
+    request.prepareForCreate();
+    final newUserData = request.toJson();
+
+    final hashedPassword = _hashPassword(request.password!);
+    final employeeId = await _generateEmployeeId(request.dateOfBirth!);
+
+    newUserData['employeeId'] = employeeId;
+    newUserData['password'] = hashedPassword;
+
+    await firestoreClient.set(employeeId, newUserData);
+  }
+
+  String _hashPassword(String password) {
+    final bytes = utf8.encode(password);
+    final digest = sha256.convert(bytes);
+    return digest.toString();
+  }
+
+  Future<String> _generateEmployeeId(DateTime dateOfBirth) async {
+    final firestore = FirebaseFirestore.instance;
+    final client = firestore.collection(Profile.collectionName);
+
+    final now = DateTime.now();
+    final yearPart = now.year.toString().substring(2, 4);
+    final dobYearPart = dateOfBirth.year.toString().substring(2, 4);
+
+    // Query only for the current year's employee IDs to get the sequence
+    final yearPrefix = yearPart;
+    final query = client
+        .where('employeeId', isGreaterThanOrEqualTo: yearPrefix)
+        .where('employeeId', isLessThan: '$yearPrefix\uffff');
+
+    final snapshot = await query.get();
+
+    final sequenceNumber = snapshot.docs.length + 1;
+
+    final sequencePart = sequenceNumber.toString().padLeft(3, '0');
+    final employeeId = '$yearPart$dobYearPart${sequencePart}HPI';
+
+    return employeeId;
+  }
+
+  Map<String, dynamic> _readJsonMap(RouteResponse response) {
+    if (response.data is Map<String, dynamic>) {
+      return response.data as Map<String, dynamic>;
+    }
+
+    throw AuthApiException(
+      statusCode: response.statusCode,
+      message: 'Format respons API tidak valid',
+    );
+  }
+
+  Map<String, dynamic> _readJsonMapFrom(
+    Map<String, dynamic> source, {
+    required String key,
+  }) {
+    final data = source[key];
+
+    if (data is Map<String, dynamic>) {
       return data;
-    } catch (e) {
-      _updateAuthStatus('Login gagal', e);
-      rethrow;
-    }
-  }
-
-  /// Mendapatkan access token dari storage
-  String? getAccessToken() {
-    final token = _prefs.getString(_accessTokenKey);
-    if (token?.isEmpty ?? true) return null;
-    return token;
-  }
-
-  /// Mendapatkan refresh token dari storage
-  String? getRefreshToken() {
-    final token = _prefs.getString(_refreshTokenKey);
-    if (token?.isEmpty ?? true) return null;
-    return token;
-  }
-
-  /// Mendapatkan data user dari cache
-  Profile? getUserData() {
-    try {
-      final userDataString = _prefs.getString(_userDataKey);
-      if (userDataString == null || userDataString.isEmpty) return null;
-
-      final userData = jsonDecode(userDataString) as Map<String, dynamic>;
-      return Profile.fromJson(userData);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /// Cek apakah refresh token sudah expired
-  bool isRefreshTokenExpired() {
-    final token = getRefreshToken();
-    final expiryString = _prefs.getString(_refreshTokenExpiresAtKey);
-
-    if (token == null || expiryString == null) return true;
-
-    try {
-      final expiry = DateTime.parse(expiryString).toLocal();
-      final now = DateTime.now();
-
-      return now.isAfter(
-        expiry.subtract(Duration(seconds: _tokenExpiryTolerance)),
-      );
-    } catch (e) {
-      return true;
-    }
-  }
-
-  /// Cek apakah access token sudah expired
-  bool isAccessTokenExpired() {
-    final token = getAccessToken();
-    if (token == null) return true;
-
-    try {
-      if (!JwtDecoder.isExpired(token)) {
-        final expiry = JwtDecoder.getExpirationDate(token);
-        final now = DateTime.now();
-
-        if (expiry.difference(now).inSeconds > _tokenExpiryTolerance) {
-          return false;
-        }
-      }
-      return true;
-    } catch (e) {
-      return true;
-    }
-  }
-
-  /// Cek apakah user sudah login
-  bool isLoggedIn() {
-    final accessToken = getAccessToken();
-    final refreshToken = getRefreshToken();
-
-    if (accessToken == null || refreshToken == null) return false;
-    if (isRefreshTokenExpired()) return false;
-
-    return true;
-  }
-
-  /// Cek apakah perlu refresh token
-  bool needsTokenRefresh() {
-    if (!isLoggedIn()) return false;
-    return isAccessTokenExpired() && !isRefreshTokenExpired();
-  }
-
-  /// Menghapus semua data authentication dari storage
-  Future<void> clearAuthData() async {
-    try {
-      await Future.wait([
-        _prefs.remove(_accessTokenKey),
-        _prefs.remove(_refreshTokenKey),
-        _prefs.remove(_userDataKey),
-        _prefs.remove(_accessTokenExpiresAtKey),
-        _prefs.remove(_refreshTokenExpiresAtKey),
-      ]);
-      _updateAuthStatus('Data auth berhasil dihapus');
-    } catch (e) {
-      _updateAuthStatus('Gagal menghapus data auth', e);
-      throw StateError('Gagal menghapus data auth: ${e.toString()}');
-    }
-  }
-
-  /// Logout user dan hapus semua data auth
-  Future<void> logout() async {
-    try {
-      // Coba logout ke server jika masih ada token valid
-      if (isLoggedIn() && !isAccessTokenExpired()) {
-        try {
-          final builder = await ApiClient.create('Auth.Logout');
-          await builder.post<void>(
-            requiresAuth: true,
-            errorMessage: 'Gagal logout dari server',
-          );
-        } catch (e) {
-          debugPrint('Error logging out from server: ${e.toString()}');
-        }
-      }
-
-      await clearAuthData();
-      _updateAuthStatus('Logout berhasil');
-    } catch (e) {
-      _updateAuthStatus('Logout gagal', e);
-      rethrow;
-    }
-  }
-
-  /// Mendapatkan data user yang sedang login
-  Future<Profile?> getCurrentUser({bool forceRefresh = false}) async {
-    try {
-      if (!isLoggedIn()) return null;
-
-      // Gunakan cache jika ada dan tidak diminta refresh
-      if (!forceRefresh) {
-        final cachedUser = getUserData();
-        if (cachedUser != null) return cachedUser;
-      }
-
-      // Fetch dari API
-      final builder = await ApiClient.create('User.getProfile');
-      final response = await builder.get<Profile>(
-        fromJson: Profile.fromJson,
-        requiresAuth: true,
-        errorMessage: 'Gagal mengambil data user',
-      );
-
-      final data = response.data;
-
-      if (data == null) {
-        throw ValidationException('Data user tidak ditemukan');
-      }
-
-      // Update cache
-      await _prefs.setString(_userDataKey, jsonEncode(data.toJson()));
-      return data;
-    } catch (e) {
-      // Return cached data jika gagal fetch
-      return getUserData();
-    }
-  }
-
-  /// Mendapatkan Bearer token untuk Authorization header
-  String? getBearerToken() {
-    final token = getAccessToken();
-    if (token == null) return null;
-    return 'Bearer $token';
-  }
-
-  /// Lock untuk mencegah multiple refresh token requests
-  static bool _isRefreshing = false;
-  static Future<RefreshTokenResponse?>? _refreshFuture;
-  static Completer<bool>? _refreshCompleter;
-
-  /// Refresh access token jika diperlukan
-  Future<bool> refreshTokenIfNeeded() async {
-    // Jangan refresh jika refresh token expired
-    if (isRefreshTokenExpired()) {
-      _updateAuthStatus('Refresh token kadaluarsa');
-      return false;
     }
 
-    try {
-      // Jika sudah ada proses refresh yang berjalan, tunggu hasilnya
-      if (_isRefreshing && _refreshCompleter != null) {
-        _updateAuthStatus('Menunggu refresh token yang sedang berjalan');
-        return await _refreshCompleter!.future;
-      }
+    throw AuthApiException(
+      statusCode: 500,
+      message: 'Data respons API tidak valid pada key "$key"',
+    );
+  }
+}
 
-      // Mulai proses refresh baru
-      _isRefreshing = true;
-      _refreshCompleter =
-          Completer<bool>(); // Create new completer for this operation
-      _updateAuthStatus('Memperbarui token');
-      _refreshFuture = _doRefreshToken();
+class AuthTokenPayload {
+  final String accessToken;
+  final String? refreshToken;
+  final String tokenType;
+  final int expiresIn;
+  final bool isDebug;
 
-      final response = await _refreshFuture;
-      final isSuccess = response != null && response.accessToken != null;
+  const AuthTokenPayload({
+    required this.accessToken,
+    this.refreshToken,
+    required this.tokenType,
+    required this.expiresIn,
+    required this.isDebug,
+  });
 
-      // Simpan hasil dan beritahu semua yang menunggu
-      if (_refreshCompleter != null && !_refreshCompleter!.isCompleted) {
-        _refreshCompleter!.complete(isSuccess);
-      }
+  factory AuthTokenPayload.fromJson(Map<String, dynamic> json) {
+    return AuthTokenPayload(
+      accessToken: '${json['access_token'] ?? ''}',
+      refreshToken: json['refresh_token']?.toString(),
+      tokenType: '${json['token_type'] ?? 'Bearer'}',
+      expiresIn: int.tryParse('${json['expires_in'] ?? 0}') ?? 0,
+      isDebug: json['is_debug'] == true,
+    );
+  }
+}
 
-      if (isSuccess) {
-        _updateAuthStatus('Token berhasil diperbarui');
-      } else {
-        _updateAuthStatus('Gagal memperbarui token');
-      }
+class AuthMeResponse {
+  final String id;
+  final String name;
+  final String email;
+  final String employeeId;
+  final bool isAdmin;
+  final bool isActive;
 
-      return isSuccess;
-    } catch (e) {
-      _updateAuthStatus('Error saat memperbarui token', e);
+  const AuthMeResponse({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.employeeId,
+    required this.isAdmin,
+    required this.isActive,
+  });
 
-      if (_refreshCompleter != null && !_refreshCompleter!.isCompleted) {
-        _refreshCompleter!.complete(false);
-      }
-
-      return false;
-    } finally {
-      _isRefreshing = false;
-      _refreshFuture = null;
-      // Don't reset completer here to allow concurrent waiters to get the result
-    }
+  factory AuthMeResponse.fromJson(Map<String, dynamic> json) {
+    return AuthMeResponse(
+      id: '${json['id'] ?? ''}',
+      name: '${json['name'] ?? ''}',
+      email: '${json['email'] ?? ''}',
+      employeeId: '${json['employee_id'] ?? ''}',
+      isAdmin: json['is_admin'] == true,
+      isActive: json['is_active'] == true,
+    );
   }
 
-  /// Melakukan refresh token ke server
-  Future<RefreshTokenResponse?> _doRefreshToken() async {
-    final refreshToken = getRefreshToken();
-    if (refreshToken == null) return null;
+  Profile toProfile() {
+    final chunks = name.trim().split(RegExp(r'\s+'));
+    final firstName = chunks.isNotEmpty ? chunks.first : null;
+    final lastName = chunks.length > 1 ? chunks.sublist(1).join(' ') : null;
 
-    try {
-      final builder = await ApiClient.create('Auth.Refresh');
-      final response = await builder.post<RefreshTokenResponse>(
-        body: {'refreshToken': refreshToken},
-        fromJson: RefreshTokenResponse.fromJson,
-        requiresAuth: false,
-        errorMessage: 'Gagal refresh token',
-      );
+    return Profile(
+      id: id,
+      employeeId: employeeId,
+      email: email,
+      firstName: firstName,
+      lastName: lastName,
+      role: isAdmin ? UserRole.admin : UserRole.user,
+    );
+  }
+}
 
-      final data = response.data;
+class AuthApiException implements Exception {
+  final int statusCode;
+  final String message;
+  final String? errorCode;
 
-      if (data == null) {
-        throw ValidationException('Gagal mendapatkan data refresh token');
-      }
+  const AuthApiException({
+    required this.statusCode,
+    required this.message,
+    this.errorCode,
+  });
 
-      if (data.accessToken == null || data.refreshToken == null) {
-        throw ValidationException('Token tidak valid dari server');
-      }
-
-      // Store the new token data before returning
-      await saveRefreshTokenData(data);
-      await Future.delayed(
-        const Duration(milliseconds: 100),
-      ); // Ensure token is saved
-      return data;
-    } catch (e) {
-      return null;
-    }
+  factory AuthApiException.fromJson({
+    required int statusCode,
+    required Map<String, dynamic> payload,
+  }) {
+    return AuthApiException(
+      statusCode: statusCode,
+      message: '${payload['message'] ?? 'Permintaan gagal'}',
+      errorCode: payload['error_code']?.toString(),
+    );
   }
 
-  /// Validate dan refresh token otomatis
-  Future<bool> ensureValidToken() async {
-    // Check if user is logged in
-    if (!isLoggedIn()) {
-      _updateAuthStatus('User tidak login');
-      return false;
+  @override
+  String toString() {
+    final normalizedError = (errorCode == null || errorCode!.isEmpty)
+        ? null
+        : errorCode;
+
+    if (normalizedError == null) {
+      return 'AuthApiException($statusCode): $message';
     }
 
-    try {
-      // If token will expire soon or is already expired, refresh it
-      if (isAccessTokenExpired() || _isTokenNearExpiry()) {
-        // Try to refresh token
-        final refreshSuccess = await refreshTokenIfNeeded();
-
-        // If refresh failed and refresh token is expired, we need to logout
-        if (!refreshSuccess && isRefreshTokenExpired()) {
-          await logout();
-          return false;
-        }
-
-        return refreshSuccess;
-      }
-
-      return true;
-    } catch (e) {
-      // If there's an error, we should return false to be safe
-      return false;
-    }
-  }
-
-  /// Cek apakah token akan expired dalam waktu dekat (10 menit)
-  bool _isTokenNearExpiry() {
-    final token = getAccessToken();
-    if (token == null) return true;
-
-    try {
-      final expiry = JwtDecoder.getExpirationDate(token);
-      final now = DateTime.now();
-      // Check if token expires in less than 10 minutes
-      return expiry.difference(now).inMinutes <= 10;
-    } catch (e) {
-      return true;
-    }
-  }
-
-  /// Dispose resources
-  Future<void> dispose() async {
-    await _authStateController.close();
+    return 'AuthApiException($statusCode/$normalizedError): $message';
   }
 }

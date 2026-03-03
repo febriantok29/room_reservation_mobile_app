@@ -1,833 +1,584 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:room_reservation_mobile_app/app/models/api_response.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:room_reservation_mobile_app/app/models/home_statistics.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/models/reservation.dart';
-import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
+import 'package:room_reservation_mobile_app/app/models/reservation_count.dart';
+import 'package:room_reservation_mobile_app/app/pages/admin/database_viewer_page.dart';
+import 'package:room_reservation_mobile_app/app/pages/calendar/calendar_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/login_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/reservation_list_page.dart';
-import 'package:room_reservation_mobile_app/app/services/auth_service.dart';
+import 'package:room_reservation_mobile_app/app/pages/room/room_list_page.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 import 'package:room_reservation_mobile_app/app/services/room_service.dart';
-import 'package:room_reservation_mobile_app/app/theme/app_colors.dart';
+import 'package:room_reservation_mobile_app/app/services/user_service.dart';
+import 'package:room_reservation_mobile_app/app/providers/auth_providers.dart';
+import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
 
-/// Halaman utama aplikasi
-class HomePage extends StatefulWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  late AuthService _authService;
-  late RoomService _roomService;
-  late ReservationService _reservationService;
+class _HomePageState extends ConsumerState<HomePage> {
+  final _now = DateTime.now();
+  final _roomService = RoomService.getInstance();
+  final _reservationService = ReservationService.getInstance();
 
-  Profile? _currentUser;
-  ApiResponse<List<Room>>? _availableRooms;
-  List<Reservation> _recentReservations = <Reservation>[];
-
-  bool _isLoading = true;
-  bool _isLoadingRooms = false;
-  bool _isLoadingReservations = false;
-
-  String? _errorMessage;
+  late Future<HomeStatistics> _statisticsFuture;
 
   @override
   void initState() {
     super.initState();
-    _initializeServices();
+    _statisticsFuture = _loadStatistics();
   }
 
-  Future<void> _initializeServices() async {
-    try {
-      _authService = await AuthService.getInstance();
-      _roomService = RoomService.getInstance();
-      _reservationService = await ReservationService.getInstance();
+  /// Load semua statistik yang diperlukan
+  Future<HomeStatistics> _loadStatistics({bool forceRefresh = false}) async {
+    final user = ref.read(authSessionProvider).valueOrNull;
+    if (user?.reference == null) {
+      return HomeStatistics.empty();
+    }
 
-      await _loadInitialData();
+    try {
+      // Fetch data secara parallel
+      final results = await Future.wait([
+        _roomService.getAvailableRoomCount(forceRefresh: forceRefresh),
+        _reservationService.getReservationCountByStatus(
+          userId: user!.reference!,
+        ),
+      ]);
+
+      final availableRooms = results[0] as int;
+      final reservationCount = results[1] as ReservationCount;
+
+      return HomeStatistics(
+        availableRooms: availableRooms,
+        activeReservations: reservationCount.active,
+        pendingReservations: reservationCount.pending,
+        completedReservations: reservationCount.completed,
+      );
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Gagal memuat data: ${e.toString()}';
-        _isLoading = false;
-      });
+      throw 'Gagal memuat statistik: ${e.toString()}';
     }
   }
 
-  Future<void> _loadInitialData() async {
+  /// Handle pull to refresh
+  Future<void> _onRefresh() async {
     setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+      _statisticsFuture = _loadStatistics(forceRefresh: true);
     });
+    await _statisticsFuture;
+  }
 
-    try {
-      // Ensure token validity before loading data
-      final isTokenValid = await _authService.ensureValidToken();
-      if (!isTokenValid) {
-        throw UnauthorizedException(
-          'Sesi telah berakhir, silakan login kembali',
+  @override
+  Widget build(BuildContext context) {
+    final user = ref.watch(authSessionProvider).valueOrNull;
+
+    return Scaffold(
+      backgroundColor: Colors.grey.shade100,
+      appBar: AppBar(
+        title: const Text('Room Reservation'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _doLogout,
+            tooltip: 'Logout',
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        child: ListView(
+          padding: const EdgeInsets.all(16.0),
+          children: [
+            _buildUserHeader(user),
+            const SizedBox(height: 24),
+            _buildStatisticsSection(),
+            const SizedBox(height: 24),
+            _buildQuickActionsSection(user),
+            const SizedBox(height: 24),
+            // Tombol Generate Users (hanya untuk development/admin)
+            if (user?.isAdmin == true) ...[
+              ElevatedButton(
+                onPressed: _generateUsers,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey.shade300,
+                  foregroundColor: Colors.black87,
+                ),
+                child: const Text('Generate Users'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserHeader(Profile? user) {
+    if (user == null) return const SizedBox.shrink();
+
+    // Ambil inisial nama untuk avatar
+    final nameParts = user.name.split(' ');
+    final initial = nameParts.isNotEmpty ? nameParts[0][0].toUpperCase() : 'U';
+
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.2),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Avatar dengan inisial
+          CircleAvatar(
+            radius: 30,
+            backgroundColor: Colors.blue,
+            child: Text(
+              initial,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Informasi user
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Selamat datang,',
+                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  user.name,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (user.employeeId != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    user.employeeId!,
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          // Icon notifikasi
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () {
+              // TODO: Implementasi notifikasi
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatisticsSection() {
+    return FutureBuilder<HomeStatistics>(
+      future: _statisticsFuture,
+      builder: (_, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoadingStatistics();
+        }
+
+        if (snapshot.hasError) {
+          return _buildErrorStatistics(snapshot.error.toString());
+        }
+
+        final stats = snapshot.data ?? HomeStatistics.empty();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Statistik Cepat',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 1.3,
+              children: [
+                _buildStatCard(
+                  icon: Icons.meeting_room,
+                  iconColor: Colors.green,
+                  value: '${stats.availableRooms}',
+                  label: 'Ruang Tersedia',
+                ),
+                _buildStatCard(
+                  icon: Icons.event_available,
+                  iconColor: Colors.blue,
+                  value: '${stats.activeReservations}',
+                  label: 'Reservasi Aktif',
+                ),
+                _buildStatCard(
+                  icon: Icons.pending_actions,
+                  iconColor: Colors.orange,
+                  value: '${stats.pendingReservations}',
+                  label: 'Pending',
+                ),
+                _buildStatCard(
+                  icon: Icons.calendar_today,
+                  iconColor: Colors.purple,
+                  value:
+                      '${_now.day} ${DateFormatter.getMonthName(_now.month)}',
+                  label: 'Hari Ini',
+                ),
+              ],
+            ),
+          ],
         );
-      }
-
-      // Load user data
-      _currentUser = await _authService.getCurrentUser();
-
-      // Load rooms first
-      await _loadAvailableRooms();
-
-      // Then load reservations
-      await _loadRecentReservations();
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Gagal memuat data: ${e.toString()}';
-      });
-
-      // If unauthorized, redirect to login
-      if (e is UnauthorizedException && mounted) {
-        Navigator.of(
-          context,
-        ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
-      }
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
+      },
+    );
   }
 
-  Future<void> _loadAvailableRooms() async {
-    setState(() {
-      _isLoadingRooms = true;
-    });
-
-    try {
-      // Get rooms that are available now
-      final startTime = DateTime.now();
-      final endTime = startTime.add(const Duration(hours: 1));
-
-      final rooms = await _roomService.getRawAvailableRoom(
-        start: startTime,
-        end: endTime,
-        limit: 3,
-      );
-
-      setState(() {
-        _availableRooms = rooms;
-      });
-    } catch (e) {
-      debugPrint('Error loading available rooms: $e');
-    } finally {
-      setState(() {
-        _isLoadingRooms = false;
-      });
-    }
+  Widget _buildLoadingStatistics() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Statistik Cepat',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.3,
+          children: List.generate(
+            4,
+            (index) => Container(
+              padding: const EdgeInsets.all(12.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withValues(alpha: 0.2),
+                    spreadRadius: 1,
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
-  Future<void> _loadRecentReservations() async {
-    setState(() {
-      _isLoadingReservations = true;
-    });
-
-    try {
-      final response = await _reservationService.getAllReservations(
-        page: 1,
-        limit: 10, // Fetch enough data to filter
-      );
-
-      setState(() {
-        _recentReservations =
-            response.data
-                ?.where((reservation) => reservation.userId == _currentUser?.id)
-                .take(3) // Show only recent 3 reservations
-                .toList() ??
-            [];
-      });
-    } catch (e) {
-      // Handle error silently for reservation loading
-      debugPrint('Error loading reservations: $e');
-    } finally {
-      setState(() {
-        _isLoadingReservations = false;
-      });
-    }
+  Widget _buildErrorStatistics(String error) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Statistik Cepat',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16.0),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(12.0),
+            border: Border.all(color: Colors.red.shade200),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red.shade700),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  error,
+                  style: TextStyle(color: Colors.red.shade700),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
-  Future<void> _handleLogout() async {
-    final shouldLogout = await showDialog<bool>(
+  Widget _buildStatCard({
+    required IconData icon,
+    required Color iconColor,
+    required String value,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.2),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: iconColor, size: 24),
+          ),
+          const SizedBox(height: 8),
+          Flexible(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionsSection(Profile? user) {
+    if (user == null) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Aksi Cepat',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionCard(
+                icon: Icons.add_circle_outline,
+                iconColor: Colors.blue,
+                label: 'Buat Reservasi',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ReservationListPage(user: user),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildActionCard(
+                icon: Icons.list_alt,
+                iconColor: Colors.green,
+                label: 'Daftar Ruangan',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => RoomListPage(user: user)),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionCard(
+                icon: Icons.calendar_month,
+                iconColor: Colors.purple,
+                label: 'Kalender',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => CalendarPage(user: user)),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            if (user.isAdmin)
+              Expanded(
+                child: _buildActionCard(
+                  icon: Icons.storage,
+                  iconColor: Colors.red,
+                  label: 'Database Viewer',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => DatabaseViewerPage(user: user),
+                      ),
+                    );
+                  },
+                ),
+              )
+            else
+              Expanded(
+                child: Container(), // Placeholder untuk simetri
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionCard({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12.0),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12.0),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withValues(alpha: 0.2),
+              spreadRadius: 1,
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 28),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _generateUsers() async {
+    bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Konfirmasi Logout'),
-        content: const Text('Apakah Anda yakin ingin keluar?'),
+        title: const Text('Confirm User Generation'),
+        content: const Text('Are you sure you want to generate sample users?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Batal'),
+            child: const Text('Cancel'),
           ),
-          FilledButton(
+          ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Logout'),
+            child: const Text('Confirm'),
           ),
         ],
       ),
     );
 
-    if (shouldLogout == true) {
-      try {
-        await _authService.logout();
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const LoginPage()),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Gagal logout: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-  }
+    confirm ??= false;
 
-  void _showComingSoon(String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$feature akan segera hadir!'),
-        backgroundColor: Colors.blue,
+    if (!confirm || !mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        content: Row(
+          children: const [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Generating users...'),
+          ],
+        ),
       ),
     );
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    try {
+      await UserService.generateSampleUsers();
 
-    if (_errorMessage != null) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 64, color: Colors.red.shade400),
-              const SizedBox(height: 16),
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _loadInitialData,
-                child: const Text('Coba Lagi'),
-              ),
-            ],
-          ),
-        ),
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sample users generated successfully')),
       );
+    } catch (e) {
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error generating users: $e')));
     }
-
-    return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: _loadInitialData,
-        child: CustomScrollView(
-          slivers: [
-            _buildAppBar(),
-            SliverPadding(
-              padding: const EdgeInsets.all(16),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  _buildWelcomeSection(),
-                  const SizedBox(height: 24),
-                  _buildQuickStatsSection(),
-                  const SizedBox(height: 24),
-                  _buildQuickActionsSection(),
-                  const SizedBox(height: 24),
-                  _buildAvailableRoomsSection(),
-                  const SizedBox(height: 24),
-                  _buildRecentReservationsSection(),
-                  const SizedBox(height: 24),
-                ]),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
-  Widget _buildAppBar() {
-    return SliverAppBar(
-      expandedHeight: 120,
-      floating: true,
-      pinned: true,
-      backgroundColor: Theme.of(context).colorScheme.primary,
-      foregroundColor: AppColors.white,
-      flexibleSpace: FlexibleSpaceBar(
-        title: const Text(
-          'Room Reservation',
-          style: TextStyle(color: AppColors.white, fontWeight: FontWeight.bold),
-        ),
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Theme.of(context).colorScheme.primary,
-                Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
-              ],
-            ),
-          ),
-        ),
-      ),
-      actions: [
-        IconButton(
-          onPressed: _loadInitialData,
-          icon: const Icon(Icons.refresh),
-          tooltip: 'Refresh',
-        ),
-        PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert),
-          itemBuilder: (context) => <PopupMenuEntry<String>>[
-            PopupMenuItem<String>(
-              value: 'profile',
-              onTap: () => _showComingSoon('Profile'),
-              child: const Row(
-                children: [
-                  Icon(Icons.person, color: AppColors.primaryLight),
-                  SizedBox(width: 8),
-                  Text('Profile'),
-                ],
-              ),
-            ),
-            PopupMenuItem<String>(
-              value: 'settings',
-              onTap: () => _showComingSoon('Settings'),
-              child: const Row(
-                children: [
-                  Icon(Icons.settings, color: AppColors.primaryLight),
-                  SizedBox(width: 8),
-                  Text('Settings'),
-                ],
-              ),
-            ),
-            const PopupMenuDivider(),
-            PopupMenuItem<String>(
-              value: 'logout',
-              onTap: _handleLogout,
-              child: const Row(
-                children: [
-                  Icon(Icons.logout, color: AppColors.error),
-                  SizedBox(width: 8),
-                  Text('Logout', style: TextStyle(color: AppColors.error)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWelcomeSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 30,
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              child: Text(
-                _currentUser?.firstName?.substring(0, 1).toUpperCase() ?? 'U',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.white,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Selamat datang,',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
-                  ),
-                  Text(
-                    '${_currentUser?.firstName ?? ''} ${_currentUser?.lastName ?? ''}',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (_currentUser?.role != null)
-                    Text(
-                      _currentUser!.role!,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.meeting_room,
-                color: Theme.of(context).colorScheme.primary,
-                size: 24,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickStatsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Statistik Cepat',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildStatCard(
-                'Ruang Tersedia',
-                '${_availableRooms?.metaData?.totalItems?.toInt() ?? 0}',
-                Icons.meeting_room,
-                Colors.green,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildStatCard(
-                'Reservasi Aktif',
-                '${_recentReservations.where((r) => r.status == 'approved').length}',
-                Icons.event_available,
-                Colors.blue,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildStatCard(
-                'Pending',
-                '${_recentReservations.where((r) => r.status == 'pending').length}',
-                Icons.pending,
-                Colors.orange,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildStatCard(
-                'Hari Ini',
-                DateFormat('dd MMM').format(DateTime.now()),
-                Icons.today,
-                Colors.purple,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.bodySmall,
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickActionsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Aksi Cepat',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildActionCard(
-                'Buat Reservasi',
-                'Reservasi ruang baru',
-                Icons.add_circle,
-                Colors.blue,
-                () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => ReservationListPage()),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildActionCard(
-                'Lihat Ruang',
-                'Daftar semua ruang',
-                Icons.view_list,
-                Colors.green,
-                () => _showComingSoon('Lihat Ruang'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildActionCard(
-                'Riwayat',
-                'Reservasi saya',
-                Icons.history,
-                Colors.orange,
-                () => _showComingSoon('Riwayat'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildActionCard(
-                'Laporan',
-                'Unduh laporan',
-                Icons.assessment,
-                Colors.purple,
-                () => _showComingSoon('Laporan'),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionCard(
-    String title,
-    String subtitle,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: color, size: 28),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodySmall,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAvailableRoomsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Ruang Tersedia',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            TextButton(
-              onPressed: () => _showComingSoon('Lihat Semua Ruang'),
-              child: const Text('Lihat Semua'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (_isLoadingRooms)
-          const Center(child: CircularProgressIndicator())
-        else if (_availableRooms?.data?.isEmpty ?? true)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.meeting_room_outlined,
-                      size: 48,
-                      color: Colors.grey[400],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Tidak ada ruang tersedia',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          )
-        else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _availableRooms?.data?.length ?? 0,
-            separatorBuilder: (_, index) => const SizedBox(height: 8),
-            itemBuilder: (_, index) {
-              final room = _availableRooms?.data?[index];
-
-              if (room == null) return const SizedBox.shrink();
-
-              return _buildRoomCard(room);
-            },
-          ),
-      ],
-    );
-  }
-
-  Widget _buildRoomCard(Room room) {
-    return Card(
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.blue.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Icon(Icons.meeting_room, color: Colors.blue),
-        ),
-        title: Text(
-          room.name ?? 'Unknown Room',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (room.location != null) Text('📍 ${room.location}'),
-            if (room.capacity != null)
-              Text('👥 Kapasitas: ${room.capacity} orang'),
-          ],
-        ),
-        trailing: FilledButton(
-          onPressed: () => _showComingSoon('Reservasi ${room.name}'),
-          child: const Text('Book'),
-        ),
-        isThreeLine: room.location != null && room.capacity != null,
-      ),
-    );
-  }
-
-  Widget _buildRecentReservationsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Reservasi Terbaru',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            TextButton(
-              onPressed: () => _showComingSoon('Lihat Semua Reservasi'),
-              child: const Text('Lihat Semua'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (_isLoadingReservations)
-          const Center(child: CircularProgressIndicator())
-        else if (_recentReservations.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.event_busy, size: 48, color: Colors.grey[400]),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Belum ada reservasi',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () => _showComingSoon('Buat Reservasi'),
-                      child: const Text('Buat Reservasi Pertama'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          )
-        else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _recentReservations.length,
-            separatorBuilder: (_, index) => const SizedBox(height: 8),
-            itemBuilder: (_, index) {
-              final reservation = _recentReservations[index];
-              return _buildReservationCard(reservation);
-            },
-          ),
-      ],
-    );
-  }
-
-  Widget _buildReservationCard(Reservation reservation) {
-    Color statusColor;
-    IconData statusIcon;
-
-    switch (reservation.status?.toLowerCase()) {
-      case 'approved':
-        statusColor = Colors.green;
-        statusIcon = Icons.check_circle;
-        break;
-      case 'pending':
-        statusColor = Colors.orange;
-        statusIcon = Icons.pending;
-        break;
-      case 'rejected':
-        statusColor = Colors.red;
-        statusIcon = Icons.cancel;
-        break;
-      default:
-        statusColor = Colors.grey;
-        statusIcon = Icons.help;
-    }
-
-    return Card(
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: statusColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(statusIcon, color: statusColor),
-        ),
-        title: Text(
-          reservation.room?.name ?? 'Unknown Room',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (reservation.startTime != null && reservation.endTime != null)
-              Text('🕐 ${reservation.formattedRange}'),
-            SizedBox(height: 4),
-            if (reservation.purpose != null) Text('📝 ${reservation.purpose}'),
-          ],
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: statusColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: statusColor),
-          ),
-          child: Text(
-            reservation.status?.toUpperCase() ?? 'UNKNOWN',
-            style: TextStyle(
-              color: statusColor,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        isThreeLine:
-            reservation.startTime != null && reservation.purpose != null,
-        onTap: () => _showComingSoon('Detail Reservasi'),
-      ),
+  Future<void> _doLogout() async {
+    await ref.read(authSessionProvider.notifier).logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (_) => false,
     );
   }
 }

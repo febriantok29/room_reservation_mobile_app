@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/services/auth_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:room_reservation_mobile_app/app/providers/auth_providers.dart';
 import 'package:room_reservation_mobile_app/app/theme/app_colors.dart';
 import 'package:room_reservation_mobile_app/app/theme/app_sizes.dart';
 
@@ -7,14 +8,14 @@ import 'home_page.dart';
 import 'login_page.dart';
 
 /// Halaman splash yang mengecek status autentikasi pengguna
-class SplashPage extends StatefulWidget {
+class SplashPage extends ConsumerStatefulWidget {
   const SplashPage({super.key});
 
   @override
-  State<SplashPage> createState() => _SplashPageState();
+  ConsumerState<SplashPage> createState() => _SplashPageState();
 }
 
-class _SplashPageState extends State<SplashPage>
+class _SplashPageState extends ConsumerState<SplashPage>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _opacityAnimation;
@@ -61,26 +62,26 @@ class _SplashPageState extends State<SplashPage>
     try {
       await Future.delayed(const Duration(seconds: 2));
 
-      final authService = await AuthService.getInstance();
-      final isLoggedIn = authService.isLoggedIn();
+      final profile = await ref.read(authSessionProvider.notifier).bootstrap();
+      final isLoggedIn = profile != null;
 
-      if (mounted) {
-        if (isLoggedIn) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const HomePage()),
-          );
-        } else {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const LoginPage()),
-          );
-        }
+      if (!mounted) {
+        return;
       }
+
+      final nextPage = isLoggedIn ? const HomePage() : const LoginPage();
+
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => nextPage));
     } catch (e) {
-      if (mounted) {
-        Navigator.of(
-          context,
-        ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
+      if (!mounted) {
+        return;
       }
+
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
     }
   }
 

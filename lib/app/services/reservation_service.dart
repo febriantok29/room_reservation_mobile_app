@@ -1,269 +1,767 @@
-import 'package:room_reservation_mobile_app/app/core/network/api_client.dart';
-import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
-import 'package:room_reservation_mobile_app/app/models/api_response.dart';
-import 'package:room_reservation_mobile_app/app/models/request/reservation_create_request.dart';
-import 'package:room_reservation_mobile_app/app/models/request/reservation_update_request.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'package:room_reservation_mobile_app/app/algorithms/csp_room_reservation_solver.dart';
+import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
+import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
+import 'package:room_reservation_mobile_app/app/models/firestore/base_firestore_model.dart';
+import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
+import 'package:room_reservation_mobile_app/app/models/reservation_count.dart';
+import 'package:room_reservation_mobile_app/app/models/room.dart';
+import 'package:room_reservation_mobile_app/app/services/room_service.dart';
+import 'package:room_reservation_mobile_app/app/services/user_service.dart';
+import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
+import 'package:room_reservation_mobile_app/app/utils/reservation_id_generator.dart';
 
 /// Service untuk mengelola operasi terkait reservasi
+///
+/// Menggunakan CSP (Constraint Satisfaction Problem) Algorithm untuk:
+/// - Validasi constraint (availability, capacity, time overlap)
+/// - Forward checking untuk optimasi
+/// - Backtracking search untuk alternatif ruangan
 class ReservationService {
   static ReservationService? _instance;
 
   ReservationService._();
 
   /// Singleton instance
-  static Future<ReservationService> getInstance() async {
+  static ReservationService getInstance() {
     _instance ??= ReservationService._();
     return _instance!;
   }
 
-  /// Mendapatkan semua reservasi user yang sedang login
-  Future<ApiResponse<List<Reservation>>> getAllReservations({
-    int page = 1,
-    int limit = 10,
+  @Deprecated(
+    'Gunakan reservationListByQueryProvider untuk read path baru berbasis Riverpod/API. Method ini dipertahankan untuk kompatibilitas legacy.',
+  )
+  Future<List<Reservation>> getReservationList({
+    DocumentReference? userId,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool showDeleted = false,
+    bool checkOverlap = false, // Parameter baru untuk cek overlap
   }) async {
-    final builder = await ApiClient.create('Reservation.getAll');
+    if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+      throw 'Tanggal mulai tidak boleh lebih besar dari tanggal selesai.';
+    }
 
-    builder
-      ..addQuery('page', page.toString())
-      ..addQuery('limit', limit.toString());
+    final client = await FirestoreClient.create(Reservation.collectionName);
 
-    return await builder.get<List<Reservation>>(
-      fromJson: (json) => (json as List)
-          .map((item) => Reservation.fromJson(item as Map<String, dynamic>))
-          .toList(),
+    Query<Map<String, dynamic>> query = client.getCollectionRef();
+
+    if (userId != null) {
+      query = query.where('userId', isEqualTo: userId);
+    }
+
+    // Logika berbeda untuk checkOverlap
+    if (checkOverlap && (startDate != null && endDate != null)) {
+      // Untuk mengecek overlap, kita perlu ambil reservasi yang:
+      // 1. startTime < endDate (reservasi dimulai sebelum waktu yang kita cari selesai)
+      // 2. endTime > startDate (reservasi berakhir setelah waktu yang kita cari dimulai)
+      //
+      // Firestore limitation: tidak bisa query dengan 2 field berbeda dalam range
+      // Solusi: ambil semua reservasi yang startTime < endDate,
+      // lalu filter di memory untuk endTime > startDate
+      final endTimestamp = Timestamp.fromDate(endDate);
+      query = query.where('startTime', isLessThan: endTimestamp);
+    } else {
+      // Query original (untuk listing biasa)
+      if (startDate != null) {
+        final startTimestamp = Timestamp.fromDate(startDate);
+        query = query.where(
+          'startTime',
+          isGreaterThanOrEqualTo: startTimestamp,
+        );
+      }
+
+      if (endDate != null) {
+        final endTimestamp = Timestamp.fromDate(endDate);
+        query = query.where('endTime', isLessThanOrEqualTo: endTimestamp);
+      }
+    }
+
+    if (!showDeleted) {
+      query = query.where(BaseFirestoreModel.deletedAtField, isNull: true);
+    }
+
+    final response = await query.get();
+
+    final reservations = <Reservation>[];
+
+    for (final doc in response.docs) {
+      if (!doc.exists) continue;
+
+      final data = doc.data();
+
+      final reservation = Reservation.fromFirestore(data, doc.id);
+
+      // Filter tambahan untuk overlap check (karena Firestore limitation)
+      if (checkOverlap && (startDate != null && endDate != null)) {
+        // Skip jika reservasi tidak overlap dengan range yang dicari
+        // Overlap terjadi jika: endTime > startDate
+        if (reservation.endTime == null ||
+            reservation.endTime!.isBefore(startDate) ||
+            reservation.endTime!.isAtSameMomentAs(startDate)) {
+          continue;
+        }
+      }
+
+      reservations.add(reservation);
+    }
+
+    final roomIds = reservations
+        .where((res) => res.roomRef != null)
+        .map((res) => res.roomRef!.id)
+        .toSet();
+
+    final roomService = RoomService.getInstance();
+
+    // Ambil room data menggunakan getByIds yang akan:
+    // 1. Cek cache dulu
+    // 2. Fetch dari Firestore jika belum ada di cache
+    // 3. Update cache dengan room yang baru di-fetch
+    final rooms = await roomService.getByIds(roomIds);
+
+    // Populate room object ke setiap reservasi
+    for (final reservation in reservations) {
+      final roomRef = reservation.roomRef;
+
+      if (roomRef == null || roomRef.id.isEmpty) {
+        continue;
+      }
+
+      final roomId = roomRef.id;
+
+      final matchedRooms = rooms.where((room) => room.id == roomId);
+
+      if (matchedRooms.isEmpty) {
+        continue;
+      }
+
+      reservation.room = matchedRooms.first;
+    }
+
+    final userIds = Set<String>.from(
+      reservations.map((reservation) => reservation.userRef?.id),
     );
+
+    final users = await UserService.getUserByDocIds(userIds);
+
+    for (final reservation in reservations) {
+      final userRef = reservation.userRef;
+
+      if (userRef == null || userRef.id.isEmpty) {
+        continue;
+      }
+
+      final userId = userRef.id;
+
+      final user = users.where((user) => user.id == userId);
+
+      if (user.isEmpty) {
+        continue;
+      }
+
+      reservation.user = user.first;
+    }
+
+    // ============================================================================
+    // AUTO-UPDATE STATUS (On-Demand)
+    // ============================================================================
+    // Update status berdasarkan waktu saat ini
+    // Status akan otomatis berubah: CONFIRMED → UPCOMING → ONGOING → COMPLETED
+    // ============================================================================
+
+    final updatedReservations = <Reservation>[];
+
+    for (final reservation in reservations) {
+      // Compute status based on current time
+      final computedStatus = reservation.getComputedStatus();
+
+      // If status changed, update in Firestore (async, don't wait)
+      if (computedStatus != reservation.status) {
+        // Update status in background
+        _updateReservationStatus(reservation.id!, computedStatus).catchError((
+          e,
+        ) {
+          // Silent fail - status will be updated on next fetch
+        });
+
+        // Return updated reservation for UI
+        updatedReservations.add(reservation.copyWith(status: computedStatus));
+      } else {
+        updatedReservations.add(reservation);
+      }
+    }
+
+    return updatedReservations;
+  }
+
+  /// Update status reservasi (internal helper)
+  Future<void> _updateReservationStatus(
+    String reservationId,
+    ReservationStatus newStatus,
+  ) async {
+    final client = await FirestoreClient.create(Reservation.collectionName);
+
+    await client.update(reservationId, {
+      'status': newStatus.toFirestoreString(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// Mendapatkan reservasi berdasarkan ID
+  @Deprecated(
+    'Gunakan ReservationApiService.getReservationDetail pada mode API atau provider domain yang baru. Method ini dipertahankan untuk kompatibilitas legacy.',
+  )
   Future<Reservation> getReservationById(String id) async {
     if (id.isEmpty) {
-      throw ValidationException('ID reservasi tidak boleh kosong');
+      throw 'ID reservasi tidak boleh kosong';
     }
 
-    final builder = await ApiClient.create('Reservation.getById');
-    builder.addParameter('id', id);
+    // Ambil dari Firestore
+    final client = await FirestoreClient.create(Reservation.collectionName);
 
-    final response = await builder.get<Reservation>(
-      fromJson: Reservation.fromJson,
-      errorMessage: 'Gagal memuat detail reservasi',
-    );
+    final doc = await client.get(id);
 
-    final data = response.data;
-
-    if (data == null) {
-      throw NotFoundException('Reservasi dengan ID $id tidak ditemukan');
+    if (!doc.exists) {
+      throw 'Reservasi dengan ID $id tidak ditemukan';
     }
 
-    return data;
+    final data = doc.data() ?? {};
+    final reservation = Reservation.fromFirestore(data, id);
+
+    // Ambil data ruangan dan user jika perlu
+    if (reservation.roomRef != null && reservation.roomRef!.id.isNotEmpty) {
+      final roomService = RoomService.getInstance();
+      try {
+        final room = await roomService.getRoomByDoc(reservation.roomRef!);
+        reservation.room = room;
+      } catch (_) {}
+    }
+
+    final userRef = reservation.userRef;
+    if (userRef != null) {
+      try {
+        final user = await UserService.getProfileByDoc(userRef);
+        reservation.user = user;
+      } catch (_) {}
+    }
+
+    return reservation;
   }
 
-  /// Membuat reservasi baru
-  Future<Reservation> createReservation({
-    required ReservationCreateRequest reservationForm,
-  }) async {
-    reservationForm.validate();
+  /// ============================================================================
+  /// CSP (CONSTRAINT SATISFACTION PROBLEM) VALIDATION
+  /// ============================================================================
 
-    _validateReservationTime(
-      startDateTime: reservationForm.startTime,
-      endDateTime: reservationForm.endTime,
-    );
+  /// Validasi reservasi menggunakan CSP Algorithm
+  ///
+  /// **CSP Components:**
+  /// - Variables: Room pada time slot tertentu
+  /// - Domain: {Available, Booked}
+  /// - Constraints: Availability, Capacity, Time Overlap
+  ///
+  /// **Algorithm:**
+  /// 1. Forward Checking - Cek constraint paling murah dulu
+  /// 2. Constraint Propagation - Jika ada violation, fail fast
+  /// 3. Backtracking - Jika current room gagal, cari alternatif
+  ///
+  /// Throws: ValidationException jika constraint violated
+  Future<CSPSolutionResult> validateReservationWithCSP(
+    Reservation reservation,
+  ) async {
+    // Get room data
+    final roomService = RoomService.getInstance();
+    final room = await roomService.getRoomByDoc(reservation.roomRef!);
 
-    final reservationData = reservationForm.toJson();
-
-    final builder = await ApiClient.create('Reservation.create');
-
-    final response = await builder.post<Reservation>(
-      body: reservationData,
-      fromJson: Reservation.fromJson,
-      errorMessage: 'Gagal membuat reservasi',
-    );
-
-    final data = response.data;
-
-    if (data == null) {
-      throw NotFoundException('Reservasi tidak ditemukan setelah dibuat');
+    if (room == null) {
+      throw 'Ruangan tidak ditemukan';
     }
 
-    return data;
+    // Get existing reservations untuk constraint checking
+    final existingReservations = await getReservationList(
+      startDate: reservation.startTime,
+      endDate: reservation.endTime,
+      checkOverlap: true,
+    );
+
+    // Create CSP Solver instance
+    final cspSolver = CSPRoomReservationSolver(
+      targetRoom: room,
+      requestedStartTime: reservation.startTime!,
+      requestedEndTime: reservation.endTime!,
+      existingReservations: existingReservations,
+      requestedCapacity: reservation.visitorCount ?? 1,
+    );
+
+    // Solve CSP - Check all constraints
+    final solution = cspSolver.solve();
+
+    // Jika constraint violated, throw exception dengan detail
+    if (!solution.isValid) {
+      throw 'Reservasi tidak memenuhi constraint:\n${solution.violations.join("\n")}';
+    }
+
+    return solution;
+  }
+
+  /// Find alternative rooms menggunakan CSP Backtracking Search
+  ///
+  /// **Backtracking Algorithm:**
+  /// 1. Try each available room
+  /// 2. Forward check constraints
+  /// 3. If satisfied, add to solutions
+  /// 4. If all fail, return empty
+  ///
+  /// Returns: List of rooms yang memenuhi semua constraint
+  Future<List<Room>> findAlternativeRoomsWithCSP({
+    required DateTime startTime,
+    required DateTime endTime,
+    required int capacity,
+  }) async {
+    // Get all available rooms
+    final roomService = RoomService.getInstance();
+    final allRooms = await roomService.getRoomList(
+      showDeleted: false,
+      showMaintenance: false,
+    );
+
+    // Get existing reservations
+    final existingReservations = await getReservationList(
+      startDate: startTime,
+      endDate: endTime,
+      checkOverlap: true,
+    );
+
+    // Use CSP Backtracking Search untuk find solutions
+    final solutionRooms = CSPRoomReservationSolver.backtrackingSearch(
+      availableRooms: allRooms,
+      startTime: startTime,
+      endTime: endTime,
+      capacity: capacity,
+      existingReservations: existingReservations,
+    );
+
+    return solutionRooms;
+  }
+
+  /// Membuat reservasi baru dengan CSP validation
+  ///
+  /// **Flow:**
+  /// 1. Basic validation (data & time)
+  /// 2. **CSP validation** - Validate all constraints using CSP algorithm
+  /// 3. Firestore transaction - Create reservation with overlap check
+  ///
+  /// **CSP ensures:**
+  /// - Room is available (not booked)
+  /// - Capacity constraint satisfied
+  /// - No time overlap with existing reservations
+  /// - Time slot is valid (working hours)
+  /// - Max reservations per day not exceeded
+  ///
+  /// Throws: ValidationException if any constraint violated
+  Future<Reservation> createReservation(Reservation reservation) async {
+    // Validasi data
+    reservation.validate();
+
+    // Validasi waktu reservasi
+    if (reservation.startTime != null && reservation.endTime != null) {
+      _validateReservationTime(
+        startDateTime: reservation.startTime!,
+        endDateTime: reservation.endTime!,
+      );
+    }
+
+    reservation.prepareForCreate();
+
+    /// ============================================================================
+    /// CSP VALIDATION (CRITICAL - BEFORE TRANSACTION)
+    /// ============================================================================
+    ///
+    /// Validate all constraints using CSP algorithm BEFORE entering transaction.
+    /// This provides:
+    /// 1. Early failure detection (fail fast)
+    /// 2. Meaningful error messages for users
+    /// 3. Alternative room suggestions if current room fails
+    /// 4. Reduced transaction conflicts
+    ///
+    /// CSP Constraints checked:
+    /// - Unary: Room availability, Capacity, Time validity
+    /// - Binary: Time overlap detection
+    /// - Global: Max reservations per day
+    /// ============================================================================
+
+    final cspResult = await validateReservationWithCSP(reservation);
+
+    if (!cspResult.isValid) {
+      // If CSP constraints not satisfied, provide helpful error with alternatives
+      String errorMessage = 'Reservasi tidak dapat dilakukan:\n\n';
+
+      for (final violation in cspResult.violations) {
+        errorMessage += '• $violation\n';
+      }
+
+      // Try to find alternative rooms using backtracking search
+      try {
+        final alternatives = await findAlternativeRoomsWithCSP(
+          startTime: reservation.startTime!,
+          endTime: reservation.endTime!,
+          capacity: reservation.visitorCount ?? 1,
+        );
+
+        if (alternatives.isNotEmpty) {
+          errorMessage += '\nRuangan alternatif yang tersedia:\n';
+          for (final room in alternatives.take(3)) {
+            errorMessage += '• ${room.name} (Kapasitas: ${room.capacity})\n';
+          }
+        }
+      } catch (e) {
+        // If finding alternatives fails, just show violation errors
+      }
+
+      throw errorMessage.trim();
+    }
+
+    // Simpan ke Firestore
+    final client = await FirestoreClient.create(Reservation.collectionName);
+    final collectionRef = client.getCollectionRef();
+    final now = DateTime.now();
+
+    // Generate ID menggunakan helper class
+    // ID akan di-validasi ulang dalam transaction untuk menghindari race condition
+    final generatedId = await ReservationIdGenerator.generateNextId(
+      collectionRef,
+      date: now,
+    );
+
+    final payload = reservation.toFirestore();
+
+    return await client.transaction<Reservation>((
+      Transaction transaction,
+    ) async {
+      /// ============================================================================
+      /// VALIDASI OVERLAP RUANGAN (CRITICAL - MENCEGAH DOUBLE BOOKING)
+      /// ============================================================================
+      ///
+      /// Validasi ini WAJIB dilakukan di dalam transaction untuk memastikan
+      /// tidak ada 2 pemesanan yang terjadi secara bersamaan (concurrent booking).
+      ///
+      /// Skenario yang dicegah:
+      /// - User A dan User B memesan ruangan X di waktu yang sama
+      /// - Keduanya submit form hampir bersamaan (selisih milidetik)
+      /// - Tanpa transaction: KEDUA pemesanan akan berhasil (DOUBLE BOOKING ❌)
+      /// - Dengan transaction: Hanya 1 yang berhasil, yang lain akan gagal (✅)
+      ///
+      /// Cara kerja Firestore Transaction:
+      /// 1. Transaction membaca data (get) - snapshot di awal
+      /// 2. Jika ada perubahan data di tengah transaction, Firestore akan
+      ///    OTOMATIS retry transaction dari awal (maksimal 5x)
+      /// 3. Jika masih gagal setelah 5x retry, akan throw error
+      /// 4. Ini menjamin ACID properties (Atomicity, Consistency, Isolation, Durability)
+      ///
+      /// PENTING:
+      /// - Kita TIDAK bisa menggunakan .where() query di dalam transaction
+      /// - Solusi: Fetch beberapa document terakhir untuk hari tersebut
+      ///   dan filter manual di memory (tetap aman karena dalam transaction)
+      /// ============================================================================
+
+      // Ambil semua reservasi pada hari yang sama untuk ruangan ini
+      // Query untuk mengambil reservasi yang mungkin overlap
+      // Karena transaction tidak support complex query, kita ambil range lebar
+      // dan filter manual di memory
+      final (dayPrefix, nextDayPrefix) =
+          ReservationIdGenerator.generateDatePrefixRange(now);
+
+      // Ambil semua reservasi hari ini (untuk validasi overlap)
+      final potentialConflicts = collectionRef
+          .where(FieldPath.documentId, isGreaterThanOrEqualTo: dayPrefix)
+          .where(FieldPath.documentId, isLessThan: nextDayPrefix)
+          .limit(1000); // Limit tinggi untuk memastikan semua data terambil
+
+      final conflictSnapshot = await potentialConflicts.get();
+
+      // Filter dan cek overlap secara manual
+      // Overlap terjadi jika:
+      // 1. Ruangan sama (roomId sama)
+      // 2. Waktu mulai reservasi baru < waktu selesai reservasi existing
+      // 3. Waktu selesai reservasi baru > waktu mulai reservasi existing
+      // 4. Reservasi existing tidak dalam status CANCELLED/REJECTED/DELETED
+      for (final doc in conflictSnapshot.docs) {
+        final data = doc.data();
+
+        // Skip jika sudah dihapus
+        if (data[BaseFirestoreModel.deletedAtField] != null) continue;
+
+        // Cek apakah ruangan sama
+        final existingRoomRef = data['roomId'] as DocumentReference?;
+        if (existingRoomRef?.id != reservation.roomRef?.id) continue;
+
+        // Ambil waktu existing reservation
+        final existingStart = DateFormatter.getDateTime(data['startTime']);
+        final existingEnd = DateFormatter.getDateTime(data['endTime']);
+
+        if (existingStart == null || existingEnd == null) continue;
+
+        // Cek overlap menggunakan interval intersection logic
+        // Overlap terjadi jika: NOT (A.end <= B.start OR A.start >= B.end)
+        // Atau dengan kata lain: A.start < B.end AND A.end > B.start
+        final hasOverlap =
+            reservation.startTime!.isBefore(existingEnd) &&
+            reservation.endTime!.isAfter(existingStart);
+
+        if (hasOverlap) {
+          // Format waktu untuk error message yang informatif
+          final formatter = DateFormat('dd MMM yyyy HH:mm');
+          final existingRange =
+              '${formatter.format(existingStart)} - ${formatter.format(existingEnd)}';
+          final requestedRange =
+              '${formatter.format(reservation.startTime!)} - ${formatter.format(reservation.endTime!)}';
+
+          throw 'Ruangan sudah dipesan pada waktu tersebut!\n\n'
+              'Pemesanan existing: $existingRange\n'
+              'Waktu yang Anda pilih: $requestedRange\n\n'
+              'Silakan pilih waktu lain.';
+        }
+      }
+
+      /// ============================================================================
+      /// GENERATE & VALIDASI ID UNIK
+      /// ============================================================================
+
+      // Validasi dan retry ID jika terjadi race condition
+      // Menggunakan helper class untuk handle retry logic
+      final finalId =
+          await ReservationIdGenerator.validateAndRetryInTransaction(
+            transaction,
+            collectionRef,
+            generatedId,
+            now,
+            maxRetries: 10,
+          );
+
+      /// ============================================================================
+      /// CREATE RESERVATION
+      /// ============================================================================
+
+      // Create document dengan custom ID yang sudah digenerate dan divalidasi
+      final newDocRef = client.getCollectionRef().doc(finalId);
+      transaction.set(newDocRef, payload);
+
+      return reservation.copyWith(id: newDocRef.id);
+    });
   }
 
   /// Update reservasi (hanya untuk reservasi sendiri yang belum disetujui)
-  Future<Reservation> updateReservation(
-    ReservationUpdateRequest reservationData,
+  Future<Reservation> updateReservation(Reservation reservation) async {
+    if (reservation.id == null || reservation.id!.isEmpty) {
+      throw 'ID reservasi tidak boleh kosong';
+    }
+
+    // Validasi data
+    reservation.validate();
+
+    // Validasi waktu jika ada
+    if (reservation.startTime != null && reservation.endTime != null) {
+      _validateReservationTime(
+        startDateTime: reservation.startTime!,
+        endDateTime: reservation.endTime!,
+      );
+    }
+
+    // Simpan ke Firestore
+    final client = await FirestoreClient.create(Reservation.collectionName);
+
+    final payload = reservation.toFirestore();
+
+    await client.update(reservation.id!, payload);
+
+    return reservation;
+  }
+
+  /// Membatalkan reservasi dengan reason
+  /// Available untuk status: CONFIRMED, UPCOMING
+  Future<Reservation> cancelReservation(
+    String reservationId,
+    String reason,
+    Profile user,
   ) async {
-    reservationData.validate();
+    if (reservationId.isEmpty) {
+      throw 'ID reservasi tidak boleh kosong';
+    }
 
-    // Validasi waktu jika ada update
+    final userId = user.id;
+
+    if (userId == null || userId.isEmpty) {
+      throw 'User ID tidak ditemukan';
+    }
+
+    // Ambil reservasi
+    final reservation = await getReservationById(reservationId);
+
+    // Validasi: hanya bisa cancel jika CONFIRMED atau UPCOMING
+    if (!reservation.status.canBeCancelled) {
+      throw 'Reservasi dengan status ${reservation.status.displayName} tidak dapat dibatalkan';
+    }
+
+    // Validasi: hanya user yang buat atau admin yang bisa cancel
+    if (reservation.userRef?.id != userId && !user.isAdmin) {
+      throw 'Anda tidak memiliki izin untuk membatalkan reservasi ini';
+    }
+
+    // Cancel menggunakan helper method dari model
+    final cancelled = reservation.cancel(reason, userId);
+    cancelled.prepareForUpdate();
+
+    // Update ke Firestore
+    final client = await FirestoreClient.create(Reservation.collectionName);
+    await client.update(reservationId, cancelled.toFirestore());
+
+    return cancelled;
+  }
+
+  /// Reschedule reservasi
+  /// Available untuk status: CONFIRMED only
+  Future<Reservation> rescheduleReservation(
+    String reservationId,
+    DateTime newStartTime,
+    DateTime newEndTime,
+    String userId, {
+    String? adminNote,
+    bool isAdmin = false,
+  }) async {
+    if (reservationId.isEmpty) {
+      throw 'ID reservasi tidak boleh kosong';
+    }
+
+    // Validasi waktu
     _validateReservationTime(
-      startDateTime: reservationData.startTime,
-      endDateTime: reservationData.endTime,
+      startDateTime: newStartTime,
+      endDateTime: newEndTime,
     );
 
-    final builder = await ApiClient.create('Reservation.update');
-    builder.addParameter('id', reservationData.reservationId);
+    // Ambil reservasi
+    final reservation = await getReservationById(reservationId);
 
-    final response = await builder.put<Reservation>(
-      body: reservationData,
-      fromJson: Reservation.fromJson,
-      errorMessage: 'Gagal mengupdate reservasi',
-    );
-
-    final data = response.data;
-
-    if (data == null) {
-      throw NotFoundException(
-        'Reservasi dengan ID ${reservationData.reservationId} tidak ditemukan',
-      );
+    // Validasi: hanya bisa reschedule jika CONFIRMED
+    if (!reservation.status.canBeRescheduled) {
+      throw 'Reservasi dengan status ${reservation.status.displayName} tidak dapat di-reschedule. '
+          'Reschedule hanya dapat dilakukan untuk reservasi yang terkonfirmasi.';
     }
 
-    return data;
+    // Validasi permission
+    if (!isAdmin && reservation.userRef?.id != userId) {
+      throw 'Anda tidak memiliki izin untuk reschedule reservasi ini';
+    }
+
+    // Create temp reservation with new time for CSP validation
+    final tempReservation = reservation.copyWith(
+      startDateTime: newStartTime,
+      endDateTime: newEndTime,
+    );
+
+    // CSP validation untuk waktu baru
+    final cspResult = await validateReservationWithCSP(tempReservation);
+
+    if (!cspResult.isValid) {
+      String errorMessage = 'Tidak dapat reschedule ke waktu tersebut:\n\n';
+
+      for (final violation in cspResult.violations) {
+        errorMessage += '• $violation\n';
+      }
+
+      // Suggest alternatives
+      try {
+        final alternatives = await findAlternativeRoomsWithCSP(
+          startTime: newStartTime,
+          endTime: newEndTime,
+          capacity: reservation.visitorCount ?? 1,
+        );
+
+        if (alternatives.isNotEmpty) {
+          errorMessage += '\nRuangan alternatif yang tersedia:\n';
+          for (final room in alternatives.take(3)) {
+            errorMessage += '• ${room.name} (Kapasitas: ${room.capacity})\n';
+          }
+        }
+      } catch (e) {
+        // Ignore if alternative search fails
+      }
+
+      throw errorMessage.trim();
+    }
+
+    // CSP passed, proceed with reschedule
+    final note =
+        adminNote ?? (isAdmin ? 'Reschedule by admin' : 'Reschedule by user');
+    final rescheduled = reservation.reschedule(newStartTime, newEndTime, note);
+    rescheduled.prepareForUpdate();
+
+    // Update ke Firestore
+    final client = await FirestoreClient.create(Reservation.collectionName);
+    await client.update(reservationId, rescheduled.toFirestore());
+
+    return rescheduled;
   }
 
-  /// Membatalkan reservasi
-  Future<bool> cancelReservation(String id) async {
-    if (id.isEmpty) {
-      throw ValidationException('ID reservasi tidak boleh kosong');
+  /// Extend reservasi (perpanjang waktu) - Admin only
+  /// Available untuk status: ONGOING only
+  Future<Reservation> extendReservation(
+    String reservationId,
+    DateTime newEndTime,
+    String reason,
+  ) async {
+    if (reservationId.isEmpty) {
+      throw 'ID reservasi tidak boleh kosong';
     }
 
-    final builder = await ApiClient.create('Reservation.delete');
-    builder.addParameter('id', id);
+    // Ambil reservasi
+    final reservation = await getReservationById(reservationId);
 
-    final response = await builder.delete<dynamic>(
-      errorMessage: 'Gagal membatalkan reservasi',
-    );
-
-    return response.data != null;
-  }
-
-  /// Mendapatkan reservasi berdasarkan status
-  Future<List<Reservation>> getReservationsByStatus(String status) async {
-    final validStatuses = ['pending', 'approved', 'rejected', 'cancelled'];
-    if (!validStatuses.contains(status.toLowerCase())) {
-      throw ValidationException(
-        'Status tidak valid. Status yang valid: ${validStatuses.join(', ')}',
-      );
+    // Validasi: hanya bisa extend jika ONGOING
+    if (!reservation.status.canBeExtended) {
+      throw 'Reservasi dengan status ${reservation.status.displayName} tidak dapat diperpanjang. '
+          'Extension hanya dapat dilakukan untuk reservasi yang sedang berlangsung.';
     }
 
-    final builder = await ApiClient.create('Reservation.getAll');
-    builder.addQuery('status', status.toLowerCase());
-
-    final response = await builder.get<List<Reservation>>(
-      fromJson: (json) => (json as List)
-          .map((item) => Reservation.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      errorMessage: 'Gagal memuat reservasi berdasarkan status',
-    );
-
-    return response.data ?? [];
-  }
-
-  /// Mendapatkan reservasi berdasarkan rentang tanggal
-  Future<List<Reservation>> getReservationsByDateRange({
-    required DateTime startDate,
-    required DateTime endDate,
-  }) async {
-    if (startDate.isAfter(endDate)) {
-      throw ValidationException(
-        'Tanggal mulai tidak boleh lebih besar dari tanggal selesai',
-      );
+    // Validasi: newEndTime harus lebih besar dari endTime saat ini
+    if (reservation.endTime != null &&
+        !newEndTime.isAfter(reservation.endTime!)) {
+      throw 'Waktu baru harus lebih besar dari waktu selesai saat ini';
     }
 
-    final builder = await ApiClient.create('Reservation.getAll');
-    builder.addQuery('startDate', startDate.toIso8601String());
-    builder.addQuery('endDate', endDate.toIso8601String());
+    // CRITICAL: CSP validation untuk waktu tambahan
+    // Pastikan tidak ada reservasi lain yang bentrok
+    final tempReservation = reservation.copyWith(endDateTime: newEndTime);
 
-    final response = await builder.get<List<Reservation>>(
-      fromJson: (json) => (json as List)
-          .map((item) => Reservation.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      errorMessage: 'Gagal memuat reservasi berdasarkan tanggal',
-    );
+    final cspResult = await validateReservationWithCSP(tempReservation);
 
-    return response.data ?? [];
-  }
+    if (!cspResult.isValid) {
+      String errorMessage = 'Tidak dapat memperpanjang waktu:\n\n';
 
-  /// Mendapatkan reservasi untuk ruangan tertentu
-  Future<List<Reservation>> getReservationsByRoom(String roomId) async {
-    if (roomId.isEmpty) {
-      throw ValidationException('ID ruangan tidak boleh kosong');
+      for (final violation in cspResult.violations) {
+        errorMessage += '• $violation\n';
+      }
+
+      // Calculate safe extension duration
+      if (reservation.endTime != null) {
+        final requestedExtension = newEndTime.difference(reservation.endTime!);
+        errorMessage +=
+            '\n\nPerpanjangan yang diminta: ${requestedExtension.inMinutes} menit';
+        errorMessage += '\nHarap periksa jadwal reservasi lain di ruangan ini.';
+      }
+
+      throw errorMessage.trim();
     }
 
-    final builder = await ApiClient.create('Reservation.getAll');
-    builder.addQuery('roomId', roomId);
+    // CSP passed, safe to extend
+    final extended = reservation.extend(newEndTime, reason);
+    extended.prepareForUpdate();
 
-    final response = await builder.get<List<Reservation>>(
-      fromJson: (json) => (json as List)
-          .map((item) => Reservation.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      errorMessage: 'Gagal memuat reservasi ruangan',
-    );
+    // Update ke Firestore
+    final client = await FirestoreClient.create(Reservation.collectionName);
+    await client.update(reservationId, extended.toFirestore());
 
-    return response.data ?? [];
-  }
-
-  /// Approve reservasi (hanya untuk admin)
-  Future<Reservation> approveReservation(
-    String id, {
-    String? approvalNote,
-  }) async {
-    if (id.isEmpty) {
-      throw ValidationException('ID reservasi tidak boleh kosong');
-    }
-
-    final body = <String, dynamic>{'status': 'approved'};
-    if (approvalNote != null && approvalNote.trim().isNotEmpty) {
-      body['approvalNote'] = approvalNote.trim();
-    }
-
-    final builder = await ApiClient.create('Reservation.update');
-    builder.addParameter('id', id);
-
-    final response = await builder.patch<Reservation>(
-      body: body,
-      fromJson: Reservation.fromJson,
-      errorMessage: 'Gagal menyetujui reservasi',
-    );
-
-    final data = response.data;
-
-    if (data == null) {
-      throw NotFoundException('Reservasi dengan ID $id tidak ditemukan');
-    }
-
-    return data;
-  }
-
-  /// Reject reservasi (hanya untuk admin)
-  Future<Reservation> rejectReservation(
-    String id, {
-    String? rejectionNote,
-  }) async {
-    if (id.isEmpty) {
-      throw ValidationException('ID reservasi tidak boleh kosong');
-    }
-
-    final body = <String, dynamic>{'status': 'rejected'};
-    if (rejectionNote != null && rejectionNote.trim().isNotEmpty) {
-      body['approvalNote'] = rejectionNote.trim();
-    }
-
-    final builder = await ApiClient.create('Reservation.update');
-    builder.addParameter('id', id);
-
-    final response = await builder.patch<Reservation>(
-      body: body,
-      fromJson: Reservation.fromJson,
-      errorMessage: 'Gagal menolak reservasi',
-    );
-
-    final data = response.data;
-
-    if (data == null) {
-      throw NotFoundException('Reservasi dengan ID $id tidak ditemukan');
-    }
-
-    return data;
+    return extended;
   }
 
   /// Validasi waktu reservasi
@@ -272,33 +770,80 @@ class ReservationService {
     required DateTime? endDateTime,
   }) {
     if (startDateTime == null || endDateTime == null) {
-      throw ValidationException('Waktu mulai dan selesai wajib diisi');
+      throw 'Waktu mulai dan selesai wajib diisi';
     }
 
     try {
       if (startDateTime.isAfter(endDateTime)) {
-        throw ValidationException(
-          'Waktu mulai tidak boleh lebih besar dari waktu selesai',
-        );
+        throw 'Waktu mulai tidak boleh lebih besar dari waktu selesai';
       }
 
       if (startDateTime.isBefore(DateTime.now())) {
-        throw ValidationException('Waktu mulai tidak boleh di masa lalu');
+        throw 'Waktu mulai tidak boleh di masa lalu';
       }
 
       // Minimal durasi 30 menit
       if (endDateTime.difference(startDateTime).inMinutes < 30) {
-        throw ValidationException('Durasi reservasi minimal 30 menit');
+        throw 'Durasi reservasi minimal 30 menit';
       }
 
       // Maksimal durasi 8 jam
       // if (endDateTime.difference(startDateTime).inHours > 8) {
-      //   throw ValidationException('Durasi reservasi maksimal 8 jam');
+      //   throw 'Durasi reservasi maksimal 8 jam';
       // }
     } catch (e) {
-      if (e is ValidationException) rethrow;
+      throw 'Format waktu tidak valid';
+    }
+  }
 
-      throw ValidationException('Format waktu tidak valid');
+  /// Mendapatkan jumlah reservasi berdasarkan status untuk user tertentu
+  Future<ReservationCount> getReservationCountByStatus({
+    required DocumentReference userId,
+  }) async {
+    try {
+      final client = await FirestoreClient.create(Reservation.collectionName);
+
+      Query<Map<String, dynamic>> query = client.getCollectionRef();
+      query = query.where('userId', isEqualTo: userId);
+      query = query.where(BaseFirestoreModel.deletedAtField, isNull: true);
+
+      final response = await query.get();
+
+      int activeCount = 0; // CONFIRMED, UPCOMING, ONGOING
+      int pendingCount = 0; // (No longer used - auto-confirmed)
+      int completedCount = 0; // COMPLETED
+
+      for (final doc in response.docs) {
+        if (!doc.exists) continue;
+
+        final data = doc.data();
+        final reservation = Reservation.fromFirestore(data, doc.id);
+
+        // Auto-update status if needed
+        final currentStatus = reservation.getComputedStatus();
+
+        switch (currentStatus) {
+          case ReservationStatus.confirmed:
+          case ReservationStatus.upcoming:
+          case ReservationStatus.ongoing:
+            activeCount++;
+            break;
+          case ReservationStatus.completed:
+            completedCount++;
+            break;
+          case ReservationStatus.cancelled:
+            // Don't count cancelled reservations
+            break;
+        }
+      }
+
+      return ReservationCount(
+        active: activeCount,
+        pending: pendingCount, // Always 0 (auto-confirm system)
+        completed: completedCount,
+      );
+    } catch (e) {
+      throw 'Gagal mengambil statistik reservasi: ${e.toString()}';
     }
   }
 }

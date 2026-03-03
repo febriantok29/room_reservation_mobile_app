@@ -1,130 +1,419 @@
-import 'package:room_reservation_mobile_app/app/core/network/api_client.dart';
-import 'package:room_reservation_mobile_app/app/exceptions/exceptions.dart';
-import 'package:room_reservation_mobile_app/app/models/api_response.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+import 'package:room_reservation_mobile_app/app/core/config/app_feature_flags.dart';
+import 'package:room_reservation_mobile_app/app/core/firestore/firestore_client.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
+import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
+import 'package:room_reservation_mobile_app/app/services/room_api_service.dart';
 
-/// Service untuk mengelola operasi terkait ruangan
 class RoomService {
+  static final _cachedRooms = <Room>[];
+  static final RoomApiService _roomApiService = RoomApiService();
+
   static RoomService? _instance;
 
   RoomService._();
 
-  /// Singleton instance
   static RoomService getInstance() {
     _instance ??= RoomService._();
     return _instance!;
   }
 
-  /// Mendapatkan semua ruangan
-  Future<List<Room>> getAllRoom() async {
-    final builder = await ApiClient.create('Room.getAll');
-    final response = await builder.get<List<Room>>(
-      fromJson: (json) => (json as List)
-          .map((item) => Room.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      errorMessage: 'Gagal memuat data ruangan',
-    );
+  Future<List<Room>> getRoomList({
+    bool showDeleted = false,
+    bool showMaintenance = true,
+    String? searchKeyword,
+    List<String>? facilityIds,
+    bool forceRefresh = false,
+  }) async {
+    if (AppFeatureFlags.useApi) {
+      final apiRooms = await _roomApiService.getRoomList(
+        search: searchKeyword,
+        availableOnly: showMaintenance ? null : true,
+      );
 
-    return response.data ?? [];
-  }
-
-  /// Mendapatkan ruangan berdasarkan ID
-  Future<Room> getRoomById(String id) async {
-    if (id.isEmpty) {
-      throw ValidationException('ID ruangan tidak boleh kosong');
+      if (forceRefresh || _cachedRooms.isEmpty) {
+        _replaceCache(apiRooms);
+      }
     }
 
-    final builder = await ApiClient.create('Room.getById');
-    builder.addParameter('id', id);
+    // Fetch dari Firestore jika:
+    // 1. Cache kosong, ATAU
+    // 2. forceRefresh = true, ATAU
+    // 3. ensureFullCache = true tapi cache belum lengkap
+    if (!AppFeatureFlags.useApi && (_cachedRooms.isEmpty || forceRefresh)) {
+      final client = await FirestoreClient.create(Room.collectionName);
 
-    final response = await builder.get<Room>(
-      fromJson: Room.fromJson,
-      errorMessage: 'Gagal memuat detail ruangan',
-    );
+      final response = await client.getAll();
 
-    final data = response.data;
+      final docs = response.docs;
 
-    if (data == null) {
-      throw NotFoundException('Ruangan dengan ID $id tidak ditemukan');
+      // Clear cache jika force refresh
+      if (forceRefresh && _cachedRooms.isNotEmpty) {
+        _cachedRooms.clear();
+      }
+
+      for (final doc in docs) {
+        if (!doc.exists) continue;
+
+        final data = doc.data();
+
+        final room = Room.fromFirestore(data, doc.id);
+
+        // Cek apakah room sudah ada di cache (by ID)
+        final existingIndex = _cachedRooms.indexWhere((r) => r.id == room.id);
+
+        if (existingIndex >= 0) {
+          // Update room yang sudah ada
+          _cachedRooms[existingIndex] = room;
+        } else {
+          // Tambah room baru
+          _cachedRooms.add(room);
+        }
+      }
     }
 
-    return data;
+    final result = <Room>[];
+    final keyword = searchKeyword?.trim().toLowerCase();
+
+    for (final room in _cachedRooms) {
+      if (!showDeleted && room.isDeleted) {
+        continue;
+      }
+
+      if (!showMaintenance && room.isMaintenance == true) {
+        continue;
+      }
+
+      if (keyword != null && keyword.isNotEmpty) {
+        final name = room.name?.toLowerCase() ?? '';
+        final location = room.location?.toLowerCase() ?? '';
+        final description = room.description?.toLowerCase() ?? '';
+
+        if (!name.contains(keyword) &&
+            !location.contains(keyword) &&
+            !description.contains(keyword)) {
+          continue;
+        }
+      }
+
+      // Filter berdasarkan fasilitas (AND logic)
+      if (facilityIds != null && facilityIds.isNotEmpty) {
+        if (room.facilityIds == null || room.facilityIds!.isEmpty) {
+          continue;
+        }
+
+        // Room harus punya SEMUA fasilitas yang dipilih
+        final hasAllFacilities = facilityIds.every(
+          (selectedId) => room.facilityIds!.contains(selectedId),
+        );
+
+        if (!hasAllFacilities) {
+          continue;
+        }
+      }
+
+      result.add(room);
+    }
+
+    return result;
   }
 
-  /// Mendapatkan ruangan yang tersedia pada rentang waktu tertentu
-  Future<ApiResponse<List<Room>>> getRawAvailableRoom({
+  Future<List<Room>> getByIds(Set<String> ids) async {
+    if (ids.isEmpty) {
+      return [];
+    }
+
+    final cachedRooms = _cachedRooms
+        .where((room) => ids.contains(room.id))
+        .toList();
+
+    if (cachedRooms.length == ids.length) {
+      return cachedRooms;
+    }
+
+    final unCachedIds = ids
+        .difference(cachedRooms.map((e) => e.id).toSet())
+        .toList();
+
+    if (unCachedIds.isEmpty) {
+      return cachedRooms;
+    }
+
+    if (AppFeatureFlags.useApi) {
+      await getRoomList(forceRefresh: false);
+
+      final rooms = _cachedRooms
+          .where((room) => ids.contains(room.id))
+          .toList();
+      return rooms;
+    }
+
+    final client = await FirestoreClient.create(Room.collectionName);
+    final snapshot = await client.query(
+      field: FieldPath.documentId,
+      whereIn: unCachedIds,
+    );
+
+    final fetchedRooms = <Room>[];
+
+    for (final doc in snapshot.docs) {
+      if (!doc.exists) continue;
+
+      final data = doc.data();
+      final room = Room.fromFirestore(data, doc.id);
+
+      fetchedRooms.add(room);
+      _updateCache(room);
+    }
+
+    return [...cachedRooms, ...fetchedRooms];
+  }
+
+  Future<Room?> getRoomByDoc(
+    DocumentReference roomRef, {
+    bool forceRefresh = false,
+  }) async {
+    final roomId = roomRef.id;
+
+    if (AppFeatureFlags.useApi) {
+      if (!forceRefresh) {
+        final cachedRoom = _cachedRooms.where((room) => room.id == roomId);
+        if (cachedRoom.isNotEmpty) {
+          return cachedRoom.first;
+        }
+      }
+
+      try {
+        final room = await _roomApiService.getRoomDetail(roomId);
+        _updateCache(room);
+        return room;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    if (roomId.isEmpty) {
+      return null;
+    }
+
+    if (!forceRefresh) {
+      final cachedRoom = _cachedRooms.where((room) => room.id == roomId);
+
+      if (cachedRoom.isNotEmpty) {
+        return cachedRoom.first;
+      }
+    }
+
+    try {
+      final client = await FirestoreClient.create(Room.collectionName);
+      final doc = await client.get(roomId);
+
+      if (doc.exists) {
+        final data = doc.data() ?? {};
+        final room = Room.fromFirestore(data, doc.id);
+
+        _updateCache(room);
+
+        return room;
+      }
+    } catch (e) {
+      debugPrint('Error fetching room from Firestore: $e');
+
+      return null;
+    }
+
+    return null;
+  }
+
+  Future<List<Room>> getAvailableRoom({
     required DateTime start,
     required DateTime end,
-    int page = 1,
-    int? limit,
+    String? searchKeyword,
+    List<String>? facilityIds,
+    bool forceRefresh = false,
   }) async {
-    // Validasi format waktu
     try {
       if (start.isAfter(end)) {
-        throw ValidationException(
-          'Waktu mulai tidak boleh lebih besar dari waktu selesai',
-        );
+        throw 'Waktu mulai tidak boleh lebih besar dari waktu selesai';
       }
 
-      // Compare dates up to minutes for more accurate validation
-      final now = DateTime.now();
-      final currentTime = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        now.hour,
-        now.minute,
-      );
-      final startCompare = DateTime(
-        start.year,
-        start.month,
-        start.day,
-        start.hour,
-        start.minute,
-      );
+      await getRoomList(showMaintenance: false, forceRefresh: forceRefresh);
 
-      if (startCompare.isBefore(currentTime)) {
-        throw ValidationException('Waktu mulai tidak boleh di masa lalu');
+      final reservationService = ReservationService.getInstance();
+
+      // Ambil reservasi yang OVERLAP dengan waktu yang dicari
+      final overlappingReservations = await reservationService
+          .getReservationList(
+            startDate: start,
+            endDate: end,
+            checkOverlap: true,
+          );
+
+      // Dapatkan ID ruangan yang sudah direservasi (overlap dengan waktu yang dicari)
+      final reservedRoomIds = overlappingReservations
+          .where((reservation) => reservation.roomRef != null)
+          .map((reservation) => reservation.roomRef!.id)
+          .toSet();
+
+      // Ambil dari cache (yang sudah lengkap berkat getRoomList di atas)
+      final allRooms = _cachedRooms
+          .where((room) => !room.isDeleted && room.isMaintenance != true)
+          .toList();
+
+      // Filter: ambil ruangan yang TIDAK ada di reservedRoomIds
+      List<Room> availableRooms = allRooms.where((room) {
+        // Skip jika ruangan ada dalam daftar yang sudah direservasi
+        if (reservedRoomIds.contains(room.id)) return false;
+
+        return true;
+      }).toList();
+
+      // Filter dengan searchKeyword jika ada
+      if (searchKeyword != null && searchKeyword.trim().isNotEmpty) {
+        final keyword = searchKeyword.trim().toLowerCase();
+
+        availableRooms = availableRooms.where((room) {
+          final name = room.name?.toLowerCase() ?? '';
+          final location = room.location?.toLowerCase() ?? '';
+          final description = room.description?.toLowerCase() ?? '';
+
+          return name.contains(keyword) ||
+              location.contains(keyword) ||
+              description.contains(keyword);
+        }).toList();
       }
 
-      final builder = await ApiClient.create('Room.getAvailable');
-      builder
-          .addQuery('startDate', start.toIso8601String())
-          .addQuery('endDate', end.toIso8601String());
+      // Filter berdasarkan fasilitas (AND logic)
+      if (facilityIds != null && facilityIds.isNotEmpty) {
+        availableRooms = availableRooms.where((room) {
+          if (room.facilityIds == null || room.facilityIds!.isEmpty) {
+            return false;
+          }
 
-      if (limit != null) {
-        builder.addQuery('limit', '$limit');
+          // Room harus punya SEMUA fasilitas yang dipilih
+          return facilityIds.every(
+            (selectedId) => room.facilityIds!.contains(selectedId),
+          );
+        }).toList();
       }
 
-      builder.addQuery('page', '$page');
-
-      return builder.get<List<Room>>(
-        fromJson: (json) => (json as List)
-            .map((item) => Room.fromJson(item as Map<String, dynamic>))
-            .toList(),
-      );
-    } catch (e) {
-      if (e is ValidationException) rethrow;
-      throw ValidationException('Format waktu tidak valid');
+      return availableRooms;
+    } catch (_) {
+      rethrow;
     }
   }
 
-  /// Cari ruangan berdasarkan keyword
-  Future<List<Room>> searchRooms(String keyword) async {
-    if (keyword.trim().isEmpty) {
-      return await getAllRoom();
+  Future<Room> createRoom(Room room) async {
+    if (AppFeatureFlags.useApi) {
+      throw 'Mode API saat ini read-only untuk room. Operasi create belum diaktifkan.';
     }
 
-    final builder = await ApiClient.create('Room.getAll');
-    builder.addQuery('search', keyword.trim());
+    final client = await FirestoreClient.create(Room.collectionName);
 
-    final response = await builder.get<List<Room>>(
-      fromJson: (json) => (json as List)
-          .map((item) => Room.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      errorMessage: 'Gagal mencari ruangan',
+    room.prepareForCreate();
+    final payload = room.toFirestore();
+
+    final doc = await client.add(payload);
+
+    final createdRoom = Room.fromFirestore(payload, doc.id);
+
+    _updateCache(createdRoom);
+
+    return createdRoom;
+  }
+
+  Future<Room> updateRoom(Room room) async {
+    if (AppFeatureFlags.useApi) {
+      throw 'Mode API saat ini read-only untuk room. Operasi update belum diaktifkan.';
+    }
+
+    if (room.id == null) {
+      throw 'Silakan pilih ruangan yang akan diperbarui terlebih dahulu';
+    }
+
+    final client = await FirestoreClient.create(Room.collectionName);
+
+    room.prepareForUpdate();
+    final payload = room.toFirestore();
+
+    await client.update(room.id!, payload);
+
+    _updateCache(room);
+
+    return room;
+  }
+
+  Future<void> deleteRoom(Room room) async {
+    if (AppFeatureFlags.useApi) {
+      throw 'Mode API saat ini read-only untuk room. Operasi delete belum diaktifkan.';
+    }
+
+    if (room.id == null) {
+      throw 'Silakan pilih ruangan yang akan dihapus terlebih dahulu';
+    }
+
+    final client = await FirestoreClient.create(Room.collectionName);
+
+    room.markAsDeleted();
+    final payload = room.toFirestore();
+
+    await client.update(room.id!, payload);
+
+    _updateCache(room);
+  }
+
+  Future<void> permanentDeleteRoom(String roomId) async {
+    if (AppFeatureFlags.useApi) {
+      throw 'Mode API saat ini read-only untuk room. Operasi delete permanen belum diaktifkan.';
+    }
+
+    if (roomId.isEmpty) {
+      throw 'ID ruangan tidak boleh kosong';
+    }
+
+    final client = await FirestoreClient.create(Room.collectionName);
+
+    await client.delete(roomId);
+
+    _removeFromCache(roomId);
+  }
+
+  Future<List<Room>> refreshCache() {
+    return getRoomList(forceRefresh: true);
+  }
+
+  void _removeFromCache(String roomId) {
+    _cachedRooms.removeWhere((room) => room.id == roomId);
+    // Tidak reset _isFullyCached karena hanya remove 1 item
+  }
+
+  void _updateCache(Room room) {
+    if (room.id == null) return;
+
+    final index = _cachedRooms.indexWhere((r) => r.id == room.id);
+
+    if (index >= 0) {
+      _cachedRooms[index] = room;
+    } else {
+      _cachedRooms.add(room);
+    }
+  }
+
+  void _replaceCache(List<Room> rooms) {
+    _cachedRooms
+      ..clear()
+      ..addAll(rooms);
+  }
+
+  /// Mendapatkan jumlah ruangan yang tersedia (tidak maintenance, tidak deleted)
+  Future<int> getAvailableRoomCount({bool forceRefresh = false}) async {
+    final rooms = await getRoomList(
+      showDeleted: false,
+      showMaintenance: false,
+      forceRefresh: forceRefresh,
     );
 
-    return response.data ?? [];
+    return rooms.where((room) => room.isMaintenance != true).length;
   }
 }
