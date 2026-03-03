@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/models/room_facility.dart';
+import 'package:room_reservation_mobile_app/app/providers/room_providers.dart';
 import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 import 'package:room_reservation_mobile_app/app/services/room_facility_service.dart';
 import 'package:room_reservation_mobile_app/app/ui_items/room_facility_filter.dart';
 import 'package:room_reservation_mobile_app/app/ui_items/room_facility_chips.dart';
 
-class RoomSelectorSection extends StatefulWidget {
+class RoomSelectorSection extends ConsumerStatefulWidget {
   final DateTime? startDateTime;
   final DateTime? endDateTime;
   final String? selectedRoomId;
@@ -20,7 +22,8 @@ class RoomSelectorSection extends StatefulWidget {
   });
 
   @override
-  State<RoomSelectorSection> createState() => _RoomSelectorSectionState();
+  ConsumerState<RoomSelectorSection> createState() =>
+      _RoomSelectorSectionState();
 
   /// Menampilkan bottom sheet untuk memilih ruangan
   static Future<Room?> showBottomSheet({
@@ -65,7 +68,7 @@ class RoomSelectorSection extends StatefulWidget {
   }
 }
 
-class _RoomSelectorSectionState extends State<RoomSelectorSection> {
+class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
   final _roomService = RoomService.getInstance();
   final _facilityService = RoomFacilityService.getInstance();
   final _searchController = TextEditingController();
@@ -73,13 +76,19 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
   String _searchKeyword = '';
   List<String> _selectedFacilityIds = [];
   List<RoomFacility> _availableFacilities = [];
-  late Future<List<Room>> _roomsFuture;
+  Future<List<Room>>? _roomsFuture;
+  int _refreshNonce = 0;
   Timer? _debounceTimer;
+
+  bool get _isTimeBasedQuery =>
+      widget.startDateTime != null && widget.endDateTime != null;
 
   @override
   void initState() {
     super.initState();
-    _roomsFuture = _loadRooms();
+    if (_isTimeBasedQuery) {
+      _roomsFuture = _loadRooms();
+    }
     _loadFacilities();
   }
 
@@ -155,7 +164,9 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
     _debounceTimer = Timer(const Duration(seconds: 1), () {
       setState(() {
         _searchKeyword = value;
-        _roomsFuture = _loadRooms();
+        if (_isTimeBasedQuery) {
+          _roomsFuture = _loadRooms();
+        }
       });
     });
   }
@@ -164,16 +175,36 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
   void _onFacilityFilterChanged(List<String> selectedIds) {
     setState(() {
       _selectedFacilityIds = selectedIds;
-      _roomsFuture = _loadRooms();
+      if (_isTimeBasedQuery) {
+        _roomsFuture = _loadRooms();
+      }
     });
   }
 
   /// Handle pull to refresh
   Future<void> _onRefresh() async {
     setState(() {
-      _roomsFuture = _loadRooms(forceRefresh: true);
+      if (_isTimeBasedQuery) {
+        _roomsFuture = _loadRooms(forceRefresh: true);
+      } else {
+        _refreshNonce++;
+      }
     });
-    await Future.wait([_roomsFuture, _loadFacilities(forceRefresh: true)]);
+
+    if (!_isTimeBasedQuery) {
+      ref.invalidate(
+        roomListByQueryProvider(
+          RoomListQuery(
+            showDeleted: false,
+            showMaintenance: false,
+            searchKeyword: _searchKeyword,
+            forceRefresh: true,
+          ),
+        ),
+      );
+    }
+
+    await _loadFacilities(forceRefresh: true);
   }
 
   @override
@@ -203,6 +234,56 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
   }
 
   Widget _buildContent() {
+    if (!_isTimeBasedQuery) {
+      final query = RoomListQuery(
+        showDeleted: false,
+        showMaintenance: false,
+        searchKeyword: _searchKeyword,
+        forceRefresh: _refreshNonce > 0,
+      );
+
+      final roomState = ref.watch(roomListByQueryProvider(query));
+
+      return RefreshIndicator(
+        onRefresh: _onRefresh,
+        child: roomState.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stack) => _buildRefreshableState(
+            icon: Icons.error_outline,
+            iconColor: Colors.red.shade300,
+            message: error.toString(),
+            messageColor: Colors.red.shade700,
+          ),
+          data: (rooms) {
+            if (_refreshNonce > 0) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _refreshNonce = 0;
+                  });
+                }
+              });
+            }
+
+            final filteredRooms = _filterByFacilities(rooms);
+
+            if (filteredRooms.isEmpty) {
+              return _buildRefreshableState(
+                icon: Icons.meeting_room_outlined,
+                iconColor: Colors.grey.shade400,
+                message: _searchKeyword.isNotEmpty
+                    ? 'Tidak ada ruangan dengan kata kunci "$_searchKeyword"'
+                    : 'Tidak ada ruangan tersedia',
+                messageColor: Colors.grey.shade600,
+              );
+            }
+
+            return _buildRoomList(filteredRooms);
+          },
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: _onRefresh,
       child: FutureBuilder<List<Room>>(
@@ -238,6 +319,22 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
         },
       ),
     );
+  }
+
+  List<Room> _filterByFacilities(List<Room> rooms) {
+    if (_selectedFacilityIds.isEmpty) {
+      return rooms;
+    }
+
+    return rooms.where((room) {
+      final roomFacilities = room.facilityIds;
+
+      if (roomFacilities == null || roomFacilities.isEmpty) {
+        return false;
+      }
+
+      return _selectedFacilityIds.every(roomFacilities.contains);
+    }).toList();
   }
 
   /// Widget search field
