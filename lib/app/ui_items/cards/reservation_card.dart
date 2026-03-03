@@ -9,6 +9,7 @@ class ReservationCard extends StatelessWidget {
   final Reservation reservation;
   final Profile user;
   final ReservationService service;
+  final bool readOnly;
   final Function()? onDeleteCompleted;
 
   const ReservationCard({
@@ -16,6 +17,7 @@ class ReservationCard extends StatelessWidget {
     required this.reservation,
     required this.user,
     required this.service,
+    this.readOnly = false,
     this.onDeleteCompleted,
   });
 
@@ -31,6 +33,10 @@ class ReservationCard extends StatelessWidget {
         onTap: () =>
             _showReservationDetail(reservation: reservation, context: context),
         onLongPress: () {
+          if (readOnly) {
+            return;
+          }
+
           // Long press untuk aksi cepat (cancel)
           if (currentStatus.canBeCancelled) {
             _cancelReservation(reservation: reservation, context: context);
@@ -222,7 +228,7 @@ class ReservationCard extends StatelessWidget {
               ],
 
               // Tombol aksi (jika status memungkinkan)
-              if (currentStatus.canBeCancelled) ...[
+              if (!readOnly && currentStatus.canBeCancelled) ...[
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,

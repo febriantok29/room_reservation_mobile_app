@@ -42,7 +42,7 @@ class RoomFacilityChips extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(
           context,
-        ).colorScheme.secondaryContainer.withOpacity(0.5),
+        ).colorScheme.secondaryContainer.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
