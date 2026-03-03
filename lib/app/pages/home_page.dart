@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:room_reservation_mobile_app/app/models/home_statistics.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation_count.dart';
+import 'package:room_reservation_mobile_app/app/pages/admin/database_viewer_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/calendar/calendar_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/login_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/reservation_list_page.dart';
@@ -9,17 +11,17 @@ import 'package:room_reservation_mobile_app/app/pages/room/room_list_page.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 import 'package:room_reservation_mobile_app/app/services/user_service.dart';
-import 'package:room_reservation_mobile_app/app/states/auth_state.dart';
+import 'package:room_reservation_mobile_app/app/providers/auth_providers.dart';
 import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
 
-class HomePage extends StatefulWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends ConsumerState<HomePage> {
   final _now = DateTime.now();
   final _roomService = RoomService.getInstance();
   final _reservationService = ReservationService.getInstance();
@@ -34,7 +36,7 @@ class _HomePageState extends State<HomePage> {
 
   /// Load semua statistik yang diperlukan
   Future<HomeStatistics> _loadStatistics({bool forceRefresh = false}) async {
-    final user = AuthState.currentUser;
+    final user = ref.read(authSessionProvider).valueOrNull;
     if (user?.reference == null) {
       return HomeStatistics.empty();
     }
@@ -72,7 +74,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final user = AuthState.currentUser;
+    final user = ref.watch(authSessionProvider).valueOrNull;
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
@@ -440,9 +442,25 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(width: 12),
-            Expanded(
-              child: Container(), // Placeholder untuk simetri
-            ),
+            if (user.isAdmin)
+              Expanded(
+                child: _buildActionCard(
+                  icon: Icons.storage,
+                  iconColor: Colors.red,
+                  label: 'Database Viewer',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => DatabaseViewerPage(user: user),
+                      ),
+                    );
+                  },
+                ),
+              )
+            else
+              Expanded(
+                child: Container(), // Placeholder untuk simetri
+              ),
           ],
         ),
       ],
@@ -556,7 +574,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _doLogout() async {
-    await AuthState.logout();
+    await ref.read(authSessionProvider.notifier).logout();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
