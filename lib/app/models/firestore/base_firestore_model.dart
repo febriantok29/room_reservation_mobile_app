@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:room_reservation_mobile_app/app/core/session/session_user_context.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/states/auth_state.dart';
 import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
 
 abstract class BaseFirestoreModel {
@@ -113,7 +113,7 @@ abstract class BaseFirestoreModel {
   }
 
   void prepareForCreate() {
-    createdBy = AuthState.currentUser?.reference;
+    createdBy = SessionUserContext.currentUser?.reference;
     createdAt = DateTime.now();
   }
 
@@ -122,7 +122,7 @@ abstract class BaseFirestoreModel {
       throw 'Cannot prepare for update: Document ID is null';
     }
 
-    updatedBy = AuthState.currentUser?.reference;
+    updatedBy = SessionUserContext.currentUser?.reference;
     updatedAt = DateTime.now();
   }
 
@@ -131,7 +131,7 @@ abstract class BaseFirestoreModel {
       throw 'Cannot mark as deleted: Document ID is null';
     }
 
-    deletedBy = AuthState.currentUser?.reference;
+    deletedBy = SessionUserContext.currentUser?.reference;
     deletedAt = DateTime.now();
   }
 }

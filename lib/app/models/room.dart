@@ -39,23 +39,65 @@ class Room extends BaseFirestoreModel {
       return Room();
     }
 
+    final rawFacilityIds = json['facilityIds'] ?? json['facility_ids'];
+
+    List<String>? facilityIds;
+
+    if (rawFacilityIds is List) {
+      facilityIds = rawFacilityIds
+          .map((item) {
+            if (item is Map<String, dynamic>) {
+              return item['id']?.toString();
+            }
+
+            return item?.toString();
+          })
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toList();
+    }
+
+    final isMaintenanceValue =
+        json['isMaintenance'] ?? json['is_maintenance'] ?? false;
+
+    final locationValue =
+        json['location'] ?? _mapFloorToLocation(json['floor']);
+
     return Room(
       id: json['id'],
       name: json['name'],
       capacity: json['capacity'],
-      location: json['location'],
+      location: locationValue,
       description: json['description'],
-      isMaintenance: json['isMaintenance'],
-      facilityIds: json['facilityIds'] != null
-          ? List<String>.from(json['facilityIds'])
-          : null,
+      isMaintenance: isMaintenanceValue == true,
+      facilityIds: facilityIds,
       createdBy: json['createdBy'],
       updatedBy: json['updatedBy'],
       deletedBy: json['deletedBy'],
-      createdAt: DateTime.tryParse('${json['createdAt']}')?.toLocal(),
-      updatedAt: DateTime.tryParse('${json['updatedAt']}')?.toLocal(),
-      deletedAt: DateTime.tryParse('${json['deletedAt']}')?.toLocal(),
+      createdAt: DateTime.tryParse(
+        '${json['createdAt'] ?? json['created_at']}',
+      )?.toLocal(),
+      updatedAt: DateTime.tryParse(
+        '${json['updatedAt'] ?? json['updated_at']}',
+      )?.toLocal(),
+      deletedAt: DateTime.tryParse(
+        '${json['deletedAt'] ?? json['deleted_at']}',
+      )?.toLocal(),
     );
+  }
+
+  static String? _mapFloorToLocation(dynamic floorValue) {
+    if (floorValue == null) {
+      return null;
+    }
+
+    final floor = num.tryParse('$floorValue');
+
+    if (floor == null) {
+      return null;
+    }
+
+    return 'Lantai ${floor.toInt()}';
   }
 
   String get imageUrl {
