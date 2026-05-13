@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 /// Utility class untuk format tanggal yang readable
@@ -8,9 +7,7 @@ class DateFormatter {
 
     DateTime? result;
 
-    if (timestamp is Timestamp) {
-      result = timestamp.toDate();
-    } else if (timestamp is int) {
+    if (timestamp is int) {
       result = DateTime.fromMillisecondsSinceEpoch(timestamp);
     } else {
       result = DateTime.tryParse('$timestamp');
