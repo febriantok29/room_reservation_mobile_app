@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:room_reservation_mobile_app/app/providers/auth_providers.dart';
 import 'package:room_reservation_mobile_app/app/theme/app_colors.dart';
@@ -60,7 +61,9 @@ class _SplashPageState extends ConsumerState<SplashPage>
   /// Mengecek status autentikasi dan mengarahkan pengguna
   Future<void> _checkAuthStatus() async {
     try {
-      await Future.delayed(const Duration(seconds: 2));
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp
+      ]);
 
       final profile = await ref.read(authSessionProvider.notifier).bootstrap();
       final isLoggedIn = profile != null;
