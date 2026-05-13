@@ -2,13 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:room_reservation_mobile_app/app/core/config/app_feature_flags.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/pages/room/room_list_modal_bottom_sheet.dart';
 import 'package:room_reservation_mobile_app/app/providers/room_providers.dart';
-import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 
 class RoomListPage extends ConsumerStatefulWidget {
   final Profile user;
@@ -22,18 +18,13 @@ class RoomListPage extends ConsumerStatefulWidget {
 class _RoomListPageState extends ConsumerState<RoomListPage> {
   final _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
 
-  final _roomService = RoomService.getInstance();
-
   // State untuk filter
-  bool _showAll = false;
   String _searchKeyword = '';
   final _searchController = TextEditingController();
   int _refreshNonce = 0;
 
   // Debounce timer untuk pencarian
   Timer? _debounceTimer;
-
-  bool get _canMutateRoom => widget.user.isAdmin && !AppFeatureFlags.useApi;
 
   @override
   void initState() {
@@ -82,17 +73,12 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
           _loadRooms(forceRefresh: true);
           ref.invalidate(
             roomListByQueryProvider(
-              RoomListQuery(
-                showDeleted: _showAll,
-                searchKeyword: _searchKeyword,
-                forceRefresh: true,
-              ),
+              RoomListQuery(searchKeyword: _searchKeyword, forceRefresh: true),
             ),
           );
         },
         child: Scaffold(
           appBar: AppBar(title: const Text('Daftar Ruangan Meeting')),
-          floatingActionButton: _addRoomButton(),
           body: Column(children: [_buildFilterSection(), _buildContent()]),
         ),
       ),
@@ -131,25 +117,6 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
       ),
     ];
 
-    // Filter untuk admin
-    if (_canMutateRoom) {
-      filter.add(
-        Row(
-          children: [
-            const Expanded(child: Text('Lihat semua ruangan')),
-            Switch(
-              value: _showAll,
-              onChanged: (_) {
-                setState(() {
-                  _showAll = !_showAll;
-                });
-              },
-            ),
-          ],
-        ),
-      );
-    }
-
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
       color: Colors.grey[200],
@@ -159,7 +126,6 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
 
   Widget _buildContent() {
     final query = RoomListQuery(
-      showDeleted: _showAll,
       searchKeyword: _searchKeyword,
       forceRefresh: _refreshNonce > 0,
     );
@@ -227,32 +193,6 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
               final room = data[index];
 
               Widget card = _buildCard(room);
-
-              if (_canMutateRoom) {
-                card = Slidable(
-                  key: ValueKey(room.id),
-                  endActionPane: ActionPane(
-                    motion: const ScrollMotion(),
-                    children: [
-                      SlidableAction(
-                        onPressed: (_) => _showRoomBottomSheet(room),
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        icon: Icons.edit,
-                        label: 'Edit',
-                      ),
-                      SlidableAction(
-                        onPressed: (_) => _confirmDeleteRoom(room),
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        icon: Icons.delete,
-                        label: 'Hapus',
-                      ),
-                    ],
-                  ),
-                  child: card,
-                );
-              }
 
               final isLast = index == data.length - 1;
               if (isLast) {
@@ -324,7 +264,7 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
                   // Lokasi
                   _buildRoomInfoRow(
                     icon: Icons.location_on,
-                    value: room.location ?? '-',
+                    value: room.location,
                   ),
                   const SizedBox(height: 4),
 
@@ -433,109 +373,5 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
         ),
       ),
     );
-  }
-
-  Widget? _addRoomButton() {
-    if (!_canMutateRoom) {
-      return null;
-    }
-
-    return FloatingActionButton(
-      onPressed: () => _showRoomBottomSheet(),
-      tooltip: 'Tambah Ruangan',
-      child: const Icon(Icons.add, color: Colors.white),
-    );
-  }
-
-  /// Menampilkan bottom sheet untuk tambah/edit ruangan
-  /// Menggunakan widget RoomListModalBottomSheet yang sudah direfaktor
-  void _showRoomBottomSheet([Room? room]) async {
-    // Menggunakan factory method static untuk menampilkan bottom sheet
-    final bool? needRefresh = await RoomListModalBottomSheet.show(
-      context: context,
-      user: widget.user,
-      room: room,
-      onSuccess: null,
-    );
-
-    // Refresh daftar ruangan jika berhasil menambahkan/mengubah ruangan
-    if (needRefresh == true) {
-      _loadRooms(forceRefresh: true);
-      ref.invalidate(
-        roomListByQueryProvider(
-          RoomListQuery(
-            showDeleted: _showAll,
-            searchKeyword: _searchKeyword,
-            forceRefresh: true,
-          ),
-        ),
-      );
-    }
-  }
-
-  /// Menampilkan konfirmasi sebelum menghapus ruangan
-  void _confirmDeleteRoom(Room room) async {
-    bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Konfirmasi Hapus'),
-        content: Text(
-          'Apakah Anda yakin ingin menghapus ruangan "${room.name}"?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('BATAL'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('HAPUS', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      try {
-        // Hapus ruangan (soft delete)
-        await _roomService.deleteRoom(room);
-
-        // Reload daftar ruangan
-        _loadRooms(forceRefresh: true);
-        ref.invalidate(
-          roomListByQueryProvider(
-            RoomListQuery(
-              showDeleted: _showAll,
-              searchKeyword: _searchKeyword,
-              forceRefresh: true,
-            ),
-          ),
-        );
-
-        if (!mounted) {
-          return;
-        }
-
-        // Tampilkan snackbar
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ruangan ${room.name} berhasil dihapus'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } catch (e) {
-        if (!mounted) {
-          return;
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal menghapus ruangan: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 }
