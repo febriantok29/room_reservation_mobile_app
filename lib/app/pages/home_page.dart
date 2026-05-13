@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:room_reservation_mobile_app/app/models/home_statistics.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/models/reservation_count.dart';
-import 'package:room_reservation_mobile_app/app/pages/admin/database_viewer_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/calendar/calendar_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/login_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/reservation_list_page.dart';
 import 'package:room_reservation_mobile_app/app/pages/room/room_list_page.dart';
-import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
-import 'package:room_reservation_mobile_app/app/services/room_service.dart';
-import 'package:room_reservation_mobile_app/app/services/user_service.dart';
 import 'package:room_reservation_mobile_app/app/providers/auth_providers.dart';
+import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
+import 'package:room_reservation_mobile_app/app/providers/reservation_providers.dart';
+import 'package:room_reservation_mobile_app/app/providers/room_providers.dart';
 import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -23,54 +20,6 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage> {
   final _now = DateTime.now();
-  final _roomService = RoomService.getInstance();
-  final _reservationService = ReservationService.getInstance();
-
-  late Future<HomeStatistics> _statisticsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _statisticsFuture = _loadStatistics();
-  }
-
-  /// Load semua statistik yang diperlukan
-  Future<HomeStatistics> _loadStatistics({bool forceRefresh = false}) async {
-    final user = ref.read(authSessionProvider).valueOrNull;
-    if (user?.reference == null) {
-      return HomeStatistics.empty();
-    }
-
-    try {
-      // Fetch data secara parallel
-      final results = await Future.wait([
-        _roomService.getAvailableRoomCount(forceRefresh: forceRefresh),
-        _reservationService.getReservationCountByStatus(
-          userId: user!.reference!,
-        ),
-      ]);
-
-      final availableRooms = results[0] as int;
-      final reservationCount = results[1] as ReservationCount;
-
-      return HomeStatistics(
-        availableRooms: availableRooms,
-        activeReservations: reservationCount.active,
-        pendingReservations: reservationCount.pending,
-        completedReservations: reservationCount.completed,
-      );
-    } catch (e) {
-      throw 'Gagal memuat statistik: ${e.toString()}';
-    }
-  }
-
-  /// Handle pull to refresh
-  Future<void> _onRefresh() async {
-    setState(() {
-      _statisticsFuture = _loadStatistics(forceRefresh: true);
-    });
-    await _statisticsFuture;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,27 +38,20 @@ class _HomePageState extends ConsumerState<HomePage> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _onRefresh,
+        onRefresh: () async {
+          ref.invalidate(roomListByQueryProvider(const RoomListQuery()));
+          ref.invalidate(
+            reservationListByQueryProvider(ReservationListQuery(user: user!)),
+          );
+        },
         child: ListView(
           padding: const EdgeInsets.all(16.0),
           children: [
             _buildUserHeader(user),
             const SizedBox(height: 24),
-            _buildStatisticsSection(),
+            _buildStatisticsSection(user),
             const SizedBox(height: 24),
             _buildQuickActionsSection(user),
-            const SizedBox(height: 24),
-            // Tombol Generate Users (hanya untuk development/admin)
-            if (user?.isAdmin == true) ...[
-              ElevatedButton(
-                onPressed: _generateUsers,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey.shade300,
-                  foregroundColor: Colors.black87,
-                ),
-                child: const Text('Generate Users'),
-              ),
-            ],
           ],
         ),
       ),
@@ -192,66 +134,78 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  Widget _buildStatisticsSection() {
-    return FutureBuilder<HomeStatistics>(
-      future: _statisticsFuture,
-      builder: (_, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildLoadingStatistics();
-        }
+  Widget _buildStatisticsSection(Profile? user) {
+    if (user == null) return const SizedBox.shrink();
 
-        if (snapshot.hasError) {
-          return _buildErrorStatistics(snapshot.error.toString());
-        }
+    final roomState = ref.watch(roomListByQueryProvider(const RoomListQuery()));
+    final reservationState = ref.watch(
+      reservationListByQueryProvider(ReservationListQuery(user: user)),
+    );
 
-        final stats = snapshot.data ?? HomeStatistics.empty();
+    final isLoading = roomState.isLoading || reservationState.isLoading;
+    final hasError = roomState.hasError || reservationState.hasError;
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    if (isLoading) return _buildLoadingStatistics();
+
+    if (hasError) {
+      final error = roomState.error ?? reservationState.error;
+      return _buildErrorStatistics('$error');
+    }
+
+    final rooms = roomState.valueOrNull ?? [];
+    final reservations = reservationState.valueOrNull ?? [];
+
+    final availableRooms = rooms.where((r) => r.isMaintenance != true).length;
+    final activeReservations = reservations
+        .where((r) => r.status.isActive)
+        .length;
+    final pendingReservations = reservations
+        .where((r) => r.status == ReservationStatus.pending)
+        .length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Statistik Cepat',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.3,
           children: [
-            const Text(
-              'Statistik Cepat',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            _buildStatCard(
+              icon: Icons.meeting_room,
+              iconColor: Colors.green,
+              value: '$availableRooms',
+              label: 'Ruang Tersedia',
             ),
-            const SizedBox(height: 12),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1.3,
-              children: [
-                _buildStatCard(
-                  icon: Icons.meeting_room,
-                  iconColor: Colors.green,
-                  value: '${stats.availableRooms}',
-                  label: 'Ruang Tersedia',
-                ),
-                _buildStatCard(
-                  icon: Icons.event_available,
-                  iconColor: Colors.blue,
-                  value: '${stats.activeReservations}',
-                  label: 'Reservasi Aktif',
-                ),
-                _buildStatCard(
-                  icon: Icons.pending_actions,
-                  iconColor: Colors.orange,
-                  value: '${stats.pendingReservations}',
-                  label: 'Pending',
-                ),
-                _buildStatCard(
-                  icon: Icons.calendar_today,
-                  iconColor: Colors.purple,
-                  value:
-                      '${_now.day} ${DateFormatter.getMonthName(_now.month)}',
-                  label: 'Hari Ini',
-                ),
-              ],
+            _buildStatCard(
+              icon: Icons.event_available,
+              iconColor: Colors.blue,
+              value: '$activeReservations',
+              label: 'Reservasi Aktif',
+            ),
+            _buildStatCard(
+              icon: Icons.pending_actions,
+              iconColor: Colors.orange,
+              value: '$pendingReservations',
+              label: 'Pending',
+            ),
+            _buildStatCard(
+              icon: Icons.calendar_today,
+              iconColor: Colors.purple,
+              value: '${_now.day} ${DateFormatter.getMonthName(_now.month)}',
+              label: 'Hari Ini',
             ),
           ],
-        );
-      },
+        ),
+      ],
     );
   }
 
@@ -441,26 +395,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                 },
               ),
             ),
-            const SizedBox(width: 12),
-            if (user.isAdmin)
-              Expanded(
-                child: _buildActionCard(
-                  icon: Icons.storage,
-                  iconColor: Colors.red,
-                  label: 'Database Viewer',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => DatabaseViewerPage(user: user),
-                      ),
-                    );
-                  },
-                ),
-              )
-            else
-              Expanded(
-                child: Container(), // Placeholder untuk simetri
-              ),
           ],
         ),
       ],
@@ -513,64 +447,6 @@ class _HomePageState extends ConsumerState<HomePage> {
         ),
       ),
     );
-  }
-
-  void _generateUsers() async {
-    bool? confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm User Generation'),
-        content: const Text('Are you sure you want to generate sample users?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Confirm'),
-          ),
-        ],
-      ),
-    );
-
-    confirm ??= false;
-
-    if (!confirm || !mounted) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        content: Row(
-          children: const [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text('Generating users...'),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      await UserService.generateSampleUsers();
-
-      if (!mounted) return;
-
-      Navigator.of(context).pop();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sample users generated successfully')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      Navigator.of(context).pop();
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error generating users: $e')));
-    }
   }
 
   Future<void> _doLogout() async {
