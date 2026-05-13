@@ -80,7 +80,7 @@ class RoomCard extends StatelessWidget {
               const SizedBox(width: AppSizes.xs),
               Expanded(
                 child: Text(
-                  room.location ?? 'Unknown location',
+                  room.location,
                   style: theme.textTheme.bodyMedium,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
