@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:room_reservation_mobile_app/app/core/config/app_feature_flags.dart';
 import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/reservation_modal_bottom_sheet.dart';
 import 'package:room_reservation_mobile_app/app/providers/reservation_providers.dart';
-import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 import 'package:room_reservation_mobile_app/app/ui_items/reservation_status_badge.dart';
 import 'package:room_reservation_mobile_app/app/ui_items/cards/reservation_card.dart';
 
@@ -23,7 +21,6 @@ class ReservationListPage extends ConsumerStatefulWidget {
 class _ReservationListPageState extends ConsumerState<ReservationListPage> {
   final _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
 
-  final _service = ReservationService.getInstance();
   ReservationStatus? _filterStatus;
 
   @override
@@ -32,18 +29,11 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
   }
 
   void _loadReservations() {
-    setState(() {});
-  }
-
-  List<Reservation> _applyFilter(List<Reservation> reservations) {
-    if (AppFeatureFlags.useApi) {
-      return reservations;
-    }
-
-    if (_filterStatus == null) return reservations;
-    return reservations
-        .where((r) => r.getComputedStatus() == _filterStatus)
-        .toList();
+    ref.invalidate(
+      reservationListByQueryProvider(
+        ReservationListQuery(user: widget.user, status: _filterStatus),
+      ),
+    );
   }
 
   @override
@@ -76,9 +66,9 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
                 ),
               ),
               const PopupMenuDivider(),
-              _buildFilterMenuItem(ReservationStatus.confirmed),
-              _buildFilterMenuItem(ReservationStatus.upcoming),
-              _buildFilterMenuItem(ReservationStatus.ongoing),
+              _buildFilterMenuItem(ReservationStatus.pending),
+              _buildFilterMenuItem(ReservationStatus.approved),
+              _buildFilterMenuItem(ReservationStatus.rejected),
               _buildFilterMenuItem(ReservationStatus.completed),
               _buildFilterMenuItem(ReservationStatus.cancelled),
             ],
@@ -90,11 +80,6 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
         key: _refreshIndicatorKey,
         onRefresh: () async {
           _loadReservations();
-          ref.invalidate(
-            reservationListByQueryProvider(
-              ReservationListQuery(user: widget.user, status: _filterStatus),
-            ),
-          );
         },
         child: Consumer(
           builder: (context, ref, _) {
@@ -141,10 +126,8 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
                   ),
                 );
               },
-              data: (allReservations) {
-                final reservations = _applyFilter(allReservations);
-
-                if (allReservations.isEmpty) {
+              data: (reservations) {
+                if (reservations.isEmpty) {
                   return _buildEmptyState(
                     icon: Icons.event_busy,
                     title: 'Belum Ada Reservasi',
@@ -257,22 +240,14 @@ class _ReservationListPageState extends ConsumerState<ReservationListPage> {
   }
 
   Widget _buildCard(Reservation reservation) {
-    // Update status if needed
-
     return ReservationCard(
       reservation: reservation,
       user: widget.user,
-      service: _service,
-      readOnly: AppFeatureFlags.useApi,
-      onDeleteCompleted: _loadReservations,
+      onRefresh: _loadReservations,
     );
   }
 
   Widget? _buildAddButton() {
-    if (AppFeatureFlags.useApi) {
-      return null;
-    }
-
     return FloatingActionButton(
       onPressed: _createReservation,
       backgroundColor: Colors.blue,
