@@ -64,13 +64,20 @@ class DefaultApi {
     final fullPath =
         '${url.endsWith('/') ? url.substring(0, url.length - 1) : url}/$normalized';
 
-    final queryParams = <String, String>{};
+    final queryParams = <String, List<String>>{};
     queries.forEach((key, value) {
       if (value == null) {
         return;
       }
 
-      queryParams[key] = '$value';
+      if (value is List) {
+        final items = value.map((e) => '$e').toList();
+        if (items.isNotEmpty) {
+          queryParams['$key[]'] = items;
+        }
+      } else {
+        queryParams[key] = ['$value'];
+      }
     });
 
     return Uri.parse(
@@ -90,8 +97,25 @@ class DefaultApiRoutes {
     'Auth.me': 'auth/me',
     'Room.list': 'rooms',
     'Room.detail': 'rooms/:id',
+    'Room.create': 'rooms',
+    'Room.update': 'rooms/:id',
+    'Room.delete': 'rooms/:id',
+    'Room.availability': 'rooms/:id/availability',
+    'Facility.list': 'facilities',
+    'Facility.detail': 'facilities/:id',
+    'Facility.create': 'facilities',
+    'Facility.update': 'facilities/:id',
+    'Facility.delete': 'facilities/:id',
     'Reservation.list': 'reservations',
+    'Reservation.calendar': 'reservations/calendar',
+    'Reservation.create': 'reservations',
     'Reservation.detail': 'reservations/:id',
+    'Reservation.update': 'reservations/:id',
+    'Reservation.cancel': 'reservations/:id/cancel',
+    'Reservation.approve': 'reservations/:id/approve',
+    'Reservation.reject': 'reservations/:id/reject',
+    'Reservation.complete': 'reservations/:id/complete',
+    'User.list': 'users',
   };
 
   final Map<String, String> _routes;
