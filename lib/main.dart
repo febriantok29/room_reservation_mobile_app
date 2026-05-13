@@ -30,9 +30,7 @@ class RoomReservationApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('id', 'ID'), // Indonesian
-      ],
+      supportedLocales: const [Locale('id', 'ID')],
       locale: const Locale('id', 'ID'),
       theme: AppTheme.light,
       home: const SplashPage(),
