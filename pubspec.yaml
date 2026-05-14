@@ -42,10 +42,13 @@ dependencies:
   crypto: ^3.0.3
   firebase_core: ^3.15.2
   firebase_messaging: ^15.2.10
-  cloud_firestore: ^5.0.0
   flutter_slidable: ^3.0.1
   syncfusion_flutter_calendar: ^28.1.38
-#  firebase_auth: ^5.0.0
+
+  haleyora_package:
+    git:
+      url: https://github.com/febriantok29/haleyora_package.git
+      ref: fe649a6b3200fb95974efdfc430de39f23ae3cfe
 
 dev_dependencies:
   flutter_test:
