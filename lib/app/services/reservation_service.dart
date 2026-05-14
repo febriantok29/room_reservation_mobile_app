@@ -6,12 +6,11 @@ import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/network/api_config/default_api.dart';
 import 'package:room_reservation_mobile_app/app/network/route_builder.dart';
 
-class ReservationApiService {
-  ReservationApiService({DefaultApi? api}) : _api = api ?? DefaultApi();
+class ReservationService {
+  ReservationService({DefaultApi? api}) : _api = api ?? DefaultApi();
 
   final DefaultApi _api;
 
-  /// Mengambil daftar reservasi dengan filter opsional
   Future<ReservationListResult> getReservationList({
     String? status,
     String? dateFrom,
@@ -55,7 +54,6 @@ class ReservationApiService {
     );
   }
 
-  /// Mengambil detail reservasi berdasarkan ID
   Future<Reservation> getReservationDetail(String reservationId) async {
     final response = await RouteBuilder(
       'Reservation.detail',
@@ -75,7 +73,6 @@ class ReservationApiService {
     return _toReservation(rawData);
   }
 
-  /// Membuat reservasi baru
   Future<Reservation> createReservation({
     required String roomId,
     required DateTime startTime,
@@ -96,7 +93,7 @@ class ReservationApiService {
     final response = await RouteBuilder(
       'Reservation.create',
       api: _api,
-    ).post(body);
+    ).post(body: body);
 
     final payload = _readSuccessPayload(response);
     final rawData = payload['data'];
@@ -108,7 +105,6 @@ class ReservationApiService {
     return _toReservation(rawData);
   }
 
-  /// Memperbarui reservasi yang sudah ada
   Future<Reservation> updateReservation({
     required String reservationId,
     String? roomId,
@@ -129,7 +125,7 @@ class ReservationApiService {
       'Reservation.update',
       api: _api,
       params: {'id': reservationId},
-    ).put(body);
+    ).put(body: body);
 
     final payload = _readSuccessPayload(response);
     final rawData = payload['data'];
@@ -141,13 +137,12 @@ class ReservationApiService {
     return _toReservation(rawData);
   }
 
-  /// Membatalkan reservasi
   Future<Reservation> cancelReservation(String reservationId) async {
     final response = await RouteBuilder(
       'Reservation.cancel',
       api: _api,
       params: {'id': reservationId},
-    ).post(<String, dynamic>{});
+    ).post(body: <String, dynamic>{});
 
     final payload = _readSuccessPayload(response);
     final rawData = payload['data'];
@@ -159,13 +154,12 @@ class ReservationApiService {
     return _toReservation(rawData);
   }
 
-  /// Menyetujui reservasi (admin)
   Future<Reservation> approveReservation(String reservationId) async {
     final response = await RouteBuilder(
       'Reservation.approve',
       api: _api,
       params: {'id': reservationId},
-    ).post(<String, dynamic>{});
+    ).post(body: <String, dynamic>{});
 
     final payload = _readSuccessPayload(response);
     final rawData = payload['data'];
@@ -177,13 +171,12 @@ class ReservationApiService {
     return _toReservation(rawData);
   }
 
-  /// Menolak reservasi (admin)
   Future<Reservation> rejectReservation(String reservationId) async {
     final response = await RouteBuilder(
       'Reservation.reject',
       api: _api,
       params: {'id': reservationId},
-    ).post(<String, dynamic>{});
+    ).post(body: <String, dynamic>{});
 
     final payload = _readSuccessPayload(response);
     final rawData = payload['data'];
@@ -195,13 +188,12 @@ class ReservationApiService {
     return _toReservation(rawData);
   }
 
-  /// Menyelesaikan reservasi (admin)
   Future<Reservation> completeReservation(String reservationId) async {
     final response = await RouteBuilder(
       'Reservation.complete',
       api: _api,
       params: {'id': reservationId},
-    ).post(<String, dynamic>{});
+    ).post(body: <String, dynamic>{});
 
     final payload = _readSuccessPayload(response);
     final rawData = payload['data'];
@@ -213,7 +205,6 @@ class ReservationApiService {
     return _toReservation(rawData);
   }
 
-  /// Mengambil data kalender reservasi per bulan
   Future<CalendarResult> getCalendar({
     required int year,
     required int month,
@@ -301,7 +292,7 @@ class ReservationApiService {
     );
   }
 
-  Map<String, dynamic> _readSuccessPayload(RouteResponse response) {
+  Map<String, dynamic> _readSuccessPayload(dynamic response) {
     final data = response.data;
 
     if (data is! Map<String, dynamic>) {
@@ -320,7 +311,6 @@ class ReservationApiService {
   }
 }
 
-/// Hasil dari list reservasi beserta metadata pagination
 class ReservationListResult {
   final List<Reservation> reservations;
   final MetaDataResponse? metadata;
@@ -328,7 +318,6 @@ class ReservationListResult {
   const ReservationListResult({required this.reservations, this.metadata});
 }
 
-/// Hasil dari endpoint kalender reservasi
 class CalendarResult {
   final int year;
   final int month;
