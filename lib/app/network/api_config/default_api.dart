@@ -1,96 +1,25 @@
-import 'dart:io';
+import 'package:haleyora_package/haleyora_package.dart';
 
-import 'package:http/http.dart' as http;
+class DefaultApi extends ApiConfig {
+  @override
+  String get protocol => 'http';
 
-class DefaultApi {
-  final String protocol;
-  final String baseUrl;
-  final String? prefix;
-  final String? version;
-  final DefaultApiRoutes _routes;
-  final http.Client _client;
-  final Duration timeout;
-  final Map<String, String> defaultHeaders;
+  @override
+  ApiEndpoints get endpoints => DefaultApiRoutes();
 
-  DefaultApi({
-    this.protocol = 'http',
-    this.baseUrl = '192.168.0.34:8000',
-    this.prefix = 'api',
-    this.version = 'v1',
-    DefaultApiRoutes routes = const DefaultApiRoutes(),
-    http.Client? client,
-    this.timeout = const Duration(seconds: 30),
-    Map<String, String> defaultHeaders = const {
-      HttpHeaders.acceptHeader: 'application/json',
-    },
-  }) : _routes = routes,
-       _client = client ?? http.Client(),
-       defaultHeaders = Map<String, String>.unmodifiable(defaultHeaders);
+  @override
+  String? get prefix => 'api';
 
-  String get url {
-    String currentUrl = '$protocol://$baseUrl';
+  @override
+  List<String> get hosts => ['192.168.100.9:8000'];
 
-    if (prefix != null && prefix!.isNotEmpty) {
-      currentUrl += '/$prefix';
-    }
-
-    if (version != null && version!.isNotEmpty) {
-      currentUrl += '/$version';
-    }
-
-    return currentUrl;
-  }
-
-  http.Client get client => _client;
-  DefaultApiRoutes get routes => _routes;
-
-  Uri buildUri({
-    required String moduleUrl,
-    Map<String, dynamic> params = const {},
-    Map<String, dynamic> queries = const {},
-  }) {
-    final mappedRoute = routes.get(moduleUrl);
-    var endpoint = mappedRoute;
-
-    if (params.isNotEmpty) {
-      params.forEach((key, value) {
-        endpoint = endpoint.replaceAll(':$key', Uri.encodeComponent('$value'));
-      });
-    }
-
-    final normalized = endpoint.startsWith('/')
-        ? endpoint.substring(1)
-        : endpoint;
-    final fullPath =
-        '${url.endsWith('/') ? url.substring(0, url.length - 1) : url}/$normalized';
-
-    final queryParams = <String, List<String>>{};
-    queries.forEach((key, value) {
-      if (value == null) {
-        return;
-      }
-
-      if (value is List) {
-        final items = value.map((e) => '$e').toList();
-        if (items.isNotEmpty) {
-          queryParams['$key[]'] = items;
-        }
-      } else {
-        queryParams[key] = ['$value'];
-      }
-    });
-
-    return Uri.parse(
-      fullPath,
-    ).replace(queryParameters: queryParams.isEmpty ? null : queryParams);
-  }
+  @override
+  String? get version => 'v1';
 }
 
-class DefaultApiRoutes {
-  const DefaultApiRoutes({Map<String, String> routes = _defaultRoutes})
-    : _routes = routes;
-
-  static const Map<String, String> _defaultRoutes = {
+class DefaultApiRoutes extends ApiEndpoints {
+  @override
+  Map<String, String> get routes => {
     'Auth.login': 'auth/login',
     'Auth.refresh': 'auth/refresh',
     'Auth.logout': 'auth/logout',
@@ -117,12 +46,4 @@ class DefaultApiRoutes {
     'Reservation.complete': 'reservations/:id/complete',
     'User.list': 'users',
   };
-
-  final Map<String, String> _routes;
-
-  String get(String route) => _routes[route] ?? route;
-
-  DefaultApiRoutes copyWith(Map<String, String> routes) {
-    return DefaultApiRoutes(routes: {..._routes, ...routes});
-  }
 }
