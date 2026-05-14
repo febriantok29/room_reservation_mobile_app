@@ -45,6 +45,9 @@ class Profile extends BaseModel {
           .toList();
       firstName = chunks.isNotEmpty ? chunks.first : null;
       lastName = chunks.length > 1 ? chunks.sublist(1).join(' ') : null;
+    } else {
+      firstName = null;
+      lastName = null;
     }
 
     final isAdmin = json['is_admin'] == true;
