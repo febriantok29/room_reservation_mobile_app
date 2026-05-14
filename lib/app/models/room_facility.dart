@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Model untuk fasilitas ruangan dari API
 class RoomFacility {
   final String id;
   final String name;
@@ -28,7 +27,6 @@ class RoomFacility {
     return {'id': id, 'name': name};
   }
 
-  /// Mendapatkan icon berdasarkan slug fasilitas
   static IconData? _getIconForSlug(String slug) {
     const Map<String, IconData> iconMap = {
       'ac': Icons.ac_unit,
