@@ -2,12 +2,11 @@ import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/network/api_config/default_api.dart';
 import 'package:room_reservation_mobile_app/app/network/route_builder.dart';
 
-class RoomApiService {
-  RoomApiService({DefaultApi? api}) : _api = api ?? DefaultApi();
+class RoomService {
+  RoomService({DefaultApi? api}) : _api = api ?? DefaultApi();
 
   final DefaultApi _api;
 
-  /// Mengambil daftar ruangan dengan filter opsional
   Future<List<Room>> getRoomList({
     int? floor,
     int? minCapacity,
@@ -48,7 +47,6 @@ class RoomApiService {
     return data.map(Room.fromJson).toList();
   }
 
-  /// Mengambil detail ruangan berdasarkan ID
   Future<Room> getRoomDetail(String roomId) async {
     final response = await RouteBuilder(
       'Room.detail',
@@ -60,7 +58,6 @@ class RoomApiService {
     return Room.fromJson(payload['data']);
   }
 
-  /// Mengambil ketersediaan ruangan pada tanggal tertentu
   Future<RoomAvailabilityResult> getRoomAvailability({
     required String roomId,
     required String date,
@@ -98,7 +95,6 @@ class RoomApiService {
     );
   }
 
-  /// Membuat ruangan baru (admin)
   Future<Room> createRoom({
     required String name,
     required int floor,
@@ -116,13 +112,15 @@ class RoomApiService {
       if (facilityIds != null) 'facility_ids': facilityIds,
     };
 
-    final response = await RouteBuilder('Room.create', api: _api).post(body);
+    final response = await RouteBuilder(
+      'Room.create',
+      api: _api,
+    ).post(body: body);
 
     final payload = _readSuccessPayload(response);
     return Room.fromJson(payload['data']);
   }
 
-  /// Memperbarui ruangan (admin)
   Future<Room> updateRoom({
     required String roomId,
     String? name,
@@ -145,13 +143,12 @@ class RoomApiService {
       'Room.update',
       api: _api,
       params: {'id': roomId},
-    ).put(body);
+    ).put(body: body);
 
     final payload = _readSuccessPayload(response);
     return Room.fromJson(payload['data']);
   }
 
-  /// Menghapus ruangan (admin)
   Future<void> deleteRoom(String roomId) async {
     final response = await RouteBuilder(
       'Room.delete',
@@ -162,7 +159,7 @@ class RoomApiService {
     _readSuccessPayload(response);
   }
 
-  Map<String, dynamic> _readSuccessPayload(RouteResponse response) {
+  Map<String, dynamic> _readSuccessPayload(dynamic response) {
     final data = response.data;
 
     if (data is! Map<String, dynamic>) {
@@ -179,7 +176,6 @@ class RoomApiService {
   }
 }
 
-/// Hasil ketersediaan ruangan
 class RoomAvailabilityResult {
   final String roomId;
   final String date;
