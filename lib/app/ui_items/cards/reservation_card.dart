@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
-import 'package:room_reservation_mobile_app/app/services/reservation_api_service.dart';
+import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 import 'package:room_reservation_mobile_app/app/ui_items/reservation_status_badge.dart';
 
 class ReservationCard extends StatelessWidget {
@@ -102,7 +102,7 @@ class ReservationCard extends StatelessWidget {
               onPressed: () => _performAction(
                 context: context,
                 action: () =>
-                    ReservationApiService().approveReservation(reservation.id!),
+                    ReservationService().approveReservation(reservation.id!),
                 loadingText: 'Menyetujui reservasi...',
                 successText: 'Reservasi berhasil disetujui',
               ),
@@ -122,7 +122,7 @@ class ReservationCard extends StatelessWidget {
               onPressed: () => _performAction(
                 context: context,
                 action: () =>
-                    ReservationApiService().rejectReservation(reservation.id!),
+                    ReservationService().rejectReservation(reservation.id!),
                 loadingText: 'Menolak reservasi...',
                 successText: 'Reservasi berhasil ditolak',
               ),
@@ -142,9 +142,8 @@ class ReservationCard extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: () => _performAction(
                 context: context,
-                action: () => ReservationApiService().completeReservation(
-                  reservation.id!,
-                ),
+                action: () =>
+                    ReservationService().completeReservation(reservation.id!),
                 loadingText: 'Menyelesaikan reservasi...',
                 successText: 'Reservasi berhasil diselesaikan',
               ),
@@ -168,7 +167,7 @@ class ReservationCard extends StatelessWidget {
             onPressed: () => _performAction(
               context: context,
               action: () =>
-                  ReservationApiService().cancelReservation(reservation.id!),
+                  ReservationService().cancelReservation(reservation.id!),
               loadingText: 'Membatalkan reservasi...',
               successText: 'Reservasi berhasil dibatalkan',
             ),

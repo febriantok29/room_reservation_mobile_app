@@ -4,7 +4,7 @@ import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/room_selector_section.dart';
 import 'package:room_reservation_mobile_app/app/pages/reservation/user_selector_section.dart';
-import 'package:room_reservation_mobile_app/app/services/reservation_api_service.dart';
+import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
 
 class ReservationModalBottomSheet extends StatefulWidget {
@@ -49,7 +49,7 @@ class ReservationModalBottomSheet extends StatefulWidget {
 
 class _ReservationModalBottomSheetState
     extends State<ReservationModalBottomSheet> {
-  final _reservationService = ReservationApiService();
+  final _reservationService = ReservationService();
 
   // Form fields
   DateTime? _selectedDate;

@@ -1,13 +1,14 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
 import 'package:room_reservation_mobile_app/app/models/room_facility.dart';
 import 'package:room_reservation_mobile_app/app/providers/room_providers.dart';
-import 'package:room_reservation_mobile_app/app/services/facility_api_service.dart';
-import 'package:room_reservation_mobile_app/app/services/room_api_service.dart';
-import 'package:room_reservation_mobile_app/app/ui_items/room_facility_filter.dart';
+import 'package:room_reservation_mobile_app/app/services/facility_service.dart';
+import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 import 'package:room_reservation_mobile_app/app/ui_items/room_facility_chips.dart';
+import 'package:room_reservation_mobile_app/app/ui_items/room_facility_filter.dart';
 
 class RoomSelectorSection extends ConsumerStatefulWidget {
   final DateTime? startDateTime;
@@ -25,7 +26,6 @@ class RoomSelectorSection extends ConsumerStatefulWidget {
   ConsumerState<RoomSelectorSection> createState() =>
       _RoomSelectorSectionState();
 
-  /// Menampilkan bottom sheet untuk memilih ruangan
   static Future<Room?> showBottomSheet({
     required BuildContext context,
     DateTime? startDateTime,
@@ -69,8 +69,8 @@ class RoomSelectorSection extends ConsumerStatefulWidget {
 }
 
 class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
-  final _roomApiService = RoomApiService();
-  final _facilityApiService = FacilityApiService();
+  final _roomApiService = RoomService();
+  final _facilityApiService = FacilityService();
   final _searchController = TextEditingController();
 
   String _searchKeyword = '';
@@ -99,7 +99,6 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
     super.dispose();
   }
 
-  /// Load daftar fasilitas yang tersedia dari API
   Future<void> _loadFacilitiesFromApi({bool forceRefresh = false}) async {
     try {
       final facilities = await _facilityApiService.getFacilityList(
@@ -116,7 +115,6 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
     }
   }
 
-  /// Load daftar ruangan yang tersedia
   Future<List<Room>> _loadRooms({bool forceRefresh = false}) async {
     try {
       final rooms = await _roomApiService.getRoomList(
@@ -136,12 +134,9 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
     }
   }
 
-  /// Reload rooms dengan keyword baru (dengan debounce)
   void _onSearchChanged(String value) {
-    // Cancel timer sebelumnya jika ada
     _debounceTimer?.cancel();
 
-    // Buat timer baru dengan delay 1 detik
     _debounceTimer = Timer(const Duration(seconds: 1), () {
       setState(() {
         _searchKeyword = value;
@@ -152,7 +147,6 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
     });
   }
 
-  /// Handle perubahan facility filter
   void _onFacilityFilterChanged(List<String> selectedIds) {
     setState(() {
       _selectedFacilityIds = selectedIds;
@@ -162,7 +156,6 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
     });
   }
 
-  /// Handle pull to refresh
   Future<void> _onRefresh() async {
     setState(() {
       if (_isTimeBasedQuery) {
@@ -321,7 +314,6 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
     }).toList();
   }
 
-  /// Widget search field
   Widget _buildSearchField() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
@@ -347,7 +339,6 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
     );
   }
 
-  /// Generic widget untuk state yang bisa di-refresh (error/empty)
   Widget _buildRefreshableState({
     required IconData icon,
     required Color iconColor,
@@ -392,7 +383,6 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
     );
   }
 
-  /// Widget daftar ruangan
   Widget _buildRoomList(List<Room> rooms) {
     return ListView.builder(
       shrinkWrap: true,

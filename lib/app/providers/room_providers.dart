@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/services/room_api_service.dart';
+import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 
 class RoomListQuery {
   final bool showMaintenance;
@@ -31,8 +31,8 @@ class RoomListQuery {
   }
 }
 
-final roomApiServiceProvider = Provider<RoomApiService>((ref) {
-  return RoomApiService();
+final roomApiServiceProvider = Provider<RoomService>((ref) {
+  return RoomService();
 });
 
 final roomListByQueryProvider = FutureProvider.autoDispose

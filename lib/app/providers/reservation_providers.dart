@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
-import 'package:room_reservation_mobile_app/app/services/reservation_api_service.dart';
+import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 
 class ReservationListQuery {
   final Profile user;
@@ -25,8 +25,8 @@ class ReservationListQuery {
   int get hashCode => Object.hash(user.id, status);
 }
 
-final reservationApiServiceProvider = Provider<ReservationApiService>((ref) {
-  return ReservationApiService();
+final reservationApiServiceProvider = Provider<ReservationService>((ref) {
+  return ReservationService();
 });
 
 final reservationListByQueryProvider = FutureProvider.autoDispose
