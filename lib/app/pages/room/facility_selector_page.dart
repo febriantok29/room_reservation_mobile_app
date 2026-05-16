@@ -3,9 +3,12 @@ import 'package:room_reservation_mobile_app/app/models/room_facility.dart';
 import 'package:room_reservation_mobile_app/app/services/facility_service.dart';
 
 class FacilitySelectorPage extends StatefulWidget {
-  final List<RoomFacility> initialSelectedIds;
+  final List<RoomFacility> initialSelectedFacilities;
 
-  const FacilitySelectorPage({super.key, required this.initialSelectedIds});
+  const FacilitySelectorPage({
+    super.key,
+    required this.initialSelectedFacilities,
+  });
 
   @override
   State<FacilitySelectorPage> createState() => _FacilitySelectorPageState();
@@ -16,7 +19,7 @@ class _FacilitySelectorPageState extends State<FacilitySelectorPage> {
   final _searchController = TextEditingController();
 
   late final _selectedFacilities = List<RoomFacility>.from(
-    widget.initialSelectedIds,
+    widget.initialSelectedFacilities,
   );
   late Future<List<RoomFacility>> _facilitiesFuture = _service
       .getFacilityList();
