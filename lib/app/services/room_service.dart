@@ -1,12 +1,8 @@
+import 'package:room_reservation_mobile_app/app/models/requests/room_request.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/network/api_config/default_api.dart';
 import 'package:room_reservation_mobile_app/app/network/route_builder.dart';
 
 class RoomService {
-  RoomService({DefaultApi? api}) : _api = api ?? DefaultApi();
-
-  final DefaultApi _api;
-
   Future<List<Room>> getRoomList({
     int? floor,
     int? minCapacity,
@@ -33,29 +29,26 @@ class RoomService {
 
     final response = await RouteBuilder(
       'Room.list',
-      api: _api,
-      queries: query,
+      queries: query.isNotEmpty ? query : null,
     ).get();
 
-    final payload = _readSuccessPayload(response);
-    final data = payload['data'];
+    final data = _readSuccessPayload(response);
 
     if (data is! List) {
       return <Room>[];
     }
 
-    return data.map(Room.fromJson).toList();
+    return data.map((e) => Room.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<Room> getRoomDetail(String roomId) async {
     final response = await RouteBuilder(
       'Room.detail',
-      api: _api,
       params: {'id': roomId},
     ).get();
 
-    final payload = _readSuccessPayload(response);
-    return Room.fromJson(payload['data']);
+    final data = _readSuccessPayload(response);
+    return Room.fromJson(data);
   }
 
   Future<RoomAvailabilityResult> getRoomAvailability({
@@ -65,7 +58,6 @@ class RoomService {
   }) async {
     final response = await RouteBuilder(
       'Room.availability',
-      api: _api,
       params: {'id': roomId},
       queries: {
         'date': date,
@@ -73,16 +65,7 @@ class RoomService {
       },
     ).get();
 
-    final payload = _readSuccessPayload(response);
-    final data = payload['data'];
-
-    if (data is! Map<String, dynamic>) {
-      return RoomAvailabilityResult(
-        roomId: roomId,
-        date: date,
-        availableSlots: [],
-      );
-    }
+    final data = _readSuccessPayload(response);
 
     final slots =
         (data['available_slots'] as List?)?.whereType<String>().toList() ?? [];
@@ -95,83 +78,50 @@ class RoomService {
     );
   }
 
-  Future<Room> createRoom({
-    required String name,
-    required int floor,
-    required int capacity,
-    String? description,
-    bool? isMaintenance,
-    List<String>? facilityIds,
-  }) async {
-    final body = <String, dynamic>{
-      'name': name,
-      'floor': floor,
-      'capacity': capacity,
-      if (description != null) 'description': description,
-      if (isMaintenance != null) 'is_maintenance': isMaintenance,
-      if (facilityIds != null) 'facility_ids': facilityIds,
-    };
+  Future<Room> createRoom({required RoomRequest request}) async {
+    request.validate();
 
     final response = await RouteBuilder(
       'Room.create',
-      api: _api,
-    ).post(body: body);
+    ).post(body: request.toMap());
 
-    final payload = _readSuccessPayload(response);
-    return Room.fromJson(payload['data']);
+    final data = _readSuccessPayload(response);
+    return Room.fromJson(data);
   }
 
   Future<Room> updateRoom({
     required String roomId,
-    String? name,
-    int? floor,
-    int? capacity,
-    String? description,
-    bool? isMaintenance,
-    List<String>? facilityIds,
+    required RoomRequest request,
   }) async {
-    final body = <String, dynamic>{
-      if (name != null) 'name': name,
-      if (floor != null) 'floor': floor,
-      if (capacity != null) 'capacity': capacity,
-      if (description != null) 'description': description,
-      if (isMaintenance != null) 'is_maintenance': isMaintenance,
-      if (facilityIds != null) 'facility_ids': facilityIds,
-    };
+    request.validate();
 
     final response = await RouteBuilder(
       'Room.update',
-      api: _api,
       params: {'id': roomId},
-    ).put(body: body);
+    ).put(body: request.toMap());
 
-    final payload = _readSuccessPayload(response);
-    return Room.fromJson(payload['data']);
+    final data = _readSuccessPayload(response);
+
+    return Room.fromJson(data);
   }
 
-  Future<void> deleteRoom(String roomId) async {
-    final response = await RouteBuilder(
-      'Room.delete',
-      api: _api,
-      params: {'id': roomId},
-    ).delete();
+  Future<void> deleteRoom(String roomId) =>
+      RouteBuilder('Room.delete', params: {'id': roomId}).delete();
 
-    _readSuccessPayload(response);
-  }
-
-  Map<String, dynamic> _readSuccessPayload(dynamic response) {
-    final data = response.data;
-
-    if (data is! Map<String, dynamic>) {
-      throw RoomApiException('Format respons room API tidak valid');
+  dynamic _readSuccessPayload(dynamic response) {
+    if (response is! Map<String, dynamic>) {
+      throw 'Format respons room API tidak valid';
     }
 
-    if (!response.isSuccess || data['success'] != true) {
-      throw RoomApiException(
-        '${data['message'] ?? 'Permintaan room API gagal'}',
-      );
+    final isSuccess = response['success'];
+
+    if (isSuccess is! bool || isSuccess != true) {
+      final errorMessage =
+          response['message'] ?? 'Gagal melakukan fetch data ruangan';
+      throw errorMessage;
     }
 
+    final data = response['data'];
     return data;
   }
 }
@@ -188,13 +138,4 @@ class RoomAvailabilityResult {
     this.intervalMinutes,
     required this.availableSlots,
   });
-}
-
-class RoomApiException implements Exception {
-  final String message;
-
-  const RoomApiException(this.message);
-
-  @override
-  String toString() => message;
 }
