@@ -2,10 +2,21 @@ import 'package:room_reservation_mobile_app/app/models/room_facility.dart';
 import 'package:room_reservation_mobile_app/app/network/route_builder.dart';
 
 class FacilityService {
+  static List<RoomFacility>? _cache;
+
   Future<List<RoomFacility>> getFacilityList({
     String? search,
     int? perPage,
+    bool forceRefresh = false,
   }) async {
+    if (_cache != null && !forceRefresh) {
+      if (search == null || search.isEmpty) return _cache!;
+
+      return _cache!
+          .where((f) => f.name.toLowerCase().contains(search.toLowerCase()))
+          .toList();
+    }
+
     final queries = <String, String>{};
 
     if (search != null && search.isNotEmpty) {
@@ -34,10 +45,16 @@ class FacilityService {
       return result;
     }
 
-    return data
+    final facilities = data
         .whereType<Map<String, dynamic>>()
         .map((f) => RoomFacility.fromJson(f))
         .toList();
+
+    if (search == null || search.isEmpty) {
+      _cache = facilities;
+    }
+
+    return facilities;
   }
 
   Future<RoomFacility?> getFacilityDetail(String facilityId) async {
