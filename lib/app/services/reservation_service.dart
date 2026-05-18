@@ -3,14 +3,9 @@ import 'package:room_reservation_mobile_app/app/models/meta_data_response.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/network/api_config/default_api.dart';
 import 'package:room_reservation_mobile_app/app/network/route_builder.dart';
 
 class ReservationService {
-  ReservationService({DefaultApi? api}) : _api = api ?? DefaultApi();
-
-  final DefaultApi _api;
-
   Future<ReservationListResult> getReservationList({
     String? status,
     String? dateFrom,
@@ -19,17 +14,18 @@ class ReservationService {
     int? perPage,
     int? page,
   }) async {
+    final queries = <String, dynamic>{
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
+      if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
+      if (roomId != null && roomId.isNotEmpty) 'room_id': roomId,
+      if (perPage != null) 'per_page': perPage,
+      if (page != null) 'page': page,
+    };
+
     final response = await RouteBuilder(
       'Reservation.list',
-      api: _api,
-      queries: {
-        if (status != null && status.isNotEmpty) 'status': status,
-        if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
-        if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
-        if (roomId != null && roomId.isNotEmpty) 'room_id': roomId,
-        if (perPage != null) 'per_page': perPage,
-        if (page != null) 'page': page,
-      },
+      queries: queries.isNotEmpty ? queries : null,
     ).get();
 
     final payload = _readSuccessPayload(response);
@@ -57,7 +53,6 @@ class ReservationService {
   Future<Reservation> getReservationDetail(String reservationId) async {
     final response = await RouteBuilder(
       'Reservation.detail',
-      api: _api,
       params: {'id': reservationId},
     ).get();
 
@@ -65,9 +60,7 @@ class ReservationService {
     final rawData = payload['data'];
 
     if (rawData is! Map<String, dynamic>) {
-      throw const ReservationApiException(
-        'Format detail reservasi tidak valid',
-      );
+      throw 'Format detail reservasi tidak valid';
     }
 
     return _toReservation(rawData);
@@ -92,14 +85,13 @@ class ReservationService {
 
     final response = await RouteBuilder(
       'Reservation.create',
-      api: _api,
     ).post(body: body);
 
     final payload = _readSuccessPayload(response);
     final rawData = payload['data'];
 
     if (rawData is! Map<String, dynamic>) {
-      throw const ReservationApiException('Format data reservasi tidak valid');
+      throw 'Format data reservasi tidak valid';
     }
 
     return _toReservation(rawData);
@@ -123,7 +115,6 @@ class ReservationService {
 
     final response = await RouteBuilder(
       'Reservation.update',
-      api: _api,
       params: {'id': reservationId},
     ).put(body: body);
 
@@ -131,7 +122,7 @@ class ReservationService {
     final rawData = payload['data'];
 
     if (rawData is! Map<String, dynamic>) {
-      throw const ReservationApiException('Format data reservasi tidak valid');
+      throw 'Format data reservasi tidak valid';
     }
 
     return _toReservation(rawData);
@@ -140,7 +131,6 @@ class ReservationService {
   Future<Reservation> cancelReservation(String reservationId) async {
     final response = await RouteBuilder(
       'Reservation.cancel',
-      api: _api,
       params: {'id': reservationId},
     ).post(body: <String, dynamic>{});
 
@@ -148,7 +138,7 @@ class ReservationService {
     final rawData = payload['data'];
 
     if (rawData is! Map<String, dynamic>) {
-      throw const ReservationApiException('Format data reservasi tidak valid');
+      throw 'Format data reservasi tidak valid';
     }
 
     return _toReservation(rawData);
@@ -157,7 +147,6 @@ class ReservationService {
   Future<Reservation> approveReservation(String reservationId) async {
     final response = await RouteBuilder(
       'Reservation.approve',
-      api: _api,
       params: {'id': reservationId},
     ).post(body: <String, dynamic>{});
 
@@ -165,7 +154,7 @@ class ReservationService {
     final rawData = payload['data'];
 
     if (rawData is! Map<String, dynamic>) {
-      throw const ReservationApiException('Format data reservasi tidak valid');
+      throw 'Format data reservasi tidak valid';
     }
 
     return _toReservation(rawData);
@@ -174,7 +163,6 @@ class ReservationService {
   Future<Reservation> rejectReservation(String reservationId) async {
     final response = await RouteBuilder(
       'Reservation.reject',
-      api: _api,
       params: {'id': reservationId},
     ).post(body: <String, dynamic>{});
 
@@ -182,7 +170,7 @@ class ReservationService {
     final rawData = payload['data'];
 
     if (rawData is! Map<String, dynamic>) {
-      throw const ReservationApiException('Format data reservasi tidak valid');
+      throw 'Format data reservasi tidak valid';
     }
 
     return _toReservation(rawData);
@@ -191,7 +179,6 @@ class ReservationService {
   Future<Reservation> completeReservation(String reservationId) async {
     final response = await RouteBuilder(
       'Reservation.complete',
-      api: _api,
       params: {'id': reservationId},
     ).post(body: <String, dynamic>{});
 
@@ -199,7 +186,7 @@ class ReservationService {
     final rawData = payload['data'];
 
     if (rawData is! Map<String, dynamic>) {
-      throw const ReservationApiException('Format data reservasi tidak valid');
+      throw 'Format data reservasi tidak valid';
     }
 
     return _toReservation(rawData);
@@ -211,7 +198,6 @@ class ReservationService {
   }) async {
     final response = await RouteBuilder(
       'Reservation.calendar',
-      api: _api,
       queries: {'year': year, 'month': month},
     ).get();
 
@@ -293,21 +279,17 @@ class ReservationService {
   }
 
   Map<String, dynamic> _readSuccessPayload(dynamic response) {
-    final data = response.data;
-
-    if (data is! Map<String, dynamic>) {
-      throw const ReservationApiException(
-        'Format respons reservasi API tidak valid',
-      );
+    if (response is! Map<String, dynamic>) {
+      throw 'Format respons reservasi API tidak valid';
     }
 
-    if (!response.isSuccess || data['success'] != true) {
-      throw ReservationApiException(
-        '${data['message'] ?? 'Permintaan reservasi API gagal'}',
-      );
+    final isSuccess = response['success'];
+
+    if (isSuccess is! bool || isSuccess != true) {
+      throw '${response['message'] ?? 'Permintaan reservasi API gagal'}';
     }
 
-    return data;
+    return response;
   }
 }
 
@@ -330,13 +312,4 @@ class CalendarResult {
     required this.reservations,
     this.summary = const {},
   });
-}
-
-class ReservationApiException implements Exception {
-  final String message;
-
-  const ReservationApiException(this.message);
-
-  @override
-  String toString() => message;
 }
