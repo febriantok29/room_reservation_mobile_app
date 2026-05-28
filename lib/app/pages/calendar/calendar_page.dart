@@ -1,30 +1,38 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/models/reservation_appointment.dart';
-import 'package:room_reservation_mobile_app/app/providers/reservation_providers.dart';
+import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
 
-class CalendarPage extends ConsumerStatefulWidget {
+class CalendarPage extends StatefulWidget {
   final Profile user;
 
   const CalendarPage({super.key, required this.user});
 
   @override
-  ConsumerState<CalendarPage> createState() => _CalendarPageState();
+  State<CalendarPage> createState() => _CalendarPageState();
 }
 
-class _CalendarPageState extends ConsumerState<CalendarPage> {
+class _CalendarPageState extends State<CalendarPage> {
   final CalendarController _calendarController = CalendarController();
+  final ReservationService _reservationService = ReservationService();
 
   CalendarView _currentView = CalendarView.month;
   DateTime _selectedDate = DateTime.now();
+  
+  Future<CalendarResult>? _calendarFuture;
 
   int get _currentYear => _selectedDate.year;
   int get _currentMonth => _selectedDate.month;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCalendar();
+  }
 
   @override
   void dispose() {
@@ -32,20 +40,25 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     super.dispose();
   }
 
-  CalendarQuery get _calendarQuery =>
-      CalendarQuery(year: _currentYear, month: _currentMonth);
+  void _loadCalendar() {
+    setState(() {
+      _calendarFuture = _reservationService.getCalendar(
+        year: _currentYear,
+        month: _currentMonth,
+      );
+    });
+  }
 
   /// Handle pull to refresh
   Future<void> _onRefresh() async {
-    ref.invalidate(calendarReservationProvider(_calendarQuery));
+    _loadCalendar();
+    if (_calendarFuture != null) {
+      await _calendarFuture;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final calendarState = ref.watch(
-      calendarReservationProvider(_calendarQuery),
-    );
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Kalender Reservasi'),
@@ -109,11 +122,19 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
           ),
         ],
       ),
-      body: calendarState.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => _buildErrorState(error.toString()),
-        data: (calendarResult) {
-          final reservations = calendarResult.reservations;
+      body: FutureBuilder<CalendarResult>(
+        future: _calendarFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return _buildErrorState(snapshot.error.toString());
+          }
+
+          final calendarResult = snapshot.data;
+          final reservations = calendarResult?.reservations ?? [];
 
           if (reservations.isEmpty) {
             return _buildEmptyState();
@@ -165,10 +186,17 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                     onViewChanged: (ViewChangedDetails details) {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (mounted) {
-                          setState(() {
-                            _selectedDate = details
-                                .visibleDates[details.visibleDates.length ~/ 2];
-                          });
+                          final newDate = details
+                              .visibleDates[details.visibleDates.length ~/ 2];
+                          
+                          if (newDate.year != _currentYear || newDate.month != _currentMonth) {
+                            setState(() {
+                              _selectedDate = newDate;
+                              _loadCalendar();
+                            });
+                          } else {
+                            _selectedDate = newDate;
+                          }
                         }
                       });
                     },
