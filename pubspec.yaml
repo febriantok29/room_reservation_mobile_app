@@ -48,7 +48,7 @@ dependencies:
   haleyora_package:
     git:
       url: https://github.com/febriantok29/haleyora_package.git
-      ref: fe649a6b3200fb95974efdfc430de39f23ae3cfe
+      ref: 3322efab6c8fb889ad84d4f6910ffaa1d7ba4fb8
 
 dev_dependencies:
   flutter_test:
