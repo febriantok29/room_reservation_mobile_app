@@ -1,34 +1,35 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/providers/room_providers.dart';
+import 'package:room_reservation_mobile_app/app/pages/room/room_detail_page.dart';
+import 'package:room_reservation_mobile_app/app/services/room_service.dart';
 
-class RoomListPage extends ConsumerStatefulWidget {
+class RoomListPage extends StatefulWidget {
   final Profile user;
 
   const RoomListPage({super.key, required this.user});
 
   @override
-  ConsumerState<RoomListPage> createState() => _RoomListPageState();
+  State<RoomListPage> createState() => _RoomListPageState();
 }
 
-class _RoomListPageState extends ConsumerState<RoomListPage> {
+class _RoomListPageState extends State<RoomListPage> {
   final _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
+  final _roomService = RoomService();
 
-  // State untuk filter
   String _searchKeyword = '';
   final _searchController = TextEditingController();
-  int _refreshNonce = 0;
 
-  // Debounce timer untuk pencarian
+  Future<List<Room>>? _roomsFuture;
+
   Timer? _debounceTimer;
 
   @override
   void initState() {
     super.initState();
+    _loadRooms();
   }
 
   @override
@@ -38,25 +39,19 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
     super.dispose();
   }
 
-  void _loadRooms({bool forceRefresh = false}) {
+  void _loadRooms() {
     setState(() {
-      if (forceRefresh) {
-        _refreshNonce++;
-      }
+      _roomsFuture = _roomService.getRoomList(search: _searchKeyword);
     });
   }
 
-  // Fungsi pencarian dengan debounce
   void _searchRooms(String keyword) {
-    // Batalkan timer sebelumnya jika masih berjalan
     _debounceTimer?.cancel();
 
-    // Atur timer baru (2 detik)
     _debounceTimer = Timer(const Duration(milliseconds: 800), () {
       if (_searchKeyword != keyword) {
-        setState(() {
-          _searchKeyword = keyword;
-        });
+        _searchKeyword = keyword;
+        _loadRooms();
       }
     });
   }
@@ -67,131 +62,153 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
       onTap: () {
         FocusScope.of(context).requestFocus(FocusNode());
       },
-      child: RefreshIndicator(
-        key: _refreshIndicatorKey,
-        onRefresh: () async {
-          _loadRooms(forceRefresh: true);
-          ref.invalidate(
-            roomListByQueryProvider(
-              RoomListQuery(searchKeyword: _searchKeyword, forceRefresh: true),
-            ),
-          );
-        },
-        child: Scaffold(
-          appBar: AppBar(title: const Text('Daftar Ruangan Meeting')),
-          body: Column(children: [_buildFilterSection(), _buildContent()]),
-        ),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Daftar Ruangan Meeting')),
+        body: Column(children: [
+          _buildFilterSection(),
+          Expanded(child: _buildContent()),
+        ]),
+        floatingActionButton: widget.user.isAdmin
+            ? FloatingActionButton(
+                onPressed: _navigateToAddRoom,
+                child: const Icon(Icons.add),
+              )
+            : null,
+      ),
+    );
+  }
+
+  Future<void> _navigateToAddRoom() async {
+    final needsRefresh = await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => RoomDetailPage(user: widget.user)),
+    );
+
+    if (needsRefresh) {
+      _loadRooms();
+    }
+  }
+
+  Future<void> _navigateToEditRoom(Room room) async {
+    final needsRefresh = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RoomDetailPage(user: widget.user, room: room),
+      ),
+    );
+
+    if (needsRefresh) {
+      _loadRooms();
+    }
+  }
+
+  void _navigateToViewRoom(Room room) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RoomDetailPage.view(user: widget.user, room: room),
       ),
     );
   }
 
   Widget _buildFilterSection() {
-    final filter = <Widget>[
-      // Kolom pencarian
-      Padding(
-        padding: const EdgeInsets.only(bottom: 8.0),
-        child: TextField(
-          controller: _searchController,
-          decoration: InputDecoration(
-            hintText: 'Cari ruangan...',
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: _searchController.text.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      _searchController.clear();
-                      _searchRooms('');
-                    },
-                  )
-                : null,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(vertical: 0),
-          ),
-          onChanged: _searchRooms,
-        ),
-      ),
-    ];
-
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
       color: Colors.grey[200],
-      child: Column(children: filter),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Cari ruangan...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          _searchRooms('');
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              ),
+              onChanged: _searchRooms,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildContent() {
-    final query = RoomListQuery(
-      searchKeyword: _searchKeyword,
-      forceRefresh: _refreshNonce > 0,
-    );
-
-    final roomState = ref.watch(roomListByQueryProvider(query));
-
-    return roomState.when(
-      loading: () {
-        return const Center(
-          child: Padding(
-            padding: EdgeInsets.only(top: 24.0),
-            child: CircularProgressIndicator(),
-          ),
-        );
+    return RefreshIndicator(
+      key: _refreshIndicatorKey,
+      onRefresh: () async {
+        _loadRooms();
+        await _roomsFuture;
       },
-      error: (error, stack) {
-        return Center(
-          child: Padding(
-            padding: EdgeInsets.only(top: 24.0),
+      child: FutureBuilder<List<Room>>(
+        future: _roomsFuture,
+        builder: (_, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.only(top: 24.0),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
 
-            child: Text('Gagal memuat ruangan: $error'),
-          ),
-        );
-      },
-      data: (data) {
-        if (_refreshNonce > 0) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              setState(() {
-                _refreshNonce = 0;
-              });
-            }
-          });
-        }
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 24.0),
+                child: Text('Gagal memuat ruangan: ${snapshot.error}'),
+              ),
+            );
+          }
 
-        // Tampilkan pesan kosong yang berbeda berdasarkan pencarian
-        if (data.isEmpty) {
-          return Padding(
-            padding: EdgeInsets.only(top: 24.0),
-            child: Center(
-              child: _searchKeyword.isNotEmpty
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.search_off,
-                          size: 64,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Tidak ada ruangan dengan kata kunci "$_searchKeyword"',
-                        ),
-                      ],
-                    )
-                  : const Text('Tidak ada ruangan tersedia.'),
-            ),
-          );
-        }
+          final data = snapshot.data ?? [];
 
-        return Flexible(
-          child: ListView.builder(
+          if (data.isEmpty) {
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 24.0),
+                child: Center(
+                  child: _searchKeyword.isNotEmpty
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.search_off,
+                              size: 64,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Tidak ada ruangan dengan kata kunci "$_searchKeyword"',
+                            ),
+                          ],
+                        )
+                      : const Text('Tidak ada ruangan tersedia.'),
+                ),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
             itemCount: data.length,
             itemBuilder: (_, index) {
               final room = data[index];
-
               Widget card = _buildCard(room);
 
               final isLast = index == data.length - 1;
@@ -204,13 +221,12 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
 
               return card;
             },
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
-  /// Widget untuk menampilkan detail ruangan dalam bentuk kartu
   Widget _buildCard(Room room) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 12.0),
@@ -220,7 +236,7 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
         borderRadius: BorderRadius.circular(8.0),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.2),
+            color: Colors.grey.withAlpha(51),
             spreadRadius: 2,
             blurRadius: 5,
             offset: const Offset(0, 3),
@@ -231,7 +247,6 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
         padding: const EdgeInsets.all(16.0),
         child: Row(
           children: [
-            // Icon ruangan di sebelah kiri
             Container(
               padding: const EdgeInsets.all(12.0),
               decoration: BoxDecoration(
@@ -246,12 +261,10 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
             ),
             const SizedBox(width: 16),
 
-            // Informasi ruangan
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Nama ruangan
                   Text(
                     room.name ?? '(Tanpa Nama)',
                     style: const TextStyle(
@@ -261,20 +274,17 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
                   ),
                   const SizedBox(height: 6),
 
-                  // Lokasi
                   _buildRoomInfoRow(
                     icon: Icons.location_on,
                     value: room.location,
                   ),
                   const SizedBox(height: 4),
 
-                  // Kapasitas
                   _buildRoomInfoRow(
                     icon: Icons.people,
                     value: 'Kapasitas: ${room.capacity ?? '-'} orang',
                   ),
 
-                  // Status maintenance
                   if (room.isMaintenance == true)
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
@@ -285,7 +295,6 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
                       ),
                     ),
 
-                  // Status hapus untuk admin
                   if (room.deletedAt != null && widget.user.isAdmin)
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
@@ -299,26 +308,47 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
               ),
             ),
 
-            // Tombol Book di sebelah kanan
-            ElevatedButton(
-              onPressed: () {
-                // TODO: Implementasi navigasi ke halaman booking
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
+            Column(
+              children: [
+                ElevatedButton(
+                  onPressed: () => _navigateToViewRoom(room),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child: const Text(
+                    'Detail',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              child: const Text(
-                'Book',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+                if (widget.user.isAdmin)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: OutlinedButton.icon(
+                      onPressed: () => _navigateToEditRoom(room),
+                      icon: const Icon(Icons.edit, size: 14),
+                      label: const Text('Edit'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        minimumSize: const Size(0, 32),
+                        textStyle: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ],
         ),
@@ -326,7 +356,6 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
     );
   }
 
-  /// Widget untuk menampilkan baris informasi ruangan dengan ikon
   Widget _buildRoomInfoRow({required IconData icon, required String value}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,16 +372,15 @@ class _RoomListPageState extends ConsumerState<RoomListPage> {
     );
   }
 
-  /// Widget untuk menampilkan status khusus (maintenance, deleted)
   Widget _buildStatusTag(IconData icon, String label, Color color) {
     return Padding(
       padding: const EdgeInsets.only(top: 8.0),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
+          color: color.withAlpha(26),
           borderRadius: BorderRadius.circular(4.0),
-          border: Border.all(color: color.withValues(alpha: 0.5)),
+          border: Border.all(color: color.withAlpha(128)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
