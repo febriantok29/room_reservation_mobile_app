@@ -1,9 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/models/api_response.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/network/route_builder.dart';
+import 'package:room_reservation_mobile_app/app/services/user_service.dart';
 
 class UserSelectorSection extends StatefulWidget {
   final String? selectedUserId;
@@ -13,7 +12,6 @@ class UserSelectorSection extends StatefulWidget {
   @override
   State<UserSelectorSection> createState() => _UserSelectorSectionState();
 
-  /// Menampilkan bottom sheet untuk memilih user
   static Future<Profile?> showBottomSheet({
     required BuildContext context,
     String? selectedUserId,
@@ -51,6 +49,8 @@ class _UserSelectorSectionState extends State<UserSelectorSection> {
   String? _errorMessage;
   Timer? _debounceTimer;
 
+  final _userService = UserService();
+
   @override
   void initState() {
     super.initState();
@@ -63,7 +63,6 @@ class _UserSelectorSectionState extends State<UserSelectorSection> {
     super.dispose();
   }
 
-  /// Load daftar pengguna dari API
   Future<void> _loadUsers() async {
     setState(() {
       _isLoading = true;
@@ -71,28 +70,11 @@ class _UserSelectorSectionState extends State<UserSelectorSection> {
     });
 
     try {
-      final route = RouteBuilder(
-        'User.list',
-        queries: {
-          if (_searchKeyword.isNotEmpty) 'q': _searchKeyword,
-          'per_page': 50,
-        },
-      );
-      final response = await route.get();
-
-      final apiResponse = ApiResponse.fromJson(response.data, (data) {
-        if (data is List) {
-          return data
-              .whereType<Map<String, dynamic>>()
-              .map((json) => Profile.fromJson(json))
-              .toList();
-        }
-        return <Profile>[];
-      });
+      final users = await _userService.getUsers(search: _searchKeyword);
 
       if (mounted) {
         setState(() {
-          _users = apiResponse.data ?? <Profile>[];
+          _users = users;
         });
       }
     } catch (e) {
@@ -101,6 +83,8 @@ class _UserSelectorSectionState extends State<UserSelectorSection> {
           _errorMessage = 'Gagal memuat pengguna: ${e.toString()}';
         });
       }
+
+      rethrow;
     } finally {
       if (mounted) {
         setState(() {
@@ -127,7 +111,6 @@ class _UserSelectorSectionState extends State<UserSelectorSection> {
     );
   }
 
-  /// Widget search field
   Widget _buildSearchField() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
@@ -151,7 +134,6 @@ class _UserSelectorSectionState extends State<UserSelectorSection> {
     );
   }
 
-  /// Widget daftar pengguna
   Widget _buildUserList() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
