@@ -5,7 +5,7 @@ import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
 import 'package:room_reservation_mobile_app/app/ui_items/reservation_status_badge.dart';
 
-class ReservationCard extends StatelessWidget {
+class ReservationCard extends StatefulWidget {
   final Reservation reservation;
   final Profile user;
   final VoidCallback? onRefresh;
@@ -16,31 +16,40 @@ class ReservationCard extends StatelessWidget {
     required this.user,
     this.onRefresh,
   });
+
+  @override
+  State<ReservationCard> createState() => _ReservationCardState();
+}
+
+class _ReservationCardState extends State<ReservationCard> {
+  final _service = ReservationService();
+
   @override
   Widget build(BuildContext context) {
-    final currentStatus = reservation.status;
+    final currentStatus = widget.reservation.status;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        onTap: () =>
-            _showReservationDetail(reservation: reservation, context: context),
+        onTap: () => _showReservationDetail(
+          reservation: widget.reservation,
+          context: context,
+        ),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header: Nama ruangan dan status
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Text(
-                      reservation.room?.name ?? "Tidak diketahui",
+                      widget.reservation.room?.name ?? "Tidak diketahui",
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -55,33 +64,33 @@ class ReservationCard extends StatelessWidget {
               Divider(color: Colors.grey[200], height: 1),
               const SizedBox(height: 12),
 
-              // Detail Info
               _buildInfoRow(
                 icon: Icons.access_time,
-                text: reservation.formattedRange,
+                text: widget.reservation.formattedRange,
               ),
               const SizedBox(height: 6),
               _buildInfoRow(
                 icon: Icons.people,
-                text: '${reservation.visitorCount ?? 1} orang',
+                text: '${widget.reservation.visitorCount ?? 1} orang',
               ),
-              if (reservation.purpose != null &&
-                  reservation.purpose!.isNotEmpty) ...[
+              if (widget.reservation.purpose != null &&
+                  widget.reservation.purpose!.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 _buildInfoRow(
                   icon: Icons.description,
-                  text: reservation.purpose!,
+                  text: widget.reservation.purpose!,
                   maxLines: 2,
                 ),
               ],
 
-              // User info (for admin)
-              if (user.isAdmin && reservation.user != null) ...[
+              if (widget.user.isAdmin && widget.reservation.user != null) ...[
                 const SizedBox(height: 6),
-                _buildInfoRow(icon: Icons.person, text: reservation.user!.name),
+                _buildInfoRow(
+                  icon: Icons.person,
+                  text: widget.reservation.user!.name,
+                ),
               ],
 
-              // Action buttons
               _buildActionButtons(context, currentStatus),
             ],
           ),
@@ -93,19 +102,28 @@ class ReservationCard extends StatelessWidget {
   Widget _buildActionButtons(BuildContext context, ReservationStatus status) {
     final actions = <Widget>[];
 
-    // Admin actions
-    if (user.isAdmin) {
+    if (widget.user.isAdmin) {
       if (status.canBeApproved) {
         actions.add(
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () => _performAction(
-                context: context,
-                action: () =>
-                    ReservationService().approveReservation(reservation.id!),
-                loadingText: 'Menyetujui reservasi...',
-                successText: 'Reservasi berhasil disetujui',
-              ),
+              onPressed: () async {
+                final confirm = await _showConfirmDialog(
+                  title: 'Setujui Reservasi',
+                  content:
+                      'Apakah Anda yakin ingin menyetujui reservasi ruangan ini?',
+                );
+
+                if (confirm && context.mounted) {
+                  _performAction(
+                    context: context,
+                    action: () =>
+                        _service.approveReservation(widget.reservation.id!),
+                    loadingText: 'Menyetujui reservasi...',
+                    successText: 'Reservasi berhasil disetujui',
+                  );
+                }
+              },
               icon: const Icon(Icons.check_circle_outline, size: 18),
               label: const Text('Setujui'),
               style: OutlinedButton.styleFrom(
@@ -119,13 +137,24 @@ class ReservationCard extends StatelessWidget {
         actions.add(
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () => _performAction(
-                context: context,
-                action: () =>
-                    ReservationService().rejectReservation(reservation.id!),
-                loadingText: 'Menolak reservasi...',
-                successText: 'Reservasi berhasil ditolak',
-              ),
+              onPressed: () async {
+                final confirm = await _showConfirmDialog(
+                  title: 'Tolak Reservasi',
+                  content:
+                      'Apakah Anda yakin ingin menolak reservasi ini? Tindakan ini tidak dapat dibatalkan.',
+                  isDestructive: true,
+                );
+
+                if (confirm && context.mounted) {
+                  _performAction(
+                    context: context,
+                    action: () =>
+                        _service.rejectReservation(widget.reservation.id!),
+                    loadingText: 'Menolak reservasi...',
+                    successText: 'Reservasi berhasil ditolak',
+                  );
+                }
+              },
               icon: const Icon(Icons.cancel_outlined, size: 18),
               label: const Text('Tolak'),
               style: OutlinedButton.styleFrom(
@@ -140,13 +169,22 @@ class ReservationCard extends StatelessWidget {
         actions.add(
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () => _performAction(
-                context: context,
-                action: () =>
-                    ReservationService().completeReservation(reservation.id!),
-                loadingText: 'Menyelesaikan reservasi...',
-                successText: 'Reservasi berhasil diselesaikan',
-              ),
+              onPressed: () async {
+                final confirm = await _showConfirmDialog(
+                  title: 'Selesaikan Reservasi',
+                  content: 'Tandai reservasi ini telah selesai digunakan?',
+                );
+
+                if (confirm && context.mounted) {
+                  _performAction(
+                    context: context,
+                    action: () =>
+                        _service.completeReservation(widget.reservation.id!),
+                    loadingText: 'Menyelesaikan reservasi...',
+                    successText: 'Reservasi berhasil diselesaikan',
+                  );
+                }
+              },
               icon: const Icon(Icons.done_all, size: 18),
               label: const Text('Selesaikan'),
               style: OutlinedButton.styleFrom(
@@ -159,18 +197,28 @@ class ReservationCard extends StatelessWidget {
       }
     }
 
-    // User can cancel their own pending/approved reservation
     if (status.canBeCancelled) {
       actions.add(
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: () => _performAction(
-              context: context,
-              action: () =>
-                  ReservationService().cancelReservation(reservation.id!),
-              loadingText: 'Membatalkan reservasi...',
-              successText: 'Reservasi berhasil dibatalkan',
-            ),
+            onPressed: () async {
+              final confirm = await _showConfirmDialog(
+                title: 'Batalkan Reservasi',
+                content:
+                    'Apakah Anda yakin ingin membatalkan pengajuan reservasi ini?',
+                isDestructive: true,
+              );
+
+              if (confirm && context.mounted) {
+                _performAction(
+                  context: context,
+                  action: () =>
+                      _service.cancelReservation(widget.reservation.id!),
+                  loadingText: 'Membatalkan reservasi...',
+                  successText: 'Reservasi berhasil dibatalkan',
+                );
+              }
+            },
             icon: const Icon(Icons.cancel_outlined, size: 18),
             label: const Text('Batalkan'),
             style: OutlinedButton.styleFrom(
@@ -188,6 +236,36 @@ class ReservationCard extends StatelessWidget {
       padding: const EdgeInsets.only(top: 16),
       child: Row(children: actions),
     );
+  }
+
+  Future<bool> _showConfirmDialog({
+    required String title,
+    required String content,
+    bool isDestructive = false,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDestructive ? Colors.red : Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Ya, Lanjutkan'),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
   }
 
   void _performAction({
@@ -221,7 +299,7 @@ class ReservationCard extends StatelessWidget {
         SnackBar(content: Text(successText), backgroundColor: Colors.green),
       );
 
-      onRefresh?.call();
+      widget.onRefresh?.call();
     } catch (e) {
       if (context.mounted) Navigator.of(context).pop();
       if (context.mounted) {

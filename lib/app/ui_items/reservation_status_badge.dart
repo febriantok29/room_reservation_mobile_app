@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
 
-/// Widget untuk menampilkan status badge reservasi
 class ReservationStatusBadge extends StatelessWidget {
   final ReservationStatus status;
   final bool showDescription;
@@ -67,7 +66,6 @@ class ReservationStatusBadge extends StatelessWidget {
   }
 }
 
-/// Widget untuk menampilkan status sebagai chip
 class ReservationStatusChip extends StatelessWidget {
   final ReservationStatus status;
   final bool showIcon;
@@ -81,32 +79,38 @@ class ReservationStatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(maxWidth: 200),
-      child: Chip(
-        side: BorderSide.none,
-        avatar: showIcon
-            ? Icon(status.icon, size: 16, color: Colors.white)
-            : null,
-        label: Text(
-          status.displayName,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: status.color,
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showIcon) ...[
+            Padding(
+              padding: const EdgeInsets.only(right: 6.0),
+              child: Icon(status.icon, size: 16, color: Colors.white),
+            ),
+          ],
+          Flexible(
+            child: Text(
+              status.displayName,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
           ),
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-        ),
-        backgroundColor: status.color,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        visualDensity: VisualDensity.compact,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ],
       ),
     );
   }
 }
 
-/// Widget untuk status indicator dengan timeline
 class ReservationStatusTimeline extends StatelessWidget {
   final ReservationStatus status;
 
@@ -114,7 +118,6 @@ class ReservationStatusTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Special case for rejected
     if (status == ReservationStatus.rejected) {
       return _buildSpecialStatusBox(
         icon: Icons.block,
@@ -124,7 +127,6 @@ class ReservationStatusTimeline extends StatelessWidget {
       );
     }
 
-    // Special case for cancelled
     if (status == ReservationStatus.cancelled) {
       return _buildSpecialStatusBox(
         icon: Icons.cancel,
