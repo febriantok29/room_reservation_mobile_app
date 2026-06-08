@@ -4,6 +4,7 @@ import 'package:room_reservation_mobile_app/app/models/auth_token.dart';
 import 'package:room_reservation_mobile_app/app/models/profile.dart';
 import 'package:room_reservation_mobile_app/app/network/route_builder.dart';
 import 'package:room_reservation_mobile_app/app/pages/login_page.dart';
+import 'package:room_reservation_mobile_app/app/services/auth_service.dart';
 import 'package:room_reservation_mobile_app/app/utils/navigation_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -27,12 +28,15 @@ class AuthenticationState {
 
   Profile? _user;
   AuthToken? _token;
+  Future<void>? _refreshFuture;
 
   bool get isLoggedIn => _user != null && _token != null;
   Profile? get user => _user;
   String? get accessToken => _token?.accessToken;
   DateTime? get tokenExpiresAt => _token?.expiresAt;
   bool get hasToken => _token != null;
+
+  final _service = AuthService();
 
   Future<void> initialize() async {
     final tokenMap = await _secureStorage.readJson(keyTokenData);
@@ -54,31 +58,13 @@ class AuthenticationState {
   }
 
   Future<bool> login(String credential, String password) async {
-    final router = RouteBuilder.noAuth('Auth.login');
+    _token = await _service.login(
+      credential: credential,
+      password: password,
+      accessTokenTtl: _accessTokenTtl,
+      refreshTokenTtl: _refreshTokenTtl,
+    );
 
-    final payload = <String, dynamic>{
-      'login': credential,
-      'password': password,
-    };
-
-    if (_accessTokenTtl != null && _refreshTokenTtl != null) {
-      payload['is_debug'] = true;
-      payload['access_token_ttl'] = _accessTokenTtl;
-      payload['refresh_token_ttl'] = _refreshTokenTtl;
-    }
-
-    final response = await router.post(body: payload);
-
-    if (response == null || response is! Map<String, dynamic>) {
-      throw 'Format respons tidak valid';
-    }
-
-    final data = response['data'] ?? response;
-    if (data['access_token'] == null) {
-      throw data['message'] ?? 'Login gagal, periksa kembali kredensial Anda.';
-    }
-
-    _token = AuthToken.fromJson(data);
     await _secureStorage.writeJson(keyTokenData, _token!.toJson());
 
     final prefs = await SharedPreferences.getInstance();
@@ -91,16 +77,8 @@ class AuthenticationState {
   Future<void> refreshUser() async {
     if (!hasToken) return;
 
-    final router = RouteBuilder('Auth.me');
-    final response = await router.get();
-
-    if (response is Map<String, dynamic>) {
-      final data = response['data'] ?? response;
-      _user = Profile.fromJson(data);
-    }
+    _user = await _service.getMe();
   }
-
-  Future<void>? _refreshFuture;
 
   Future<void> refreshToken() async {
     if (_token?.refreshToken == null) return;
@@ -118,27 +96,27 @@ class AuthenticationState {
   }
 
   Future<void> _doRefreshToken() async {
-    final router = RouteBuilder.noAuth('Auth.refresh');
-
-    final payload = <String, dynamic>{'refresh_token': _token!.refreshToken};
-
-    if (_accessTokenTtl != null && _refreshTokenTtl != null) {
-      payload['is_debug'] = true;
-      payload['access_token_ttl'] = _accessTokenTtl;
+    final currentRefreshToken = _token!.refreshToken;
+    if (currentRefreshToken == null) {
+      await clearSession();
+      await forceLogout();
+      return;
     }
 
-    final response = await router.post(body: payload);
+    final refreshedToken = await _service.refreshToken(
+      refreshToken: currentRefreshToken,
+      accessTokenTtl: _accessTokenTtl,
+      refreshTokenTtl: _refreshTokenTtl,
+    );
 
-    if (response is Map<String, dynamic>) {
-      final data = response['data'] ?? response;
-      if (data['access_token'] != null) {
-        _token = AuthToken.fromJson(data);
-        await _secureStorage.writeJson(keyTokenData, _token!.toJson());
-      } else {
-        await clearSession();
-        await forceLogout();
-      }
+    if (refreshedToken == null) {
+      await clearSession();
+      await forceLogout();
+      return;
     }
+
+    _token = refreshedToken;
+    await _secureStorage.writeJson(keyTokenData, _token!.toJson());
   }
 
   Future<void> logout() async {
@@ -147,6 +125,7 @@ class AuthenticationState {
         await RouteBuilder('Auth.logout').post();
       } catch (_) {}
     }
+
     await forceLogout();
   }
 
