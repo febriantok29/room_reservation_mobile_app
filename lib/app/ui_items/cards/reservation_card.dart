@@ -91,7 +91,7 @@ class _ReservationCardState extends State<ReservationCard> {
                 ),
               ],
 
-              _buildActionButtons(context, currentStatus),
+              _buildActionButtons(currentStatus),
             ],
           ),
         ),
@@ -99,142 +99,157 @@ class _ReservationCardState extends State<ReservationCard> {
     );
   }
 
-  Widget _buildActionButtons(BuildContext context, ReservationStatus status) {
-    final actions = <Widget>[];
+  Widget _buildActionButtons(ReservationStatus status) {
+    final buttons = <Widget>[];
 
     if (widget.user.isAdmin) {
       if (status.canBeApproved) {
-        actions.add(
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                final confirm = await _showConfirmDialog(
-                  title: 'Setujui Reservasi',
-                  content:
-                      'Apakah Anda yakin ingin menyetujui reservasi ruangan ini?',
-                );
+        buttons.add(
+          _buildActionButton(
+            label: 'Setujui',
+            icon: Icons.check_circle_outline,
+            color: Colors.green,
+            onPressed: () async {
+              final confirm = await _showConfirmDialog(
+                title: 'Setujui Reservasi',
+                content:
+                    'Apakah Anda yakin ingin menyetujui reservasi ruangan ini?',
+              );
 
-                if (confirm && context.mounted) {
-                  _performAction(
-                    context: context,
-                    action: () =>
-                        _service.approveReservation(widget.reservation.id!),
-                    loadingText: 'Menyetujui reservasi...',
-                    successText: 'Reservasi berhasil disetujui',
-                  );
-                }
-              },
-              icon: const Icon(Icons.check_circle_outline, size: 18),
-              label: const Text('Setujui'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.green,
-                side: const BorderSide(color: Colors.green),
-              ),
-            ),
+              if (confirm && mounted) {
+                _performAction(
+                  context: context,
+                  action: () =>
+                      _service.approveReservation(widget.reservation.id!),
+                  loadingText: 'Menyetujui reservasi...',
+                  successText: 'Reservasi berhasil disetujui',
+                );
+              }
+            },
           ),
         );
-        actions.add(const SizedBox(width: 8));
-        actions.add(
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                final confirm = await _showConfirmDialog(
-                  title: 'Tolak Reservasi',
-                  content:
-                      'Apakah Anda yakin ingin menolak reservasi ini? Tindakan ini tidak dapat dibatalkan.',
-                  isDestructive: true,
-                );
 
-                if (confirm && context.mounted) {
-                  _performAction(
-                    context: context,
-                    action: () =>
-                        _service.rejectReservation(widget.reservation.id!),
-                    loadingText: 'Menolak reservasi...',
-                    successText: 'Reservasi berhasil ditolak',
-                  );
-                }
-              },
-              icon: const Icon(Icons.cancel_outlined, size: 18),
-              label: const Text('Tolak'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: const BorderSide(color: Colors.red),
-              ),
-            ),
+        buttons.add(
+          _buildActionButton(
+            label: 'Tolak',
+            icon: Icons.cancel_outlined,
+            color: Colors.red,
+            onPressed: () async {
+              final confirm = await _showConfirmDialog(
+                title: 'Tolak Reservasi',
+                content: 'Apakah Anda yakin ingin menolak reservasi ini?',
+                isDestructive: true,
+              );
+
+              if (confirm && mounted) {
+                _performAction(
+                  context: context,
+                  action: () =>
+                      _service.rejectReservation(widget.reservation.id!),
+                  loadingText: 'Menolak reservasi...',
+                  successText: 'Reservasi berhasil ditolak',
+                );
+              }
+            },
           ),
         );
       }
-      if (status.canBeCompleted) {
-        actions.add(
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                final confirm = await _showConfirmDialog(
-                  title: 'Selesaikan Reservasi',
-                  content: 'Tandai reservasi ini telah selesai digunakan?',
-                );
 
-                if (confirm && context.mounted) {
-                  _performAction(
-                    context: context,
-                    action: () =>
-                        _service.completeReservation(widget.reservation.id!),
-                    loadingText: 'Menyelesaikan reservasi...',
-                    successText: 'Reservasi berhasil diselesaikan',
-                  );
-                }
-              },
-              icon: const Icon(Icons.done_all, size: 18),
-              label: const Text('Selesaikan'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.blue,
-                side: const BorderSide(color: Colors.blue),
-              ),
-            ),
+      if (status.canBeCompleted) {
+        buttons.add(
+          _buildActionButton(
+            label: 'Selesaikan',
+            icon: Icons.done_all,
+            color: Colors.blue,
+            onPressed: () async {
+              final confirm = await _showConfirmDialog(
+                title: 'Selesaikan Reservasi',
+                content: 'Tandai reservasi ini telah selesai digunakan?',
+              );
+
+              if (confirm && mounted) {
+                _performAction(
+                  context: context,
+                  action: () =>
+                      _service.completeReservation(widget.reservation.id!),
+                  loadingText: 'Menyelesaikan reservasi...',
+                  successText: 'Reservasi berhasil diselesaikan',
+                );
+              }
+            },
           ),
         );
       }
     }
 
-    if (status.canBeCancelled) {
-      actions.add(
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () async {
-              final confirm = await _showConfirmDialog(
-                title: 'Batalkan Reservasi',
-                content:
-                    'Apakah Anda yakin ingin membatalkan pengajuan reservasi ini?',
-                isDestructive: true,
-              );
+    bool shouldShowCancel = status.canBeCancelled;
 
-              if (confirm && context.mounted) {
-                _performAction(
-                  context: context,
-                  action: () =>
-                      _service.cancelReservation(widget.reservation.id!),
-                  loadingText: 'Membatalkan reservasi...',
-                  successText: 'Reservasi berhasil dibatalkan',
-                );
-              }
-            },
-            icon: const Icon(Icons.cancel_outlined, size: 18),
-            label: const Text('Batalkan'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-              side: BorderSide(color: Colors.red.shade400),
-            ),
-          ),
+    if (widget.user.isAdmin && status == ReservationStatus.pending) {
+      shouldShowCancel = false;
+    }
+
+    if (shouldShowCancel) {
+      buttons.add(
+        _buildActionButton(
+          label: 'Batalkan',
+          icon: Icons.cancel_outlined,
+          color: Colors.red.shade400,
+          onPressed: () async {
+            final confirm = await _showConfirmDialog(
+              title: 'Batalkan Reservasi',
+              content: 'Apakah Anda yakin ingin membatalkan pengajuan ini?',
+              isDestructive: true,
+            );
+
+            if (confirm && mounted) {
+              _performAction(
+                context: context,
+                action: () =>
+                    _service.cancelReservation(widget.reservation.id!),
+                loadingText: 'Membatalkan reservasi...',
+                successText: 'Reservasi berhasil dibatalkan',
+              );
+            }
+          },
         ),
       );
     }
 
-    if (actions.isEmpty) return const SizedBox.shrink();
+    if (buttons.isEmpty) return const SizedBox.shrink();
+
+    final spacedButtons = <Widget>[];
+    for (var i = 0; i < buttons.length; i++) {
+      spacedButtons.add(buttons[i]);
+      if (i < buttons.length - 1) {
+        spacedButtons.add(const SizedBox(width: 8));
+      }
+    }
 
     return Padding(
       padding: const EdgeInsets.only(top: 16),
-      child: Row(children: actions),
+      child: Row(children: spacedButtons),
+    );
+  }
+
+  Widget _buildActionButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Expanded(
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 16),
+
+        label: FittedBox(fit: BoxFit.scaleDown, child: Text(label)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: color,
+          side: BorderSide(color: color),
+
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        ),
+      ),
     );
   }
 

@@ -1,31 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Status reservasi sesuai API server
-///
-/// Flow normal:
-/// PENDING → APPROVED → COMPLETED
-///
-/// Flow rejection:
-/// PENDING → REJECTED
-///
-/// Flow cancellation:
-/// PENDING/APPROVED → CANCELLED
-enum ReservationStatus {
-  /// Reservasi baru dibuat, menunggu persetujuan admin
-  pending,
-
-  /// Reservasi disetujui oleh admin
-  approved,
-
-  /// Reservasi ditolak oleh admin
-  rejected,
-
-  /// Reservasi selesai
-  completed,
-
-  /// Reservasi dibatalkan oleh user atau admin
-  cancelled,
-}
+enum ReservationStatus { pending, approved, rejected, completed, cancelled }
 
 extension ReservationStatusExtension on ReservationStatus {
   Color get color {
@@ -47,7 +22,6 @@ extension ReservationStatusExtension on ReservationStatus {
     }
   }
 
-  /// Display name untuk UI (Bahasa Indonesia)
   String get displayName {
     switch (this) {
       case ReservationStatus.pending:
@@ -63,7 +37,6 @@ extension ReservationStatusExtension on ReservationStatus {
     }
   }
 
-  /// Deskripsi status
   String get description {
     switch (this) {
       case ReservationStatus.pending:
@@ -79,57 +52,49 @@ extension ReservationStatusExtension on ReservationStatus {
     }
   }
 
-  /// Warna untuk UI indicator
   String get colorHex {
     switch (this) {
       case ReservationStatus.pending:
-        return '#FF9800'; // Orange
+        return '#FF9800';
       case ReservationStatus.approved:
-        return '#4CAF50'; // Green
+        return '#4CAF50';
       case ReservationStatus.rejected:
-        return '#F44336'; // Red
+        return '#F44336';
       case ReservationStatus.completed:
-        return '#9E9E9E'; // Grey
+        return '#117cd4';
       case ReservationStatus.cancelled:
-        return '#F44336'; // Red
+        return '#F44336';
     }
   }
 
-  /// Apakah bisa dibatalkan
   bool get canBeCancelled {
     return this == ReservationStatus.pending ||
         this == ReservationStatus.approved;
   }
 
-  /// Apakah bisa di-approve (admin only)
   bool get canBeApproved {
     return this == ReservationStatus.pending;
   }
 
-  /// Apakah bisa di-reject (admin only)
   bool get canBeRejected {
     return this == ReservationStatus.pending;
   }
 
-  /// Apakah bisa di-complete
   bool get canBeCompleted {
     return this == ReservationStatus.approved;
   }
 
-  /// Apakah masih aktif (belum selesai/batal/ditolak)
   bool get isActive {
     return this == ReservationStatus.pending ||
         this == ReservationStatus.approved;
   }
 
-  /// Apakah sudah final (tidak bisa diubah)
   bool get isFinal {
     return this == ReservationStatus.completed ||
         this == ReservationStatus.cancelled ||
         this == ReservationStatus.rejected;
   }
 
-  /// Convert dari string API
   static ReservationStatus fromString(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
@@ -147,7 +112,6 @@ extension ReservationStatusExtension on ReservationStatus {
     }
   }
 
-  /// Convert ke string untuk API
   String toApiString() {
     return name;
   }
