@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
+import 'package:rapa_track_mobile_app/app/enums/reservation_status.dart';
 
 class ReservationStatusBadge extends StatelessWidget {
   final ReservationStatus status;

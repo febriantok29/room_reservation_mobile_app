@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/pages/room/room_detail_page.dart';
-import 'package:room_reservation_mobile_app/app/services/room_service.dart';
+import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/models/room.dart';
+import 'package:rapa_track_mobile_app/app/pages/room/room_detail_page.dart';
+import 'package:rapa_track_mobile_app/app/services/room_service.dart';
 
 class RoomListPage extends StatefulWidget {
   final Profile user;
@@ -64,10 +64,12 @@ class _RoomListPageState extends State<RoomListPage> {
       },
       child: Scaffold(
         appBar: AppBar(title: const Text('Daftar Ruangan Meeting')),
-        body: Column(children: [
-          _buildFilterSection(),
-          Expanded(child: _buildContent()),
-        ]),
+        body: Column(
+          children: [
+            _buildFilterSection(),
+            Expanded(child: _buildContent()),
+          ],
+        ),
         floatingActionButton: widget.user.isAdmin
             ? FloatingActionButton(
                 onPressed: _navigateToAddRoom,

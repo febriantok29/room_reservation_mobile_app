@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/pages/home_page.dart';
-import 'package:room_reservation_mobile_app/app/states/authentication_state.dart';
-import 'package:room_reservation_mobile_app/app/theme/app_colors.dart';
-import 'package:room_reservation_mobile_app/app/theme/app_sizes.dart';
+import 'package:rapa_track_mobile_app/app/pages/home_page.dart';
+import 'package:rapa_track_mobile_app/app/states/authentication_state.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
@@ -188,15 +188,12 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final authState = AuthenticationState();
 
-      final isLoggedIn = await authState.login(
-        credential,
-        password,
-      );
+      final isLoggedIn = await authState.login(credential, password);
 
       if (isLoggedIn && mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomePage()),
-        );
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
       }
     } catch (e) {
       setState(() {

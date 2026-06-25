@@ -1,6 +1,6 @@
-import 'package:room_reservation_mobile_app/app/models/auth_token.dart';
-import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/network/route_builder.dart';
+import 'package:rapa_track_mobile_app/app/models/auth_token.dart';
+import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/network/route_builder.dart';
 
 class AuthService {
   Future<AuthToken> login({

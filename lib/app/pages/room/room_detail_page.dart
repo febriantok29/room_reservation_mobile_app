@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/models/requests/room_request.dart';
-import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/models/room_facility.dart';
-import 'package:room_reservation_mobile_app/app/pages/room/facility_selector_page.dart';
-import 'package:room_reservation_mobile_app/app/services/room_service.dart';
+import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/models/requests/room_request.dart';
+import 'package:rapa_track_mobile_app/app/models/room.dart';
+import 'package:rapa_track_mobile_app/app/models/room_facility.dart';
+import 'package:rapa_track_mobile_app/app/pages/room/facility_selector_page.dart';
+import 'package:rapa_track_mobile_app/app/services/room_service.dart';
 
 class RoomDetailPage extends StatefulWidget {
   final Profile user;

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/core/storage/secure_storage_service.dart';
-import 'package:room_reservation_mobile_app/app/models/auth_token.dart';
-import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/network/route_builder.dart';
-import 'package:room_reservation_mobile_app/app/pages/login_page.dart';
-import 'package:room_reservation_mobile_app/app/services/auth_service.dart';
-import 'package:room_reservation_mobile_app/app/utils/navigation_handler.dart';
+import 'package:rapa_track_mobile_app/app/core/storage/secure_storage_service.dart';
+import 'package:rapa_track_mobile_app/app/models/auth_token.dart';
+import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/network/route_builder.dart';
+import 'package:rapa_track_mobile_app/app/pages/login_page.dart';
+import 'package:rapa_track_mobile_app/app/services/auth_service.dart';
+import 'package:rapa_track_mobile_app/app/utils/navigation_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthenticationState {

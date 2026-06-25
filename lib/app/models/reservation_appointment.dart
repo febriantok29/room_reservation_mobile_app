@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
+import 'package:rapa_track_mobile_app/app/enums/reservation_status.dart';
+import 'package:rapa_track_mobile_app/app/models/reservation.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
-import 'package:room_reservation_mobile_app/app/models/reservation.dart';
 
 /// Model untuk mengkonversi Reservation menjadi Appointment untuk Syncfusion Calendar
 class ReservationAppointment extends Appointment {

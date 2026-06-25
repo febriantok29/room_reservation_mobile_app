@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
-import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/models/reservation.dart';
-import 'package:room_reservation_mobile_app/app/pages/reservation/reservation_modal_bottom_sheet.dart';
-import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
-import 'package:room_reservation_mobile_app/app/ui_items/cards/reservation_card.dart';
-import 'package:room_reservation_mobile_app/app/ui_items/reservation_status_badge.dart';
+import 'package:rapa_track_mobile_app/app/enums/reservation_status.dart';
+import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/models/reservation.dart';
+import 'package:rapa_track_mobile_app/app/pages/reservation/reservation_modal_bottom_sheet.dart';
+import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/cards/reservation_card.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/reservation_status_badge.dart';
 
 class ReservationListPage extends StatefulWidget {
   final Profile user;

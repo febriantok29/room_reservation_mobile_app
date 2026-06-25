@@ -1,4 +1,4 @@
-import 'package:room_reservation_mobile_app/app/models/meta_data_response.dart';
+import 'package:rapa_track_mobile_app/app/models/meta_data_response.dart';
 
 /// Model untuk response API standar
 class ApiResponse<T> {

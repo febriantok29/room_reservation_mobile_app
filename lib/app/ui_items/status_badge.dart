@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/theme/app_sizes.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 
 /// Status badge yang konsisten untuk seluruh aplikasi
 class StatusBadge extends StatelessWidget {

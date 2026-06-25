@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/models/room_facility.dart';
-import 'package:room_reservation_mobile_app/app/services/facility_service.dart';
+import 'package:rapa_track_mobile_app/app/models/room_facility.dart';
+import 'package:rapa_track_mobile_app/app/services/facility_service.dart';
 
 class FacilitySelectorPage extends StatefulWidget {
   final List<RoomFacility> initialSelectedFacilities;

@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/models/room_facility.dart';
-import 'package:room_reservation_mobile_app/app/services/facility_service.dart';
-import 'package:room_reservation_mobile_app/app/services/room_service.dart';
-import 'package:room_reservation_mobile_app/app/ui_items/room_facility_chips.dart';
-import 'package:room_reservation_mobile_app/app/ui_items/room_facility_filter.dart';
+import 'package:rapa_track_mobile_app/app/models/room.dart';
+import 'package:rapa_track_mobile_app/app/models/room_facility.dart';
+import 'package:rapa_track_mobile_app/app/services/facility_service.dart';
+import 'package:rapa_track_mobile_app/app/services/room_service.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/room_facility_chips.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/room_facility_filter.dart';
 
 class RoomSelectorSection extends StatefulWidget {
   final DateTime? startDateTime;
@@ -21,8 +21,7 @@ class RoomSelectorSection extends StatefulWidget {
   });
 
   @override
-  State<RoomSelectorSection> createState() =>
-      _RoomSelectorSectionState();
+  State<RoomSelectorSection> createState() => _RoomSelectorSectionState();
 
   static Future<Room?> showBottomSheet({
     required BuildContext context,
@@ -114,7 +113,9 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
     try {
       final rooms = await _roomApiService.getRoomList(
         search: _searchKeyword.isNotEmpty ? _searchKeyword : null,
-        availableOnly: _isTimeBasedQuery ? true : null, // If not time based, don't filter available
+        availableOnly: _isTimeBasedQuery
+            ? true
+            : null, // If not time based, don't filter available
         startTime: widget.startDateTime,
         endTime: widget.endDateTime,
         facilityIds: _selectedFacilityIds.isNotEmpty

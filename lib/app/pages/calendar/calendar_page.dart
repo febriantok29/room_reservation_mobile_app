@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
+import 'package:rapa_track_mobile_app/app/enums/reservation_status.dart';
+import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/models/reservation.dart';
+import 'package:rapa_track_mobile_app/app/models/reservation_appointment.dart';
+import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
+import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
-import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/models/reservation.dart';
-import 'package:room_reservation_mobile_app/app/models/reservation_appointment.dart';
-import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
-import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
 
 class CalendarPage extends StatefulWidget {
   final Profile user;
@@ -22,7 +22,7 @@ class _CalendarPageState extends State<CalendarPage> {
 
   CalendarView _currentView = CalendarView.month;
   DateTime _selectedDate = DateTime.now();
-  
+
   Future<CalendarResult>? _calendarFuture;
 
   int get _currentYear => _selectedDate.year;
@@ -188,8 +188,9 @@ class _CalendarPageState extends State<CalendarPage> {
                         if (mounted) {
                           final newDate = details
                               .visibleDates[details.visibleDates.length ~/ 2];
-                          
-                          if (newDate.year != _currentYear || newDate.month != _currentMonth) {
+
+                          if (newDate.year != _currentYear ||
+                              newDate.month != _currentMonth) {
                             setState(() {
                               _selectedDate = newDate;
                               _loadCalendar();

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/models/room_facility.dart';
+import 'package:rapa_track_mobile_app/app/models/room_facility.dart';
 
 /// Widget untuk filter fasilitas ruangan
 /// Menampilkan chips horizontal scrollable dengan multi-select

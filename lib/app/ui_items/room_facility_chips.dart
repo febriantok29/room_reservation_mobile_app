@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/models/room_facility.dart';
+import 'package:rapa_track_mobile_app/app/models/room_facility.dart';
 
 /// Widget untuk menampilkan chips fasilitas di room card
 /// Compact display dengan icon dan text

@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:haleyora_package/enum.dart';
 import 'package:haleyora_package/haleyora_package.dart';
 import 'package:http/http.dart' as http;
-import 'package:room_reservation_mobile_app/app/network/api_config/default_api.dart';
-import 'package:room_reservation_mobile_app/app/states/authentication_state.dart';
+import 'package:rapa_track_mobile_app/app/network/api_config/default_api.dart';
+import 'package:rapa_track_mobile_app/app/states/authentication_state.dart';
 
 class RouteBuilder extends ApiClient {
   static final ApiConfig _sharedConfig = DefaultApi();

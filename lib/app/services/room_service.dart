@@ -1,6 +1,6 @@
-import 'package:room_reservation_mobile_app/app/models/requests/room_request.dart';
-import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/network/route_builder.dart';
+import 'package:rapa_track_mobile_app/app/models/requests/room_request.dart';
+import 'package:rapa_track_mobile_app/app/models/room.dart';
+import 'package:rapa_track_mobile_app/app/network/route_builder.dart';
 
 class RoomService {
   Future<List<Room>> getRoomList({

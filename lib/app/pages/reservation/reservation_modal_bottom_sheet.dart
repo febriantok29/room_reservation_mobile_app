@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/models/reservation.dart';
-import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/pages/reservation/room_selector_section.dart';
-import 'package:room_reservation_mobile_app/app/pages/reservation/user_selector_section.dart';
-import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
-import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
+import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/models/reservation.dart';
+import 'package:rapa_track_mobile_app/app/models/room.dart';
+import 'package:rapa_track_mobile_app/app/pages/reservation/room_selector_section.dart';
+import 'package:rapa_track_mobile_app/app/pages/reservation/user_selector_section.dart';
+import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
+import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
 
 class ReservationModalBottomSheet extends StatefulWidget {
   final Profile user;

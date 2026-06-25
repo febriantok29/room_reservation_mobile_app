@@ -1,8 +1,8 @@
 import 'package:intl/intl.dart';
-import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
-import 'package:room_reservation_mobile_app/app/models/base_model.dart';
-import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/models/room.dart';
+import 'package:rapa_track_mobile_app/app/enums/reservation_status.dart';
+import 'package:rapa_track_mobile_app/app/models/base_model.dart';
+import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/models/room.dart';
 
 class Reservation extends BaseModel {
   final String? userId;

@@ -1,5 +1,5 @@
-import 'package:room_reservation_mobile_app/app/enums/user_role.dart';
-import 'package:room_reservation_mobile_app/app/models/base_model.dart';
+import 'package:rapa_track_mobile_app/app/enums/user_role.dart';
+import 'package:rapa_track_mobile_app/app/models/base_model.dart';
 
 class Profile extends BaseModel {
   String? employeeId;
