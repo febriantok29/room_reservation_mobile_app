@@ -53,6 +53,9 @@ class DateFormatter {
     return '$day, ${date.day} $month ${date.year}';
   }
 
+  /// Alias untuk fullDate (untuk backward compatibility)
+  static String longDate(DateTime date) => fullDate(date);
+
   /// Format: "31 Des 2024"
   static String shortDate(DateTime date) {
     date = date.toLocal();
