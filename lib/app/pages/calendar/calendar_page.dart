@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/enums/reservation_status.dart';
 import 'package:rapa_track_mobile_app/app/models/profile.dart';
 import 'package:rapa_track_mobile_app/app/models/reservation.dart';
 import 'package:rapa_track_mobile_app/app/models/reservation_appointment.dart';
+import 'package:rapa_track_mobile_app/app/pages/reservation/create_reservation_wizard_page.dart';
 import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 
@@ -21,9 +24,10 @@ class _CalendarPageState extends State<CalendarPage> {
   final ReservationService _reservationService = ReservationService();
 
   CalendarView _currentView = CalendarView.month;
-  DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDate = DateTime(2026, 6, 1);
 
   Future<CalendarResult>? _calendarFuture;
+  final Map<String, CalendarResult> _cachedResults = {};
 
   int get _currentYear => _selectedDate.year;
   int get _currentMonth => _selectedDate.month;
@@ -41,15 +45,40 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   void _loadCalendar() {
+    final cacheKey =
+        '$_currentYear-${_currentMonth.toString().padLeft(2, '0')}';
+
+    if (_cachedResults.containsKey(cacheKey)) {
+      setState(() {
+        _calendarFuture = Future.value(_cachedResults[cacheKey]!);
+      });
+      return;
+    }
+
     setState(() {
-      _calendarFuture = _reservationService.getCalendar(
-        year: _currentYear,
-        month: _currentMonth,
-      );
+      _calendarFuture = _reservationService
+          .getCalendar(year: _currentYear, month: _currentMonth)
+          .then((result) {
+            debugPrint(
+              '📅 Calendar loaded: ${result.reservations.length} reservations',
+            );
+            debugPrint('   Year: ${result.year}, Month: ${result.month}');
+            if (result.reservations.isEmpty) {
+              debugPrint(
+                '   ⚠️  No reservations found for $_currentMonth/$_currentYear',
+              );
+            }
+
+            _cachedResults[cacheKey] = result;
+            return result;
+          })
+          .catchError((error) {
+            debugPrint('❌ Calendar load error: $error');
+            throw error;
+          });
     });
   }
 
-  /// Handle pull to refresh
   Future<void> _onRefresh() async {
     _loadCalendar();
     if (_calendarFuture != null) {
@@ -61,9 +90,37 @@ class _CalendarPageState extends State<CalendarPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Kalender Reservasi'),
+        title: Text('Kalender Reservasi'),
         actions: [
-          // View mode selector
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: GestureDetector(
+              onTap: () => _showMonthYearPicker(context),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_today, size: 18, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${_getMonthName(_currentMonth)} $_currentYear',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.arrow_drop_down,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ],
+              ),
+            ),
+          ),
           PopupMenuButton<CalendarView>(
             icon: const Icon(Icons.view_module),
             onSelected: (CalendarView view) {
@@ -114,7 +171,7 @@ class _CalendarPageState extends State<CalendarPage> {
               ),
             ],
           ),
-          // Refresh button
+
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _onRefresh,
@@ -135,10 +192,6 @@ class _CalendarPageState extends State<CalendarPage> {
 
           final calendarResult = snapshot.data;
           final reservations = calendarResult?.reservations ?? [];
-
-          if (reservations.isEmpty) {
-            return _buildEmptyState();
-          }
 
           final appointments = reservations
               .map((r) => ReservationAppointment.fromReservation(r))
@@ -182,6 +235,13 @@ class _CalendarPageState extends State<CalendarPage> {
                           details.appointments!.first as ReservationAppointment,
                         );
                       }
+                      // else if (details.targetElement ==
+                      //     CalendarElement.calendarCell) {
+                      //   final tappedDate = details.date;
+                      //   if (tappedDate != null) {
+                      //     _navigateToCreateReservation(initialDate: tappedDate);
+                      //   }
+                      // }
                     },
                     onViewChanged: (ViewChangedDetails details) {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -191,12 +251,13 @@ class _CalendarPageState extends State<CalendarPage> {
 
                           if (newDate.year != _currentYear ||
                               newDate.month != _currentMonth) {
+                            debugPrint(
+                              '📆 Calendar view changed to: ${newDate.month}/${newDate.year}',
+                            );
                             setState(() {
                               _selectedDate = newDate;
                               _loadCalendar();
                             });
-                          } else {
-                            _selectedDate = newDate;
                           }
                         }
                       });
@@ -208,10 +269,19 @@ class _CalendarPageState extends State<CalendarPage> {
           );
         },
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _navigateToCreateReservation(),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text(
+          'Buat Reservasi',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+      ),
     );
   }
 
-  /// Info panel di atas kalender
   Widget _buildInfoPanel(List<Reservation> reservations) {
     final active = reservations.where((r) => r.status.isActive).length;
     final completed = reservations
@@ -293,45 +363,6 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  /// Empty state
-  Widget _buildEmptyState() {
-    return RefreshIndicator(
-      onRefresh: _onRefresh,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Container(
-          height: MediaQuery.of(context).size.height - 200,
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.calendar_today_outlined,
-                size: 80,
-                color: Colors.grey.shade400,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Tidak ada reservasi',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Tarik ke bawah untuk refresh',
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Error state
   Widget _buildErrorState(String error) {
     return RefreshIndicator(
       onRefresh: _onRefresh,
@@ -365,7 +396,6 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  /// Show appointment details in bottom sheet
   void _showAppointmentDetails(
     BuildContext context,
     ReservationAppointment appointment,
@@ -392,7 +422,6 @@ class _CalendarPageState extends State<CalendarPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header dengan status badge
               Row(
                 children: [
                   Expanded(
@@ -432,7 +461,7 @@ class _CalendarPageState extends State<CalendarPage> {
                 ],
               ),
               const SizedBox(height: 24),
-              // Detail information
+
               _buildDetailRow(
                 icon: Icons.person,
                 label: 'Pemesan',
@@ -463,7 +492,7 @@ class _CalendarPageState extends State<CalendarPage> {
                 value: '${reservation.visitorCount ?? 0} orang',
               ),
               const SizedBox(height: 16),
-              // Purpose
+
               const Text(
                 'Keperluan:',
                 style: TextStyle(
@@ -517,6 +546,133 @@ class _CalendarPageState extends State<CalendarPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _navigateToCreateReservation({DateTime? initialDate}) async {
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CreateReservationWizardPage(
+          currentUser: widget.user,
+          initialDate: initialDate,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      _loadCalendar();
+    }
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return months[month - 1];
+  }
+
+  void _showMonthYearPicker(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pilih Bulan & Tahun'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: () {
+                    setState(() {
+                      _selectedDate = DateTime(_currentYear - 1, _currentMonth);
+                      _loadCalendar();
+                    });
+                    Navigator.pop(context);
+                  },
+                ),
+                Text(
+                  '$_currentYear',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: () {
+                    setState(() {
+                      _selectedDate = DateTime(_currentYear + 1, _currentMonth);
+                      _loadCalendar();
+                    });
+                    Navigator.pop(context);
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              children: List.generate(12, (index) {
+                final month = index + 1;
+                final isSelected = month == _currentMonth;
+                return Material(
+                  color: isSelected ? AppColors.primary : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(8),
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        _selectedDate = DateTime(_currentYear, month);
+                        _loadCalendar();
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: Center(
+                      child: Text(
+                        _getMonthName(month),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: isSelected ? Colors.white : Colors.black,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(
+      DiagnosticsProperty<CalendarController>(
+        '_calendarController',
+        _calendarController,
+      ),
+    );
+    properties.add(
+      DiagnosticsProperty<DateTime>('_selectedDate', _selectedDate),
     );
   }
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/enums/reservation_status.dart';
 import 'package:rapa_track_mobile_app/app/models/profile.dart';
 import 'package:rapa_track_mobile_app/app/models/reservation.dart';
-import 'package:rapa_track_mobile_app/app/pages/reservation/reservation_modal_bottom_sheet.dart';
+import 'package:rapa_track_mobile_app/app/pages/reservation/create_reservation_wizard_page.dart';
 import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
 import 'package:rapa_track_mobile_app/app/ui_items/cards/reservation_card.dart';
 import 'package:rapa_track_mobile_app/app/ui_items/reservation_status_badge.dart';
@@ -262,21 +262,25 @@ class _ReservationListPageState extends State<ReservationListPage> {
   }
 
   Widget? _buildAddButton() {
-    return FloatingActionButton(
+    return FloatingActionButton.extended(
       onPressed: _createReservation,
       backgroundColor: Colors.blue,
-      child: const Icon(Icons.add, color: Colors.white),
+      icon: const Icon(Icons.add, color: Colors.white),
+      label: const Text(
+        'Buat Reservasi',
+        style: TextStyle(color: Colors.white),
+      ),
     );
   }
 
-  void _createReservation() async {
-    final bool? needRefresh = await ReservationModalBottomSheet.show(
-      context: context,
-      user: widget.user,
-      onSuccess: _loadReservations,
+  Future<void> _createReservation() async {
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CreateReservationWizardPage(currentUser: widget.user),
+      ),
     );
 
-    if (needRefresh == true) {
+    if (result == true) {
       _loadReservations();
     }
   }

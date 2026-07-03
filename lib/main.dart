@@ -4,13 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:rapa_track_mobile_app/firebase_options.dart';
 import 'package:rapa_track_mobile_app/app/pages/home_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/login_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/splash_screen_page.dart';
 import 'package:rapa_track_mobile_app/app/states/authentication_state.dart';
-import 'package:rapa_track_mobile_app/app/theme/app_theme.dart';
 import 'package:rapa_track_mobile_app/app/utils/navigation_handler.dart';
+import 'package:rapa_track_mobile_app/firebase_options.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -54,7 +53,10 @@ class _RoomReservationAppState extends State<RoomReservationApp> {
       ],
       supportedLocales: const [Locale('id', 'ID')],
       locale: const Locale('id', 'ID'),
-      theme: AppTheme.light,
+      theme: ThemeData(
+        useMaterial3: false, // Reverts your design system to Material 2
+      ),
+      // theme: AppTheme.light,
       home: const SplashScreenPage(),
     );
   }
