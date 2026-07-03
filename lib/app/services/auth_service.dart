@@ -77,4 +77,14 @@ class AuthService {
 
     return null;
   }
+
+  Future<void> logout() async {
+    await RouteBuilder('Auth.logout').post(body: <String, dynamic>{});
+  }
+
+  Future<void> updateFcmToken(String fcmToken) async {
+    await RouteBuilder(
+      'Auth.updateFcmToken',
+    ).post(body: {'fcm_token': fcmToken});
+  }
 }

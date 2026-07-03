@@ -2,10 +2,20 @@ import 'package:rapa_track_mobile_app/app/models/profile.dart';
 import 'package:rapa_track_mobile_app/app/network/route_builder.dart';
 
 class UserService {
-  Future<List<Profile>> getUsers({String? search}) async {
+  Future<List<Profile>> getUsers({
+    String? search,
+    int? perPage,
+    int? page,
+  }) async {
+    final queries = <String, dynamic>{
+      if (search?.isNotEmpty ?? false) 'q': search,
+      if (perPage != null) 'per_page': perPage,
+      if (page != null) 'page': page,
+    };
+
     final route = RouteBuilder(
       'User.list',
-      queries: {if (search?.isNotEmpty ?? false) 'q': search},
+      queries: queries.isNotEmpty ? queries : null,
     );
     final response = await route.get();
 
