@@ -34,7 +34,6 @@ dependencies:
     sdk: flutter
 
   http: ^1.5.0
-  flutter_riverpod: ^2.6.1
   flutter_secure_storage: ^9.2.2
   shared_preferences: ^2.5.3
   intl: ^0.20.2
@@ -48,7 +47,7 @@ dependencies:
   haleyora_package:
     git:
       url: https://github.com/febriantok29/haleyora_package.git
-      ref: 3322efab6c8fb889ad84d4f6910ffaa1d7ba4fb8
+      ref: 72f0eae90be87f79c959d0732224b05ceb5d705a
 
 dev_dependencies:
   flutter_test:
