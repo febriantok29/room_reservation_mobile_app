@@ -1,8 +1,17 @@
 import 'package:haleyora_package/haleyora_package.dart';
 
+const _apiHost = String.fromEnvironment(
+  'API_HOST',
+  defaultValue: '192.168.100.9:8000',
+);
+const _apiProtocol = String.fromEnvironment(
+  'API_PROTOCOL',
+  defaultValue: 'http',
+);
+
 class DefaultApi extends ApiConfig {
   @override
-  String get protocol => 'http';
+  String get protocol => _apiProtocol;
 
   @override
   ApiEndpoints get endpoints => DefaultApiRoutes();
@@ -11,7 +20,7 @@ class DefaultApi extends ApiConfig {
   String? get prefix => 'api';
 
   @override
-  List<String> get hosts => ['192.168.100.9:8000'];
+  List<String> get hosts => [_apiHost];
 
   @override
   String? get version => 'v1';
