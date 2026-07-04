@@ -1,17 +1,28 @@
+import 'dart:io';
+
 import 'package:rapa_track_mobile_app/app/models/complaint.dart';
 import 'package:rapa_track_mobile_app/app/network/route_builder.dart';
+import 'package:rapa_track_mobile_app/app/services/data_list_service.dart';
 
-class ComplaintService {
-  /// Get list of complaints
+class ComplaintService extends DataListService<Complaint> {
+  @override
+  String get routeKey => 'Complaint.list';
+
+  @override
+  Complaint fromJson(Map<String, dynamic> json) => Complaint.fromJson(json);
+
   Future<List<Complaint>> getComplaintList({
     String? status,
     String? roomId,
+    String? reservationId,
     int? perPage,
     int? page,
   }) async {
     final queries = <String, dynamic>{
       if (status != null && status.isNotEmpty) 'status': status,
       if (roomId != null && roomId.isNotEmpty) 'room_id': roomId,
+      if (reservationId != null && reservationId.isNotEmpty)
+        'reservation_id': reservationId,
       if (perPage != null) 'per_page': perPage,
       if (page != null) 'page': page,
     };
@@ -34,7 +45,6 @@ class ComplaintService {
         .toList();
   }
 
-  /// Get complaint detail
   Future<Complaint> getComplaintDetail(String complaintId) async {
     final response = await RouteBuilder(
       'Complaint.detail',
@@ -51,14 +61,22 @@ class ComplaintService {
     return Complaint.fromJson(rawData);
   }
 
-  /// Create new complaint
   Future<Complaint> createComplaint({
-    required String roomId,
-    required String message,
+    required String reservationId,
+    required String title,
+    required String description,
+    String? facilityId,
+    File? photo,
   }) async {
-    final body = <String, dynamic>{'room_id': roomId, 'message': message};
+    final body = <String, dynamic>{
+      'reservation_id': reservationId,
+      'title': title,
+      'description': description,
+      if (facilityId != null && facilityId.isNotEmpty) 'facility_id': facilityId,
+      if (photo != null) 'photo': photo,
+    };
 
-    final response = await RouteBuilder('Complaint.create').post(body: body);
+    final response = await RouteBuilder('Complaint.create').postFile(body);
 
     final payload = _readSuccessPayload(response);
     final rawData = payload['data'];
@@ -70,16 +88,15 @@ class ComplaintService {
     return Complaint.fromJson(rawData);
   }
 
-  /// Update complaint status (Admin only)
   Future<Complaint> updateComplaintStatus({
     required String complaintId,
     required String status,
-    String? adminResponse,
+    String? resolutionNotes,
   }) async {
     final body = <String, dynamic>{
       'status': status,
-      if (adminResponse != null && adminResponse.isNotEmpty)
-        'admin_response': adminResponse,
+      if (resolutionNotes != null && resolutionNotes.isNotEmpty)
+        'resolution_notes': resolutionNotes,
     };
 
     final response = await RouteBuilder(

@@ -43,6 +43,7 @@ dependencies:
   firebase_messaging: ^15.2.10
   flutter_slidable: ^3.0.1
   syncfusion_flutter_calendar: ^28.1.38
+  image_picker: ^1.1.2
 
   haleyora_package:
     git:

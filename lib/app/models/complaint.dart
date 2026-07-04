@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/models/base_model.dart';
 import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/models/reservation.dart';
 import 'package:rapa_track_mobile_app/app/models/room.dart';
+import 'package:rapa_track_mobile_app/app/models/room_facility.dart';
 
 enum ComplaintStatus {
-  pending,
+  open,
   inProgress,
   resolved,
   rejected;
 
   String get displayName {
     switch (this) {
-      case ComplaintStatus.pending:
+      case ComplaintStatus.open:
         return 'Menunggu';
       case ComplaintStatus.inProgress:
         return 'Diproses';
@@ -22,10 +24,9 @@ enum ComplaintStatus {
     }
   }
 
-  /// Icon untuk status
   IconData get icon {
     switch (this) {
-      case ComplaintStatus.pending:
+      case ComplaintStatus.open:
         return Icons.pending;
       case ComplaintStatus.inProgress:
         return Icons.sync;
@@ -36,10 +37,9 @@ enum ComplaintStatus {
     }
   }
 
-  /// Warna untuk status
   Color get color {
     switch (this) {
-      case ComplaintStatus.pending:
+      case ComplaintStatus.open:
         return Colors.orange;
       case ComplaintStatus.inProgress:
         return Colors.blue;
@@ -50,10 +50,13 @@ enum ComplaintStatus {
     }
   }
 
+  bool get isClosed =>
+      this == ComplaintStatus.resolved || this == ComplaintStatus.rejected;
+
   static ComplaintStatus fromString(String status) {
     switch (status.toLowerCase()) {
-      case 'pending':
-        return ComplaintStatus.pending;
+      case 'open':
+        return ComplaintStatus.open;
       case 'in_progress':
       case 'inprogress':
         return ComplaintStatus.inProgress;
@@ -62,31 +65,43 @@ enum ComplaintStatus {
       case 'rejected':
         return ComplaintStatus.rejected;
       default:
-        return ComplaintStatus.pending;
+        return ComplaintStatus.open;
     }
   }
 }
 
 class Complaint extends BaseModel {
-  final String? userId;
+  final String? reportedBy;
   final String? roomId;
-  final String? message;
+  final String? reservationId;
+  final String? facilityId;
+  final String? title;
+  final String? description;
+  final String? photoPath;
   final ComplaintStatus status;
-  final String? adminResponse;
-  final DateTime? respondedAt;
+  final String? resolutionNotes;
+  final DateTime? resolvedAt;
+  final String? resolvedBy;
 
-  // Relations
   Room? room;
-  Profile? user;
+  Reservation? reservation;
+  RoomFacility? facility;
+  Profile? reporter;
+  Profile? resolver;
 
   Complaint({
     super.id,
-    this.userId,
+    this.reportedBy,
     this.roomId,
-    this.message,
-    this.status = ComplaintStatus.pending,
-    this.adminResponse,
-    this.respondedAt,
+    this.reservationId,
+    this.facilityId,
+    this.title,
+    this.description,
+    this.photoPath,
+    this.status = ComplaintStatus.open,
+    this.resolutionNotes,
+    this.resolvedAt,
+    this.resolvedBy,
     super.createdBy,
     super.updatedBy,
     super.deletedBy,
@@ -94,75 +109,61 @@ class Complaint extends BaseModel {
     super.updatedAt,
     super.deletedAt,
     this.room,
-    this.user,
+    this.reservation,
+    this.facility,
+    this.reporter,
+    this.resolver,
   });
 
   factory Complaint.fromJson(Map<String, dynamic> json) {
-    final rawStatus = '${json['status'] ?? 'pending'}'.toLowerCase();
+    final rawStatus = '${json['status'] ?? 'open'}'.toLowerCase();
 
     Room? room;
     if (json['room'] is Map<String, dynamic>) {
       room = Room.fromJson(json['room']);
     }
 
-    Profile? user;
-    if (json['user'] is Map<String, dynamic>) {
-      user = Profile.fromJson(json['user'] as Map<String, dynamic>);
+    Reservation? reservation;
+    if (json['reservation'] is Map<String, dynamic>) {
+      reservation = Reservation.fromJson(json['reservation']);
+    }
+
+    RoomFacility? facility;
+    if (json['facility'] is Map<String, dynamic>) {
+      facility = RoomFacility.fromJson(json['facility']);
+    }
+
+    Profile? reporter;
+    if (json['reporter'] is Map<String, dynamic>) {
+      reporter = Profile.fromJson(json['reporter']);
+    }
+
+    Profile? resolver;
+    if (json['resolver'] is Map<String, dynamic>) {
+      resolver = Profile.fromJson(json['resolver']);
     }
 
     final complaint = Complaint(
-      userId: json['user_id']?.toString(),
+      reportedBy: json['reported_by']?.toString(),
       roomId: json['room_id']?.toString(),
-      message: json['message']?.toString(),
+      reservationId: json['reservation_id']?.toString(),
+      facilityId: json['facility_id']?.toString(),
+      title: json['title']?.toString(),
+      description: json['description']?.toString(),
+      photoPath: json['photo_path']?.toString(),
       status: ComplaintStatus.fromString(rawStatus),
-      adminResponse: json['admin_response']?.toString(),
-      respondedAt: DateTime.tryParse(
-        '${json['responded_at'] ?? ''}',
-      )?.toLocal(),
+      resolutionNotes: json['resolution_notes']?.toString(),
+      resolvedAt: DateTime.tryParse('${json['resolved_at'] ?? ''}')?.toLocal(),
+      resolvedBy: json['resolved_by']?.toString(),
       room: room,
-      user: user,
+      reservation: reservation,
+      facility: facility,
+      reporter: reporter,
+      resolver: resolver,
     );
 
     complaint.setCommonFieldsFromJson(json);
 
     return complaint;
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'user_id': userId,
-      'room_id': roomId,
-      'message': message,
-      'status': status.name,
-      'admin_response': adminResponse,
-      'responded_at': respondedAt?.toIso8601String(),
-      'created_at': createdAt?.toIso8601String(),
-      'updated_at': updatedAt?.toIso8601String(),
-    };
-  }
-
-  Complaint copyWith({
-    String? id,
-    String? userId,
-    String? roomId,
-    String? message,
-    ComplaintStatus? status,
-    String? adminResponse,
-    DateTime? respondedAt,
-    Room? room,
-    Profile? user,
-  }) {
-    return Complaint(
-      id: id ?? this.id,
-      userId: userId ?? this.userId,
-      roomId: roomId ?? this.roomId,
-      message: message ?? this.message,
-      status: status ?? this.status,
-      adminResponse: adminResponse ?? this.adminResponse,
-      respondedAt: respondedAt ?? this.respondedAt,
-      room: room ?? this.room,
-      user: user ?? this.user,
-    );
   }
 }
