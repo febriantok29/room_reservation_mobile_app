@@ -108,11 +108,11 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _buildSectionHeader(title: 'Informasi Dasar'),
           _buildTextField(
             controller: _nameController,
             label: 'Nama Ruangan',
-            validator: (v) =>
-                (v == null || v.isEmpty) ? 'Nama tidak boleh kosong' : null,
+            validator: _validateRoomName,
           ),
           const SizedBox(height: 16),
           Row(
@@ -120,11 +120,14 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
               Expanded(
                 child: _buildTextField(
                   controller: _capacityController,
-                  label: 'Kapasitas',
+                  label: 'Kapasitas (orang)',
                   keyboardType: TextInputType.number,
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Wajib diisi';
-                    if (int.tryParse(v) == null) return 'Harus angka';
+                    final cap = int.tryParse(v);
+                    if (cap == null) return 'Harus angka';
+                    if (cap < 1) return 'Min. 1 orang';
+                    if (cap > 100) return 'Max. 100 orang';
                     return null;
                   },
                 ),
@@ -137,7 +140,12 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                   keyboardType: TextInputType.number,
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Wajib diisi';
-                    if (int.tryParse(v) == null) return 'Harus angka';
+
+                    final floor = int.tryParse(v);
+
+                    if (floor == null) return 'Harus angka';
+
+                    if (floor < 1 || floor > 4) return 'Lantai 1-4';
                     return null;
                   },
                 ),
@@ -151,41 +159,106 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
             maxLines: 3,
           ),
           const SizedBox(height: 24),
+
+          _buildSectionHeader(
+            title: 'Fasilitas',
+            actionSection: widget.editable
+                ? TextButton.icon(
+                    onPressed: _openFacilitySelector,
+                    icon: const Icon(Icons.edit, size: 18),
+                    label: const Text('Kelola'),
+                  )
+                : null,
+          ),
           _buildFacilitiesSection(),
-          const SizedBox(height: 16),
-          if (widget.editable)
+          const SizedBox(height: 24),
+
+          if (widget.editable) ...[
+            _buildSectionHeader(title: 'Status'),
             SwitchListTile(
               title: const Text('Sedang Maintenance'),
+              subtitle: const Text('Ruangan tidak tersedia untuk reservasi'),
               value: _isMaintenance,
               onChanged: (val) => setState(() => _isMaintenance = val),
               contentPadding: EdgeInsets.zero,
             ),
-          if (!widget.editable && (_currentRoom?.isMaintenance ?? false))
-            const ListTile(
-              leading: Icon(Icons.warning, color: Colors.orange),
-              title: Text(
-                'Ruangan sedang dalam maintenance',
-                style: TextStyle(color: Colors.orange),
+            const SizedBox(height: 24),
+          ] else if (_currentRoom?.isMaintenance ?? false) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[200]!),
               ),
-              contentPadding: EdgeInsets.zero,
+              child: Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.orange[800], size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Ruangan sedang dalam maintenance',
+                      style: TextStyle(color: Colors.orange[800]),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          const SizedBox(height: 32),
+            const SizedBox(height: 24),
+          ],
+
           if (widget.editable)
             ElevatedButton(
               onPressed: _isSubmitting ? null : _submit,
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
               ),
               child: _isSubmitting
                   ? const SizedBox(
                       height: 20,
                       width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
                     )
-                  : const Text('Simpan'),
+                  : const Text(
+                      'Simpan Ruangan',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSectionHeader({required String title, Widget? actionSection}) {
+    Widget section = Text(
+      title,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: Colors.black87,
+      ),
+    );
+
+    if (actionSection != null) {
+      section = Row(
+        children: [
+          Expanded(child: section),
+          Padding(
+            padding: const EdgeInsets.only(left: 8.0),
+            child: actionSection,
+          ),
+        ],
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: section,
     );
   }
 
@@ -193,22 +266,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Fasilitas',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            if (widget.editable)
-              TextButton.icon(
-                onPressed: _openFacilitySelector,
-                icon: const Icon(Icons.edit, size: 18),
-                label: const Text('Kelola'),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
         if (_selectedFacilities.isEmpty)
           const Text(
             'Tidak ada fasilitas dipilih',
@@ -261,7 +318,11 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
       controller: controller,
       decoration: InputDecoration(
         labelText: label,
-        border: const OutlineInputBorder(),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
       ),
       keyboardType: keyboardType,
       maxLines: maxLines,
@@ -270,25 +331,65 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     );
   }
 
+  String? _validateRoomName(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Nama ruangan tidak boleh kosong';
+    }
+    if (value.length < 3) {
+      return 'Nama minimal 3 karakter';
+    }
+    return null;
+  }
+
+  Future<bool> _checkDuplicateName(String name) async {
+    try {
+      final rooms = await _service.getRoomList();
+
+      final lowerName = name.toLowerCase().trim();
+
+      return rooms.any((room) {
+        final isSameName = room.name?.toLowerCase() == lowerName;
+        final isNotCurrentRoom = room.id != _currentRoom?.id;
+        return isSameName && isNotCurrentRoom;
+      });
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSubmitting = true);
 
-    final request = RoomRequest(
-      name: _nameController.text.trim(),
-      floor: int.tryParse(_floorController.text.trim()),
-      capacity: int.tryParse(_capacityController.text.trim()),
-      description: _descriptionController.text.trim(),
-      isMaintenance: _isMaintenance,
-      facilityIds: _selectedFacilities.map((f) => f.id).toList(),
-    );
-
-    final actionText = _currentRoom != null
-        ? 'memperbarui ruangan'
-        : 'menambahkan ruangan';
-
     try {
+      final name = _nameController.text.trim();
+
+      final isDuplicate = await _checkDuplicateName(name);
+
+      if (isDuplicate && mounted) {
+        _showStatusDialog(
+          title: 'Nama Sudah Ada',
+          message:
+              'Nama ruangan "$name" sudah digunakan. Gunakan nama yang berbeda.',
+        );
+        setState(() => _isSubmitting = false);
+        return;
+      }
+
+      final request = RoomRequest(
+        name: name,
+        floor: int.tryParse(_floorController.text.trim()),
+        capacity: int.tryParse(_capacityController.text.trim()),
+        description: _descriptionController.text.trim(),
+        isMaintenance: _isMaintenance,
+        facilityIds: _selectedFacilities.map((f) => f.id).toList(),
+      );
+
+      final actionText = _currentRoom != null
+          ? 'memperbarui ruangan'
+          : 'menambahkan ruangan';
+
       if (_currentRoom != null) {
         await _service.updateRoom(roomId: _currentRoom.id!, request: request);
       } else {
@@ -304,10 +405,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
       }
     } catch (e) {
       if (mounted) {
-        _showStatusDialog(
-          title: 'Error',
-          message: 'Terjadi kesalahan saat $actionText: $e',
-        );
+        _showStatusDialog(title: 'Error', message: 'Terjadi kesalahan: $e');
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
