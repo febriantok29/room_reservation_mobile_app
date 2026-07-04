@@ -5,6 +5,9 @@ import 'package:rapa_track_mobile_app/app/models/room.dart';
 import 'package:rapa_track_mobile_app/app/models/room_facility.dart';
 import 'package:rapa_track_mobile_app/app/pages/room/facility_selector_page.dart';
 import 'package:rapa_track_mobile_app/app/services/room_service.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/app_button.dart';
 
 class RoomDetailPage extends StatefulWidget {
   final Profile user;
@@ -55,9 +58,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     _descriptionController = TextEditingController(
       text: _currentRoom?.description ?? '',
     );
-
     _isMaintenance = _currentRoom?.isMaintenance ?? false;
-
     if (_currentRoom?.facilities != null) {
       _selectedFacilities.addAll(_currentRoom!.facilities!);
     }
@@ -78,7 +79,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
       canPop: !_isSubmitting,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Harap tunggu hingga proses selesai...'),
@@ -87,202 +87,174 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
         );
       },
       child: Scaffold(
+        backgroundColor: AppColors.background,
         appBar: AppBar(
           title: Text(
             _isNewRoom
                 ? 'Tambah Ruangan'
                 : (widget.editable ? 'Edit Ruangan' : 'Detail Ruangan'),
           ),
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.white,
+          elevation: 0,
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: _buildFormSection(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFormSection() {
-    return Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildSectionHeader(title: 'Informasi Dasar'),
-          _buildTextField(
-            controller: _nameController,
-            label: 'Nama Ruangan',
-            validator: _validateRoomName,
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildTextField(
-                  controller: _capacityController,
-                  label: 'Kapasitas (orang)',
-                  keyboardType: TextInputType.number,
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Wajib diisi';
-                    final cap = int.tryParse(v);
-                    if (cap == null) return 'Harus angka';
-                    if (cap < 1) return 'Min. 1 orang';
-                    if (cap > 100) return 'Max. 100 orang';
-                    return null;
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildTextField(
-                  controller: _floorController,
-                  label: 'Lantai',
-                  keyboardType: TextInputType.number,
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Wajib diisi';
-
-                    final floor = int.tryParse(v);
-
-                    if (floor == null) return 'Harus angka';
-
-                    if (floor < 1 || floor > 4) return 'Lantai 1-4';
-                    return null;
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildTextField(
-            controller: _descriptionController,
-            label: 'Deskripsi',
-            maxLines: 3,
-          ),
-          const SizedBox(height: 24),
-
-          _buildSectionHeader(
-            title: 'Fasilitas',
-            actionSection: widget.editable
-                ? TextButton.icon(
-                    onPressed: _openFacilitySelector,
-                    icon: const Icon(Icons.edit, size: 18),
-                    label: const Text('Kelola'),
-                  )
-                : null,
-          ),
-          _buildFacilitiesSection(),
-          const SizedBox(height: 24),
-
-          if (widget.editable) ...[
-            _buildSectionHeader(title: 'Status'),
-            SwitchListTile(
-              title: const Text('Sedang Maintenance'),
-              subtitle: const Text('Ruangan tidak tersedia untuk reservasi'),
-              value: _isMaintenance,
-              onChanged: (val) => setState(() => _isMaintenance = val),
-              contentPadding: EdgeInsets.zero,
-            ),
-            const SizedBox(height: 24),
-          ] else if (_currentRoom?.isMaintenance ?? false) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange[200]!),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.warning, color: Colors.orange[800], size: 20),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Ruangan sedang dalam maintenance',
-                      style: TextStyle(color: Colors.orange[800]),
-                    ),
+        body: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSizes.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildInfoCard(),
+                const SizedBox(height: AppSizes.md),
+                _buildFacilitiesCard(),
+                const SizedBox(height: AppSizes.md),
+                _buildStatusCard(),
+                if (widget.editable) ...[
+                  const SizedBox(height: AppSizes.lg),
+                  AppButton(
+                    text: 'Simpan Ruangan',
+                    isFullWidth: true,
+                    isLoading: _isSubmitting,
+                    onPressed: _isSubmitting ? null : _submit,
                   ),
+                  const SizedBox(height: AppSizes.xxl),
                 ],
-              ),
+              ],
             ),
-            const SizedBox(height: 24),
-          ],
-
-          if (widget.editable)
-            ElevatedButton(
-              onPressed: _isSubmitting ? null : _submit,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-              child: _isSubmitting
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text(
-                      'Simpan Ruangan',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader({required String title, Widget? actionSection}) {
-    Widget section = Text(
-      title,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-        color: Colors.black87,
-      ),
-    );
-
-    if (actionSection != null) {
-      section = Row(
-        children: [
-          Expanded(child: section),
-          Padding(
-            padding: const EdgeInsets.only(left: 8.0),
-            child: actionSection,
           ),
-        ],
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: section,
+        ),
+      ),
     );
   }
 
-  Widget _buildFacilitiesSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildInfoCard() {
+    return _buildCard(
+      title: 'Informasi Dasar',
+      children: [
+        _buildTextField(
+          controller: _nameController,
+          label: 'Nama Ruangan',
+          validator: _validateRoomName,
+        ),
+        const SizedBox(height: AppSizes.md),
+        Row(
+          children: [
+            Expanded(
+              child: _buildTextField(
+                controller: _capacityController,
+                label: 'Kapasitas (orang)',
+                keyboardType: TextInputType.number,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Wajib diisi';
+                  final cap = int.tryParse(v);
+                  if (cap == null) return 'Harus angka';
+                  if (cap < 1) return 'Min. 1 orang';
+                  if (cap > 100) return 'Max. 100 orang';
+                  return null;
+                },
+              ),
+            ),
+            const SizedBox(width: AppSizes.md),
+            Expanded(
+              child: _buildTextField(
+                controller: _floorController,
+                label: 'Lantai',
+                keyboardType: TextInputType.number,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Wajib diisi';
+                  final floor = int.tryParse(v);
+                  if (floor == null) return 'Harus angka';
+                  if (floor < 1 || floor > 4) return 'Lantai 1–4';
+                  return null;
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSizes.md),
+        _buildTextField(
+          controller: _descriptionController,
+          label: 'Deskripsi (opsional)',
+          maxLines: 3,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFacilitiesCard() {
+    return _buildCard(
+      title: 'Fasilitas',
+      action: widget.editable
+          ? TextButton.icon(
+              onPressed: _openFacilitySelector,
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              label: const Text('Kelola'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+              ),
+            )
+          : null,
       children: [
         if (_selectedFacilities.isEmpty)
-          const Text(
-            'Tidak ada fasilitas dipilih',
-            style: TextStyle(color: Colors.grey, fontSize: 13),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: AppSizes.md),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: AppSizes.iconSm,
+                  color: AppColors.textDisabled,
+                ),
+                const SizedBox(width: AppSizes.sm),
+                const Text(
+                  'Belum ada fasilitas dipilih',
+                  style: TextStyle(
+                    fontSize: AppSizes.fontSm,
+                    color: AppColors.textDisabled,
+                  ),
+                ),
+              ],
+            ),
           )
         else
           Wrap(
-            spacing: 8,
-            runSpacing: 4,
+            spacing: AppSizes.sm,
+            runSpacing: AppSizes.sm,
             children: _selectedFacilities.map((facility) {
-              return Chip(
-                label: Text(facility.name),
-                labelStyle: const TextStyle(fontSize: 12),
-                avatar: facility.icon != null
-                    ? Icon(facility.icon, size: 16, color: Colors.blue)
-                    : null,
-                backgroundColor: Colors.blue.shade50,
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSizes.sm,
+                  vertical: AppSizes.xs,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withAlpha(20),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+                  border: Border.all(color: AppColors.primary.withAlpha(80)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (facility.icon != null) ...[
+                      Icon(
+                        facility.icon,
+                        size: 14,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: AppSizes.xxs),
+                    ],
+                    Text(
+                      facility.name,
+                      style: const TextStyle(
+                        fontSize: AppSizes.fontXs,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               );
             }).toList(),
           ),
@@ -290,21 +262,151 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     );
   }
 
-  Future<void> _openFacilitySelector() async {
-    final result = await Navigator.of(context).push<List<RoomFacility>>(
-      MaterialPageRoute(
-        builder: (_) => FacilitySelectorPage(
-          initialSelectedFacilities: _selectedFacilities,
+  Widget _buildStatusCard() {
+    if (widget.editable) {
+      return _buildCard(
+        title: 'Status Ruangan',
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: _isMaintenance
+                  ? AppColors.warning.withAlpha(15)
+                  : AppColors.background,
+              borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+              border: Border.all(
+                color: _isMaintenance
+                    ? AppColors.warning.withAlpha(100)
+                    : AppColors.border,
+              ),
+            ),
+            child: SwitchListTile(
+              title: const Text(
+                'Sedang Maintenance',
+                style: TextStyle(
+                  fontSize: AppSizes.fontSm,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              subtitle: Text(
+                _isMaintenance
+                    ? 'Ruangan tidak dapat dipesan saat ini'
+                    : 'Ruangan tersedia untuk reservasi',
+                style: TextStyle(
+                  fontSize: AppSizes.fontXs,
+                  color: _isMaintenance
+                      ? AppColors.warning
+                      : AppColors.textSecondary,
+                ),
+              ),
+              value: _isMaintenance,
+              activeThumbColor: AppColors.warning,
+              activeTrackColor: AppColors.warning.withAlpha(128),
+              onChanged: (val) => setState(() => _isMaintenance = val),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: AppSizes.md,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (_currentRoom?.isMaintenance ?? false) {
+      return Container(
+        padding: const EdgeInsets.all(AppSizes.md),
+        decoration: BoxDecoration(
+          color: AppColors.warning.withAlpha(20),
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          border: Border.all(color: AppColors.warning.withAlpha(100)),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: AppColors.warning,
+              size: AppSizes.iconMd,
+            ),
+            const SizedBox(width: AppSizes.md),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Dalam Perawatan',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.warning,
+                      fontSize: AppSizes.fontSm,
+                    ),
+                  ),
+                  SizedBox(height: AppSizes.xxs),
+                  Text(
+                    'Ruangan ini sedang dalam perawatan dan tidak dapat dipesan.',
+                    style: TextStyle(
+                      color: AppColors.warning,
+                      fontSize: AppSizes.fontXs,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildCard({
+    required String title,
+    Widget? action,
+    required List<Widget> children,
+  }) {
+    return Card(
+      elevation: AppSizes.elevationXs,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSizes.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 3,
+                  height: AppSizes.fontLg,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(AppSizes.radiusXs),
+                  ),
+                ),
+                const SizedBox(width: AppSizes.sm),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: AppSizes.fontMd,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                if (action != null) action,
+              ],
+            ),
+            const SizedBox(height: AppSizes.md),
+            ...children,
+          ],
         ),
       ),
     );
-
-    if (result != null) {
-      setState(() {
-        _selectedFacilities.clear();
-        _selectedFacilities.addAll(result);
-      });
-    }
   }
 
   Widget _buildTextField({
@@ -318,10 +420,35 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
       controller: controller,
       decoration: InputDecoration(
         labelText: label,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        labelStyle: const TextStyle(
+          fontSize: AppSizes.fontSm,
+          color: AppColors.textSecondary,
+        ),
+        filled: true,
+        fillColor: widget.editable ? AppColors.white : AppColors.background,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+          borderSide: const BorderSide(color: AppColors.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+          borderSide: const BorderSide(color: AppColors.error, width: 2),
+        ),
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 12,
+          horizontal: AppSizes.md,
+          vertical: AppSizes.md,
         ),
       ),
       keyboardType: keyboardType,
@@ -332,46 +459,54 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
   }
 
   String? _validateRoomName(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Nama ruangan tidak boleh kosong';
-    }
-    if (value.length < 3) {
-      return 'Nama minimal 3 karakter';
-    }
+    if (value == null || value.isEmpty) return 'Nama ruangan tidak boleh kosong';
+    if (value.length < 3) return 'Nama minimal 3 karakter';
     return null;
   }
 
   Future<bool> _checkDuplicateName(String name) async {
     try {
       final rooms = await _service.getRoomList();
-
       final lowerName = name.toLowerCase().trim();
-
       return rooms.any((room) {
-        final isSameName = room.name?.toLowerCase() == lowerName;
-        final isNotCurrentRoom = room.id != _currentRoom?.id;
-        return isSameName && isNotCurrentRoom;
+        return room.name?.toLowerCase() == lowerName &&
+            room.id != _currentRoom?.id;
       });
     } catch (_) {
       return false;
     }
   }
 
+  Future<void> _openFacilitySelector() async {
+    final result = await Navigator.of(context).push<List<RoomFacility>>(
+      MaterialPageRoute(
+        builder: (_) => FacilitySelectorPage(
+          initialSelectedFacilities: _selectedFacilities,
+        ),
+      ),
+    );
+    if (result != null) {
+      setState(() {
+        _selectedFacilities.clear();
+        _selectedFacilities.addAll(result);
+      });
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isSubmitting = true);
 
     try {
       final name = _nameController.text.trim();
-
       final isDuplicate = await _checkDuplicateName(name);
 
       if (isDuplicate && mounted) {
         _showStatusDialog(
-          title: 'Nama Sudah Ada',
-          message:
-              'Nama ruangan "$name" sudah digunakan. Gunakan nama yang berbeda.',
+          title: 'Nama Sudah Digunakan',
+          message: 'Nama ruangan "$name" sudah ada. Gunakan nama yang berbeda.',
+          icon: Icons.warning_amber_rounded,
+          iconColor: AppColors.warning,
         );
         setState(() => _isSubmitting = false);
         return;
@@ -399,13 +534,18 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
       if (mounted) {
         await _showStatusDialog(
           title: 'Berhasil',
-          message: 'Berhasil $actionText',
+          message: 'Berhasil $actionText.',
+          icon: Icons.check_circle,
+          iconColor: AppColors.success,
         );
         if (mounted) Navigator.of(context).pop(true);
       }
     } catch (e) {
       if (mounted) {
-        _showStatusDialog(title: 'Error', message: 'Terjadi kesalahan: $e');
+        _showStatusDialog(
+          title: 'Gagal Menyimpan',
+          message: 'Terjadi kesalahan: $e',
+        );
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -415,18 +555,43 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
   Future<void> _showStatusDialog({
     required String title,
     required String message,
-  }) async {
+    IconData icon = Icons.error_outline,
+    Color iconColor = AppColors.error,
+  }) {
     return showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
+        contentPadding: const EdgeInsets.all(AppSizes.xl),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: iconColor, size: AppSizes.iconXl),
+            const SizedBox(height: AppSizes.md),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: AppSizes.fontLg,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSizes.sm),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: AppSizes.fontSm,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSizes.lg),
+            AppButton(
+              text: 'OK',
+              isFullWidth: true,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
       ),
     );
   }

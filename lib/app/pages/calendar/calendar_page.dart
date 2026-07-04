@@ -1,12 +1,11 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/enums/reservation_status.dart';
 import 'package:rapa_track_mobile_app/app/models/profile.dart';
-import 'package:rapa_track_mobile_app/app/models/reservation.dart';
 import 'package:rapa_track_mobile_app/app/models/reservation_appointment.dart';
 import 'package:rapa_track_mobile_app/app/pages/reservation/create_reservation_wizard_page.dart';
 import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 
@@ -20,17 +19,30 @@ class CalendarPage extends StatefulWidget {
 }
 
 class _CalendarPageState extends State<CalendarPage> {
-  final CalendarController _calendarController = CalendarController();
-  final ReservationService _reservationService = ReservationService();
+  final _calendarController = CalendarController();
+  final _reservationService = ReservationService();
 
   CalendarView _currentView = CalendarView.month;
-  DateTime _selectedDate = DateTime(2026, 6, 1);
+  DateTime _visibleDate = DateTime.now();
+  final Set<ReservationStatus> _filterStatuses = {};
 
-  Future<CalendarResult>? _calendarFuture;
-  final Map<String, CalendarResult> _cachedResults = {};
+  List<ReservationAppointment> _appointments = [];
+  bool _isLoading = false;
+  String? _error;
 
-  int get _currentYear => _selectedDate.year;
-  int get _currentMonth => _selectedDate.month;
+  final Map<String, List<ReservationAppointment>> _cache = {};
+
+  static DateTime get _today {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  List<ReservationAppointment> get _filteredAppointments {
+    if (_filterStatuses.isEmpty) return _appointments;
+    return _appointments
+        .where((a) => _filterStatuses.contains(a.reservation.status))
+        .toList();
+  }
 
   @override
   void initState() {
@@ -44,468 +56,470 @@ class _CalendarPageState extends State<CalendarPage> {
     super.dispose();
   }
 
-  void _loadCalendar() {
-    final cacheKey =
-        '$_currentYear-${_currentMonth.toString().padLeft(2, '0')}';
+  Future<void> _loadCalendar({bool invalidateCache = false}) async {
+    final key =
+        '${_visibleDate.year}-${_visibleDate.month.toString().padLeft(2, '0')}';
 
-    if (_cachedResults.containsKey(cacheKey)) {
-      setState(() {
-        _calendarFuture = Future.value(_cachedResults[cacheKey]!);
-      });
+    if (!invalidateCache && _cache.containsKey(key)) {
+      setState(() => _appointments = _cache[key]!);
       return;
     }
 
     setState(() {
-      _calendarFuture = _reservationService
-          .getCalendar(year: _currentYear, month: _currentMonth)
-          .then((result) {
-            debugPrint(
-              '📅 Calendar loaded: ${result.reservations.length} reservations',
-            );
-            debugPrint('   Year: ${result.year}, Month: ${result.month}');
-            if (result.reservations.isEmpty) {
-              debugPrint(
-                '   ⚠️  No reservations found for $_currentMonth/$_currentYear',
-              );
-            }
+      _isLoading = true;
+      _error = null;
+    });
 
-            _cachedResults[cacheKey] = result;
-            return result;
-          })
-          .catchError((error) {
-            debugPrint('❌ Calendar load error: $error');
-            throw error;
-          });
+    try {
+      final result = await _reservationService.getCalendar(
+        year: _visibleDate.year,
+        month: _visibleDate.month,
+      );
+      final appointments = result.reservations
+          .map((r) => ReservationAppointment.fromReservation(r))
+          .toList();
+      _cache[key] = appointments;
+      if (mounted) setState(() => _appointments = appointments);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _goToToday() {
+    final now = DateTime.now();
+    _calendarController.displayDate = now;
+    if (_visibleDate.year != now.year || _visibleDate.month != now.month) {
+      setState(() => _visibleDate = now);
+      _loadCalendar();
+    }
+  }
+
+  void _changeView(CalendarView view) {
+    setState(() => _currentView = view);
+    _calendarController.view = view;
+  }
+
+  void _toggleFilter(ReservationStatus status) {
+    setState(() {
+      if (_filterStatuses.contains(status)) {
+        _filterStatuses.remove(status);
+      } else {
+        _filterStatuses.add(status);
+      }
     });
   }
 
-  Future<void> _onRefresh() async {
-    _loadCalendar();
-    if (_calendarFuture != null) {
-      await _calendarFuture;
-    }
-  }
+  void _clearFilters() => setState(() => _filterStatuses.clear());
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Kalender Reservasi'),
-        actions: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(8),
+      backgroundColor: AppColors.white,
+      appBar: _buildAppBar(),
+      body: Column(
+        children: [
+          if (_isLoading)
+            const LinearProgressIndicator(
+              color: AppColors.primary,
+              backgroundColor: AppColors.border,
+              minHeight: 2,
             ),
-            child: GestureDetector(
-              onTap: () => _showMonthYearPicker(context),
-              child: Row(
-                children: [
-                  Icon(Icons.calendar_today, size: 18, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${_getMonthName(_currentMonth)} $_currentYear',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(
-                    Icons.arrow_drop_down,
-                    size: 20,
-                    color: Colors.white,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          PopupMenuButton<CalendarView>(
-            icon: const Icon(Icons.view_module),
-            onSelected: (CalendarView view) {
-              setState(() {
-                _currentView = view;
-              });
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: CalendarView.day,
-                child: Row(
-                  children: [
-                    Icon(Icons.view_day),
-                    SizedBox(width: 8),
-                    Text('Hari'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: CalendarView.week,
-                child: Row(
-                  children: [
-                    Icon(Icons.view_week),
-                    SizedBox(width: 8),
-                    Text('Minggu'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: CalendarView.month,
-                child: Row(
-                  children: [
-                    Icon(Icons.calendar_month),
-                    SizedBox(width: 8),
-                    Text('Bulan'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: CalendarView.schedule,
-                child: Row(
-                  children: [
-                    Icon(Icons.list),
-                    SizedBox(width: 8),
-                    Text('Jadwal'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _onRefresh,
-            tooltip: 'Refresh',
-          ),
+          if (_error != null) _buildErrorBanner(),
+          _buildFilterRow(),
+          const Divider(height: 1),
+          Expanded(child: _buildCalendar()),
         ],
-      ),
-      body: FutureBuilder<CalendarResult>(
-        future: _calendarFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return _buildErrorState(snapshot.error.toString());
-          }
-
-          final calendarResult = snapshot.data;
-          final reservations = calendarResult?.reservations ?? [];
-
-          final appointments = reservations
-              .map((r) => ReservationAppointment.fromReservation(r))
-              .toList();
-
-          final dataSource = ReservationDataSource(appointments);
-
-          return RefreshIndicator(
-            onRefresh: _onRefresh,
-            child: Column(
-              children: [
-                _buildInfoPanel(reservations),
-                Expanded(
-                  child: SfCalendar(
-                    view: _currentView,
-                    controller: _calendarController,
-                    dataSource: dataSource,
-                    initialSelectedDate: _selectedDate,
-                    firstDayOfWeek: 1,
-                    showNavigationArrow: true,
-                    showDatePickerButton: true,
-                    allowViewNavigation: true,
-                    monthViewSettings: const MonthViewSettings(
-                      appointmentDisplayMode:
-                          MonthAppointmentDisplayMode.appointment,
-                      showAgenda: true,
-                      agendaViewHeight: 150,
-                      navigationDirection: MonthNavigationDirection.vertical,
-                    ),
-                    timeSlotViewSettings: const TimeSlotViewSettings(
-                      startHour: 7,
-                      endHour: 20,
-                      timeFormat: 'HH:mm',
-                      timeInterval: Duration(minutes: 30),
-                    ),
-                    onTap: (CalendarTapDetails details) {
-                      if (details.targetElement ==
-                          CalendarElement.appointment) {
-                        _showAppointmentDetails(
-                          context,
-                          details.appointments!.first as ReservationAppointment,
-                        );
-                      }
-                      // else if (details.targetElement ==
-                      //     CalendarElement.calendarCell) {
-                      //   final tappedDate = details.date;
-                      //   if (tappedDate != null) {
-                      //     _navigateToCreateReservation(initialDate: tappedDate);
-                      //   }
-                      // }
-                    },
-                    onViewChanged: (ViewChangedDetails details) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) {
-                          final newDate = details
-                              .visibleDates[details.visibleDates.length ~/ 2];
-
-                          if (newDate.year != _currentYear ||
-                              newDate.month != _currentMonth) {
-                            debugPrint(
-                              '📆 Calendar view changed to: ${newDate.month}/${newDate.year}',
-                            );
-                            setState(() {
-                              _selectedDate = newDate;
-                              _loadCalendar();
-                            });
-                          }
-                        }
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _navigateToCreateReservation(),
-        icon: const Icon(Icons.add, color: Colors.white),
+        onPressed: _navigateToCreateReservationFromFab,
+        icon: const Icon(Icons.add, color: AppColors.white),
         label: const Text(
           'Buat Reservasi',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w600),
         ),
         backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
       ),
     );
   }
 
-  Widget _buildInfoPanel(List<Reservation> reservations) {
-    final active = reservations.where((r) => r.status.isActive).length;
-    final completed = reservations
-        .where((r) => r.status == ReservationStatus.completed)
-        .length;
-    final cancelled = reservations
-        .where((r) => r.status == ReservationStatus.cancelled)
-        .length;
-    final total = reservations.length;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: AppColors.primary,
+      foregroundColor: AppColors.white,
+      elevation: 0,
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildInfoItem(
-            icon: Icons.event,
-            label: 'Total',
-            value: '$total',
-            color: Colors.blue,
+          const Text(
+            'Kalender Reservasi',
+            style: TextStyle(fontSize: AppSizes.fontXs, color: AppColors.white),
           ),
-          _buildInfoItem(
-            icon: Icons.check_circle,
-            label: 'Aktif',
-            value: '$active',
-            color: Colors.green,
-          ),
-          _buildInfoItem(
-            icon: Icons.done_all,
-            label: 'Selesai',
-            value: '$completed',
-            color: Colors.grey,
-          ),
-          _buildInfoItem(
-            icon: Icons.cancel,
-            label: 'Batal',
-            value: '$cancelled',
-            color: Colors.red,
+          Text(
+            '${_monthName(_visibleDate.month)} ${_visibleDate.year}',
+            style: const TextStyle(
+              fontSize: AppSizes.fontMd,
+              fontWeight: FontWeight.bold,
+              color: AppColors.white,
+            ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildInfoItem({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(width: 6),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            Text(
-              label,
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-            ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.today_outlined),
+          onPressed: _goToToday,
+          tooltip: 'Hari Ini',
+        ),
+        PopupMenuButton<CalendarView>(
+          icon: const Icon(Icons.view_module_outlined),
+          tooltip: 'Tampilan',
+          onSelected: _changeView,
+          itemBuilder: (_) => [
+            _viewMenuItem(CalendarView.month, Icons.calendar_month_outlined, 'Bulan'),
+            _viewMenuItem(CalendarView.week, Icons.view_week_outlined, 'Minggu'),
+            _viewMenuItem(CalendarView.day, Icons.view_day_outlined, 'Hari'),
+            _viewMenuItem(CalendarView.schedule, Icons.list_alt_outlined, 'Jadwal'),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildErrorState(String error) {
-    return RefreshIndicator(
-      onRefresh: _onRefresh,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Container(
-          height: MediaQuery.of(context).size.height - 200,
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 80, color: Colors.red.shade300),
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(
-                  error,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Colors.red.shade700),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Tarik ke bawah untuk refresh',
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-              ),
-            ],
+  PopupMenuItem<CalendarView> _viewMenuItem(
+    CalendarView view,
+    IconData icon,
+    String label,
+  ) {
+    final isSelected = _currentView == view;
+    return PopupMenuItem(
+      value: view,
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: AppSizes.iconSm,
+            color: isSelected ? AppColors.primary : AppColors.textSecondary,
           ),
+          const SizedBox(width: AppSizes.md),
+          Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? AppColors.primary : AppColors.textPrimary,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+          if (isSelected) ...[
+            const Spacer(),
+            const Icon(Icons.check, size: AppSizes.iconSm, color: AppColors.primary),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterRow() {
+    const statuses = [
+      ReservationStatus.pending,
+      ReservationStatus.approved,
+      ReservationStatus.completed,
+      ReservationStatus.rejected,
+      ReservationStatus.cancelled,
+    ];
+
+    final allSelected = _filterStatuses.isEmpty;
+
+    return Container(
+      color: AppColors.white,
+      padding: const EdgeInsets.fromLTRB(
+        AppSizes.md,
+        AppSizes.sm,
+        AppSizes.md,
+        AppSizes.sm,
+      ),
+      child: Wrap(
+        spacing: AppSizes.xs,
+        runSpacing: AppSizes.xs,
+        children: [
+          _buildChip(
+            label: 'Semua',
+            icon: Icons.all_inclusive,
+            isSelected: allSelected,
+            color: AppColors.primary,
+            onTap: _clearFilters,
+          ),
+          ...statuses.map(
+            (s) => _buildChip(
+              label: s.displayName,
+              icon: s.icon,
+              isSelected: _filterStatuses.contains(s),
+              color: s.color,
+              onTap: () => _toggleFilter(s),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChip({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSizes.sm,
+          vertical: AppSizes.xs,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withAlpha(25) : AppColors.white,
+          borderRadius: BorderRadius.circular(AppSizes.radiusXxl),
+          border: Border.all(
+            color: isSelected ? color : AppColors.border,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: isSelected ? color : AppColors.textSecondary),
+            const SizedBox(width: AppSizes.xxs),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: AppSizes.fontXs,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected ? color : AppColors.textSecondary,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  void _showAppointmentDetails(
-    BuildContext context,
-    ReservationAppointment appointment,
-  ) {
+  Widget _buildCalendar() {
+    return SfCalendar(
+      view: _currentView,
+      controller: _calendarController,
+      dataSource: ReservationDataSource(_filteredAppointments),
+      initialDisplayDate: DateTime.now(),
+      firstDayOfWeek: 1,
+      showNavigationArrow: true,
+      showDatePickerButton: false,
+      allowViewNavigation: false,
+      headerHeight: 48,
+      headerStyle: const CalendarHeaderStyle(
+        textAlign: TextAlign.center,
+        textStyle: TextStyle(
+          fontSize: AppSizes.fontMd,
+          fontWeight: FontWeight.bold,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      viewHeaderStyle: const ViewHeaderStyle(
+        dayTextStyle: TextStyle(
+          fontSize: AppSizes.fontXs,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textSecondary,
+        ),
+        dateTextStyle: TextStyle(
+          fontSize: AppSizes.fontSm,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      todayHighlightColor: AppColors.primary,
+      selectionDecoration: BoxDecoration(
+        border: Border.all(color: AppColors.primary, width: 2),
+        borderRadius: BorderRadius.circular(AppSizes.radiusXs),
+      ),
+      monthViewSettings: const MonthViewSettings(
+        appointmentDisplayMode: MonthAppointmentDisplayMode.appointment,
+        showAgenda: true,
+        agendaViewHeight: 180,
+        navigationDirection: MonthNavigationDirection.horizontal,
+        appointmentDisplayCount: 3,
+        agendaStyle: AgendaStyle(
+          dayTextStyle: TextStyle(
+            fontSize: AppSizes.fontXl,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+          dateTextStyle: TextStyle(
+            fontSize: AppSizes.fontXs,
+            color: AppColors.textSecondary,
+          ),
+          appointmentTextStyle: TextStyle(
+            fontSize: AppSizes.fontXs,
+            color: AppColors.white,
+          ),
+        ),
+      ),
+      timeSlotViewSettings: const TimeSlotViewSettings(
+        startHour: 7,
+        endHour: 20,
+        timeFormat: 'HH:mm',
+        timeInterval: Duration(minutes: 30),
+        timeTextStyle: TextStyle(
+          fontSize: AppSizes.fontXs,
+          color: AppColors.textSecondary,
+        ),
+      ),
+      onTap: _onCalendarTap,
+      onViewChanged: (details) {
+        final mid = details.visibleDates[details.visibleDates.length ~/ 2];
+        if (mid.year != _visibleDate.year || mid.month != _visibleDate.month) {
+          setState(() => _visibleDate = mid);
+          _loadCalendar();
+        }
+      },
+    );
+  }
+
+  void _onCalendarTap(CalendarTapDetails details) {
+    if (details.targetElement == CalendarElement.appointment &&
+        details.appointments != null &&
+        details.appointments!.isNotEmpty) {
+      final appt = details.appointments!.first;
+      if (appt is ReservationAppointment) {
+        _showAppointmentDetails(appt);
+      }
+      return;
+    }
+
+    // cell tap only selects the date — agenda panel updates automatically
+  }
+
+  Widget _buildErrorBanner() {
+    return Container(
+      color: AppColors.error.withAlpha(15),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSizes.lg,
+        vertical: AppSizes.sm,
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.warning_amber_outlined,
+            size: AppSizes.iconSm,
+            color: AppColors.error,
+          ),
+          const SizedBox(width: AppSizes.sm),
+          const Expanded(
+            child: Text(
+              'Gagal memuat data.',
+              style: TextStyle(fontSize: AppSizes.fontXs, color: AppColors.error),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _loadCalendar(invalidateCache: true),
+            child: const Text(
+              'Coba Lagi',
+              style: TextStyle(fontSize: AppSizes.fontXs, color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAppointmentDetails(ReservationAppointment appointment) {
     final reservation = appointment.reservation;
-    final currentStatus = reservation.status;
+    final status = reservation.status;
     final room = reservation.room;
-    final user = reservation.user;
+    final booker = reservation.user;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppSizes.radiusXl),
+        ),
       ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.55,
         minChildSize: 0.4,
         maxChildSize: 0.9,
         expand: false,
-        builder: (context, scrollController) => SingleChildScrollView(
+        builder: (_, scrollController) => SingleChildScrollView(
           controller: scrollController,
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(
+            AppSizes.lg,
+            AppSizes.md,
+            AppSizes.lg,
+            AppSizes.xl,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(AppSizes.radiusXxl),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSizes.lg),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Text(
                       room?.name ?? 'Reservasi',
                       style: const TextStyle(
-                        fontSize: 24,
+                        fontSize: AppSizes.fontXl,
                         fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: currentStatus.color,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(currentStatus.icon, size: 16, color: Colors.white),
-                        const SizedBox(width: 4),
-                        Text(
-                          currentStatus.displayName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  const SizedBox(width: AppSizes.sm),
+                  _buildStatusChip(status),
                 ],
               ),
-              const SizedBox(height: 24),
-
-              _buildDetailRow(
-                icon: Icons.person,
-                label: 'Pemesan',
-                value: user?.name ?? 'Unknown',
-              ),
-              _buildDetailRow(
-                icon: Icons.location_on,
-                label: 'Lokasi',
-                value: room?.location ?? 'Tidak diketahui',
-              ),
-              _buildDetailRow(
-                icon: Icons.access_time,
-                label: 'Waktu Mulai',
-                value: reservation.startTime != null
+              const SizedBox(height: AppSizes.lg),
+              const Divider(height: 1),
+              const SizedBox(height: AppSizes.md),
+              _buildSheetRow(Icons.person_outline, 'Pemesan', booker?.name ?? '-'),
+              if (room?.location != null)
+                _buildSheetRow(Icons.location_on_outlined, 'Lokasi', room!.location),
+              _buildSheetRow(
+                Icons.schedule_outlined,
+                'Waktu Mulai',
+                reservation.startTime != null
                     ? DateFormatter.shortDateTime(reservation.startTime!)
                     : '-',
               ),
-              _buildDetailRow(
-                icon: Icons.access_time,
-                label: 'Waktu Selesai',
-                value: reservation.endTime != null
+              _buildSheetRow(
+                Icons.schedule_outlined,
+                'Waktu Selesai',
+                reservation.endTime != null
                     ? DateFormatter.shortDateTime(reservation.endTime!)
                     : '-',
               ),
-              _buildDetailRow(
-                icon: Icons.group,
-                label: 'Jumlah Tamu',
-                value: '${reservation.visitorCount ?? 0} orang',
+              _buildSheetRow(
+                Icons.group_outlined,
+                'Jumlah Tamu',
+                '${reservation.visitorCount ?? 0} orang',
               ),
-              const SizedBox(height: 16),
-
-              const Text(
-                'Keperluan:',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
+              if (reservation.purpose != null && reservation.purpose!.isNotEmpty)
+                _buildSheetRow(
+                  Icons.description_outlined,
+                  'Keperluan',
+                  reservation.purpose!,
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                reservation.purpose ?? 'Tidak ada keterangan',
-                style: const TextStyle(fontSize: 16),
-              ),
+              const SizedBox(height: AppSizes.xl),
             ],
           ),
         ),
@@ -513,32 +527,61 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  Widget _buildDetailRow({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
+  Widget _buildStatusChip(ReservationStatus status) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSizes.sm,
+        vertical: AppSizes.xs,
+      ),
+      decoration: BoxDecoration(
+        color: status.color.withAlpha(20),
+        borderRadius: BorderRadius.circular(AppSizes.radiusXxl),
+        border: Border.all(color: status.color.withAlpha(80)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(status.icon, size: 13, color: status.color),
+          const SizedBox(width: AppSizes.xxs),
+          Text(
+            status.displayName,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: status.color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSheetRow(IconData icon, String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: AppSizes.md),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: Colors.grey.shade600),
-          const SizedBox(width: 12),
+          Icon(icon, size: AppSizes.iconSm, color: AppColors.textDisabled),
+          const SizedBox(width: AppSizes.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   label,
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  style: const TextStyle(
+                    fontSize: AppSizes.fontXs,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: AppSizes.fontSm,
                     fontWeight: FontWeight.w500,
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ],
@@ -547,6 +590,16 @@ class _CalendarPageState extends State<CalendarPage> {
         ],
       ),
     );
+  }
+
+  void _navigateToCreateReservationFromFab() {
+    final selected = _calendarController.selectedDate;
+    DateTime initialDate = _today;
+    if (selected != null) {
+      final selectedDay = DateTime(selected.year, selected.month, selected.day);
+      if (!selectedDay.isBefore(_today)) initialDate = selected;
+    }
+    _navigateToCreateReservation(initialDate: initialDate);
   }
 
   Future<void> _navigateToCreateReservation({DateTime? initialDate}) async {
@@ -558,121 +611,14 @@ class _CalendarPageState extends State<CalendarPage> {
         ),
       ),
     );
-
-    if (result == true) {
-      _loadCalendar();
-    }
+    if (result == true) _loadCalendar(invalidateCache: true);
   }
 
-  String _getMonthName(int month) {
+  String _monthName(int month) {
     const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
     ];
     return months[month - 1];
-  }
-
-  void _showMonthYearPicker(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Pilih Bulan & Tahun'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: () {
-                    setState(() {
-                      _selectedDate = DateTime(_currentYear - 1, _currentMonth);
-                      _loadCalendar();
-                    });
-                    Navigator.pop(context);
-                  },
-                ),
-                Text(
-                  '$_currentYear',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () {
-                    setState(() {
-                      _selectedDate = DateTime(_currentYear + 1, _currentMonth);
-                      _loadCalendar();
-                    });
-                    Navigator.pop(context);
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            GridView.count(
-              crossAxisCount: 3,
-              shrinkWrap: true,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              children: List.generate(12, (index) {
-                final month = index + 1;
-                final isSelected = month == _currentMonth;
-                return Material(
-                  color: isSelected ? AppColors.primary : Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(8),
-                  child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        _selectedDate = DateTime(_currentYear, month);
-                        _loadCalendar();
-                      });
-                      Navigator.pop(context);
-                    },
-                    child: Center(
-                      child: Text(
-                        _getMonthName(month),
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: isSelected ? Colors.white : Colors.black,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties.add(
-      DiagnosticsProperty<CalendarController>(
-        '_calendarController',
-        _calendarController,
-      ),
-    );
-    properties.add(
-      DiagnosticsProperty<DateTime>('_selectedDate', _selectedDate),
-    );
   }
 }

@@ -7,6 +7,7 @@ import 'package:rapa_track_mobile_app/app/pages/base_list_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/room/room_detail_page.dart';
 import 'package:rapa_track_mobile_app/app/repositories/room_list_repository.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 
 class RoomListPage extends StatefulWidget {
   final Profile user;
@@ -18,13 +19,19 @@ class RoomListPage extends StatefulWidget {
 }
 
 class _RoomListPageState extends State<RoomListPage> {
-  late final RoomListRepository _repository;
+  late RoomListRepository _repository;
   final _searchController = TextEditingController();
   Timer? _debounceTimer;
 
-  // Filter states
+  int _listKey = 0;
+
   int? _selectedFloor;
   int _minCapacity = 1;
+
+  bool get _hasActiveFilters =>
+      _searchController.text.isNotEmpty ||
+      _selectedFloor != null ||
+      _minCapacity > 1;
 
   @override
   void initState() {
@@ -40,13 +47,6 @@ class _RoomListPageState extends State<RoomListPage> {
     super.dispose();
   }
 
-  void _onSearchChanged(String keyword) {
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 800), () {
-      // Filter will be applied via callback
-    });
-  }
-
   Map<String, dynamic> _buildFilters() {
     return {
       if (_searchController.text.isNotEmpty) 'search': _searchController.text,
@@ -60,9 +60,19 @@ class _RoomListPageState extends State<RoomListPage> {
     callback(filters.isEmpty ? null : filters);
   }
 
+  void _resetFilters(void Function(Map<String, dynamic>?) onApplyFilter) {
+    setState(() {
+      _searchController.clear();
+      _selectedFloor = null;
+      _minCapacity = 1;
+    });
+    onApplyFilter(null);
+  }
+
   @override
   Widget build(BuildContext context) {
     return BaseListPage<Room>(
+      key: ValueKey(_listKey),
       pageTitle: 'Daftar Ruangan Meeting',
       repository: _repository,
       itemBuilder: _buildRoomCard,
@@ -73,7 +83,7 @@ class _RoomListPageState extends State<RoomListPage> {
           ? FloatingActionButton(
               onPressed: _navigateToAddRoom,
               backgroundColor: AppColors.primary,
-              child: const Icon(Icons.add),
+              child: const Icon(Icons.add, color: AppColors.white),
             )
           : null,
       customFilterBuilder: _buildFilterSection,
@@ -85,11 +95,7 @@ class _RoomListPageState extends State<RoomListPage> {
     final needsRefresh = await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => RoomDetailPage(user: widget.user)),
     );
-
-    if (needsRefresh == true) {
-      _repository.reset();
-      setState(() {});
-    }
+    if (needsRefresh == true) _forceRefreshList();
   }
 
   Future<void> _navigateToEditRoom(Room room) async {
@@ -98,11 +104,12 @@ class _RoomListPageState extends State<RoomListPage> {
         builder: (_) => RoomDetailPage(user: widget.user, room: room),
       ),
     );
+    if (needsRefresh == true) _forceRefreshList();
+  }
 
-    if (needsRefresh == true) {
-      _repository.reset();
-      setState(() {});
-    }
+  void _forceRefreshList() {
+    _repository.reset();
+    setState(() => _listKey++);
   }
 
   void _navigateToViewRoom(Room room) {
@@ -118,140 +125,233 @@ class _RoomListPageState extends State<RoomListPage> {
     void Function(Map<String, dynamic>?) onApplyFilter,
   ) {
     return GestureDetector(
-      onTap: () => FocusScope.of(context).requestFocus(FocusNode()),
+      onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
-        padding: const EdgeInsets.all(12.0),
-        color: Colors.grey[200],
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Search field
-              TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Cari ruangan...',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _searchController.clear();
-                            _applyFilters(onApplyFilter);
-                          },
-                        )
-                      : null,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey[300]!),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                ),
-                onChanged: (value) {
-                  _onSearchChanged(value);
-                  _applyFilters(onApplyFilter);
-                },
-              ),
-              const SizedBox(height: 12),
-              // Floor filter
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[300]!),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.layers, size: 20, color: Colors.blue),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: DropdownButton<int?>(
-                        isExpanded: true,
-                        value: _selectedFloor,
-                        hint: const Text('Pilih Lantai'),
-                        underline: const SizedBox.shrink(),
-                        items: [
-                          const DropdownMenuItem<int?>(
-                            value: null,
-                            child: Text('Semua Lantai'),
-                          ),
-                          ...List.generate(4, (i) {
-                            final floor = i + 1;
-                            return DropdownMenuItem<int?>(
-                              value: floor,
-                              child: Text('Lantai $floor'),
-                            );
-                          }),
-                        ],
-                        onChanged: (floor) {
-                          setState(() => _selectedFloor = floor);
-                          _applyFilters(onApplyFilter);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Capacity filter
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[300]!),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.people, size: 20, color: Colors.blue),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Kapasitas Minimal: $_minCapacity orang',
-                            style: const TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Slider(
-                      value: _minCapacity.toDouble(),
-                      min: 1,
-                      max: 50,
-                      divisions: 49,
-                      label: '$_minCapacity',
-                      onChanged: (value) {
-                        setState(() => _minCapacity = value.toInt());
-                        _applyFilters(onApplyFilter);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              // Reset button
-              TextButton.icon(
+        color: AppColors.white,
+        padding: const EdgeInsets.fromLTRB(
+          AppSizes.md,
+          AppSizes.md,
+          AppSizes.md,
+          AppSizes.sm,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildSearchField(onApplyFilter),
+            const SizedBox(height: AppSizes.sm),
+            _buildFilterChips(onApplyFilter),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchField(void Function(Map<String, dynamic>?) onApplyFilter) {
+    return TextField(
+      controller: _searchController,
+      decoration: InputDecoration(
+        hintText: 'Cari ruangan...',
+        hintStyle: const TextStyle(
+          fontSize: AppSizes.fontSm,
+          color: AppColors.grey,
+        ),
+        prefixIcon: const Icon(
+          Icons.search,
+          size: AppSizes.iconSm,
+          color: AppColors.grey,
+        ),
+        suffixIcon: _searchController.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.close, size: AppSizes.iconSm),
                 onPressed: () {
-                  setState(() {
-                    _searchController.clear();
-                    _selectedFloor = null;
-                    _minCapacity = 1;
-                  });
+                  _searchController.clear();
+                  _applyFilters(onApplyFilter);
+                  setState(() {});
+                },
+              )
+            : null,
+        filled: true,
+        fillColor: AppColors.background,
+        contentPadding: const EdgeInsets.symmetric(vertical: AppSizes.sm),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          borderSide: const BorderSide(color: AppColors.primary),
+        ),
+      ),
+      onChanged: (v) {
+        setState(() {});
+        _debounceTimer?.cancel();
+        _debounceTimer = Timer(const Duration(milliseconds: 600), () {
+          _applyFilters(onApplyFilter);
+        });
+      },
+    );
+  }
+
+  Widget _buildFilterChips(void Function(Map<String, dynamic>?) onApplyFilter) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          ...[null, 1, 2, 3, 4].map((floorVal) {
+            final label = floorVal == null ? 'Semua' : 'Lantai $floorVal';
+            final isSelected = _selectedFloor == floorVal;
+            return Padding(
+              padding: const EdgeInsets.only(right: AppSizes.xs),
+              child: ChoiceChip(
+                label: Text(label),
+                selected: isSelected,
+                showCheckmark: false,
+                onSelected: (_) {
+                  setState(() => _selectedFloor = floorVal);
                   _applyFilters(onApplyFilter);
                 },
-                icon: const Icon(Icons.refresh),
-                label: const Text('Reset Filter'),
+                selectedColor: AppColors.primary.withAlpha(30),
+                backgroundColor: AppColors.white,
+                side: BorderSide(
+                  color: isSelected ? AppColors.primary : AppColors.border,
+                ),
+                labelStyle: TextStyle(
+                  fontSize: AppSizes.fontXs,
+                  color:
+                      isSelected ? AppColors.primary : AppColors.textSecondary,
+                  fontWeight:
+                      isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: AppSizes.xs),
+                visualDensity: VisualDensity.compact,
+              ),
+            );
+          }),
+          const SizedBox(width: AppSizes.xs),
+          ActionChip(
+            avatar: Icon(
+              Icons.people_outline,
+              size: 14,
+              color: _minCapacity > 1 ? AppColors.primary : AppColors.grey,
+            ),
+            label: Text(
+              _minCapacity > 1 ? 'Min. $_minCapacity org' : 'Kapasitas',
+              style: TextStyle(
+                fontSize: AppSizes.fontXs,
+                color: _minCapacity > 1
+                    ? AppColors.primary
+                    : AppColors.textSecondary,
+                fontWeight:
+                    _minCapacity > 1 ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+            onPressed: () => _showCapacityDialog(onApplyFilter),
+            backgroundColor: _minCapacity > 1
+                ? AppColors.primary.withAlpha(20)
+                : AppColors.white,
+            side: BorderSide(
+              color: _minCapacity > 1 ? AppColors.primary : AppColors.border,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: AppSizes.xs),
+            visualDensity: VisualDensity.compact,
+          ),
+          if (_hasActiveFilters) ...[
+            const SizedBox(width: AppSizes.xs),
+            ActionChip(
+              avatar: Icon(
+                Icons.close,
+                size: 14,
+                color: AppColors.error.withAlpha(200),
+              ),
+              label: const Text(
+                'Reset',
+                style: TextStyle(fontSize: AppSizes.fontXs),
+              ),
+              onPressed: () => _resetFilters(onApplyFilter),
+              backgroundColor: AppColors.error.withAlpha(15),
+              side: BorderSide(color: AppColors.error.withAlpha(80)),
+              labelStyle: TextStyle(color: AppColors.error.withAlpha(200)),
+              padding: const EdgeInsets.symmetric(horizontal: AppSizes.xs),
+              visualDensity: VisualDensity.compact,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showCapacityDialog(
+    void Function(Map<String, dynamic>?) onApplyFilter,
+  ) async {
+    double temp = _minCapacity.toDouble();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        contentPadding: const EdgeInsets.all(AppSizes.xl),
+        content: StatefulBuilder(
+          builder: (_, setLocal) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.people,
+                size: AppSizes.iconXl,
+                color: AppColors.primary,
+              ),
+              const SizedBox(height: AppSizes.md),
+              const Text(
+                'Kapasitas Minimal',
+                style: TextStyle(
+                  fontSize: AppSizes.fontLg,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: AppSizes.sm),
+              Text(
+                '${temp.toInt()} orang',
+                style: const TextStyle(
+                  fontSize: AppSizes.fontXl,
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Slider(
+                value: temp,
+                min: 1,
+                max: 50,
+                divisions: 49,
+                activeColor: AppColors.primary,
+                onChanged: (v) => setLocal(() => temp = v),
+              ),
+              const SizedBox(height: AppSizes.sm),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Batal'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSizes.md),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        setState(() => _minCapacity = temp.toInt());
+                        _applyFilters(onApplyFilter);
+                        Navigator.pop(ctx);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.white,
+                      ),
+                      child: const Text('Terapkan'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -261,169 +361,180 @@ class _RoomListPageState extends State<RoomListPage> {
   }
 
   Widget _buildRoomCard(Room room) {
+    final isMaintenance = room.isMaintenance == true;
+    final statusColor = isMaintenance ? AppColors.warning : AppColors.primary;
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8.0),
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withAlpha(51),
-            spreadRadius: 2,
-            blurRadius: 5,
-            offset: const Offset(0, 3),
+            color: AppColors.black.withAlpha(15),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12.0),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: Icon(
-                Icons.meeting_room,
-                size: 32,
-                color: Colors.blue.shade700,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+        child: InkWell(
+          onTap: () => _navigateToViewRoom(room),
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    room.name ?? '(Tanpa Nama)',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  _buildRoomInfoRow(
-                    icon: Icons.location_on,
-                    value: room.location,
-                  ),
-                  const SizedBox(height: 4),
-                  _buildRoomInfoRow(
-                    icon: Icons.people,
-                    value: 'Kapasitas: ${room.capacity ?? '-'} orang',
-                  ),
-                  if (room.isMaintenance == true)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: _buildStatusTag(
-                        Icons.build,
-                        'DALAM PERAWATAN',
-                        Colors.orange.shade800,
+                  Container(width: 4, color: statusColor),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSizes.md,
+                        vertical: AppSizes.md,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(AppSizes.sm),
+                            decoration: BoxDecoration(
+                              color: statusColor.withAlpha(25),
+                              borderRadius: BorderRadius.circular(
+                                AppSizes.radiusSm,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.meeting_room,
+                              size: AppSizes.iconLg,
+                              color: statusColor,
+                            ),
+                          ),
+                          const SizedBox(width: AppSizes.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  room.name ?? '(Tanpa Nama)',
+                                  style: const TextStyle(
+                                    fontSize: AppSizes.fontMd,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: AppSizes.xxs),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.location_on_outlined,
+                                      size: 13,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      room.location,
+                                      style: const TextStyle(
+                                        fontSize: AppSizes.fontXs,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppSizes.sm),
+                                    const Icon(
+                                      Icons.people_outline,
+                                      size: 13,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      '${room.capacity ?? '-'} orang',
+                                      style: const TextStyle(
+                                        fontSize: AppSizes.fontXs,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (isMaintenance) ...[
+                                  const SizedBox(height: AppSizes.xs),
+                                  _buildStatusBadge(
+                                    Icons.build_outlined,
+                                    'Dalam Perawatan',
+                                    AppColors.warning,
+                                  ),
+                                ],
+                                if (room.deletedAt != null &&
+                                    widget.user.isAdmin) ...[
+                                  const SizedBox(height: AppSizes.xs),
+                                  _buildStatusBadge(
+                                    Icons.delete_outlined,
+                                    'Dihapus ${room.deletedAtFormatted}',
+                                    AppColors.error,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (widget.user.isAdmin)
+                            IconButton(
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                size: AppSizes.iconSm,
+                                color: AppColors.primary,
+                              ),
+                              onPressed: () => _navigateToEditRoom(room),
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              tooltip: 'Edit',
+                            ),
+                          const Icon(
+                            Icons.chevron_right,
+                            size: AppSizes.iconMd,
+                            color: AppColors.textDisabled,
+                          ),
+                        ],
                       ),
                     ),
-                  if (room.deletedAt != null && widget.user.isAdmin)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: _buildStatusTag(
-                        Icons.delete,
-                        'Dihapus pada ${room.deletedAtFormatted}',
-                        Colors.red.shade800,
-                      ),
-                    ),
+                  ),
                 ],
               ),
             ),
-            Column(
-              children: [
-                ElevatedButton(
-                  onPressed: () => _navigateToViewRoom(room),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
-                  child: const Text(
-                    'Detail',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                if (widget.user.isAdmin)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: OutlinedButton.icon(
-                      onPressed: () => _navigateToEditRoom(room),
-                      icon: const Icon(Icons.edit, size: 14),
-                      label: const Text('Edit'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        minimumSize: const Size(0, 32),
-                        textStyle: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildRoomInfoRow({required IconData icon, required String value}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 16, color: Colors.grey[600]),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(color: Colors.grey[700], fontSize: 13),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatusTag(IconData icon, String label, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8.0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
-        decoration: BoxDecoration(
-          color: color.withAlpha(26),
-          borderRadius: BorderRadius.circular(4.0),
-          border: Border.all(color: color.withAlpha(128)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
+  Widget _buildStatusBadge(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSizes.sm,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: color.withAlpha(25),
+        borderRadius: BorderRadius.circular(AppSizes.radiusXs),
+        border: Border.all(color: color.withAlpha(100)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: AppSizes.xxs),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w600,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
