@@ -39,25 +39,32 @@ class _FacilitySelectorPageState extends State<FacilitySelectorPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Pilih Fasilitas')),
+      appBar: AppBar(
+        title: Text(
+          'Pilih Fasilitas${_selectedFacilities.isNotEmpty ? ' (${_selectedFacilities.length})' : ''}',
+        ),
+        actions: [
+          if (_selectedFacilities.isNotEmpty)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(_selectedFacilities),
+              child: const Text(
+                'Pilih',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+        ],
+      ),
       body: Column(
         children: [
           _buildSearchField(),
           Expanded(child: _buildContent()),
         ],
       ),
-      floatingActionButton: _buildSaveButton(),
     );
-  }
-
-  FloatingActionButton? _buildSaveButton() {
-    return _selectedFacilities.isEmpty
-        ? null
-        : FloatingActionButton.extended(
-            onPressed: () => Navigator.of(context).pop(_selectedFacilities),
-            label: const Text('Simpan'),
-            icon: const Icon(Icons.save),
-          );
   }
 
   Widget _buildSearchField() {
@@ -99,42 +106,29 @@ class _FacilitySelectorPageState extends State<FacilitySelectorPage> {
         return ListView.separated(
           itemCount: facilities.length,
           separatorBuilder: (_, __) => const Divider(height: 1),
-          itemBuilder: (_, index) {
-            final facility = facilities[index];
-
-            final isLast = index == facilities.length - 1;
-
-            Widget content = _buildCard(facility);
-
-            if (isLast) {
-              content = Padding(
-                padding: const EdgeInsets.only(bottom: 80.0),
-                child: content,
-              );
-            }
-
-            return content;
-          },
+          itemBuilder: (_, index) => _buildCard(facilities[index]),
         );
       },
     );
   }
 
   Widget _buildCard(RoomFacility facility) {
-    final isSelected = _selectedFacilities
-        .where((f) => f.id == facility.id)
-        .isNotEmpty;
+    final isSelected = _selectedFacilities.any((f) => f.id == facility.id);
 
     return CheckboxListTile(
       title: Text(facility.name),
       secondary: facility.icon != null
           ? Icon(facility.icon, color: Colors.blue)
           : const Icon(Icons.check_circle_outline),
+      activeColor: Colors.blue,
+      controlAffinity: ListTileControlAffinity.trailing,
       value: isSelected,
       onChanged: (checked) {
         setState(() {
           if (checked == true) {
-            _selectedFacilities.add(facility);
+            if (!isSelected) {
+              _selectedFacilities.add(facility);
+            }
           } else {
             _selectedFacilities.removeWhere((f) => f.id == facility.id);
           }
