@@ -52,9 +52,8 @@ void main() {
       final date = DateTime(2025, 1, 4);
 
       expect(
-        () =>
-            ReservationIdGenerator.generateId(date: date, lastSequence: 99),
-        throwsException,
+        () => ReservationIdGenerator.generateId(date: date, lastSequence: 99),
+        throwsA(isA<String>()),
       );
     });
 

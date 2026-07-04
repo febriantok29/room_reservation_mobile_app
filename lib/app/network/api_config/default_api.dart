@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:room_reservation_mobile_app/app/core/config/app_environment.dart';
 
 class DefaultApi {
   final String protocol;
@@ -13,13 +14,13 @@ class DefaultApi {
   final Map<String, String> defaultHeaders;
 
   DefaultApi({
-    this.protocol = 'http',
-    this.baseUrl = '192.168.0.34:8000',
-    this.prefix = 'api',
-    this.version = 'v1',
+    this.protocol = AppEnvironment.apiProtocol,
+    this.baseUrl = AppEnvironment.apiBaseUrl,
+    this.prefix = AppEnvironment.apiPrefix,
+    this.version = AppEnvironment.apiVersion,
     DefaultApiRoutes routes = const DefaultApiRoutes(),
     http.Client? client,
-    this.timeout = const Duration(seconds: 30),
+    this.timeout = const Duration(seconds: AppEnvironment.apiTimeoutSeconds),
     Map<String, String> defaultHeaders = const {
       HttpHeaders.acceptHeader: 'application/json',
     },

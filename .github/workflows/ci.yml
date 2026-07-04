@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: "3.32.5"
+
+jobs:
+  test:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      # lib/firebase_options.dart di-gitignore karena berisi kredensial.
+      # Pakai isi secret FIREBASE_OPTIONS_DART bila tersedia,
+      # jika tidak pakai stub agar project tetap bisa di-compile.
+      - name: Siapkan firebase_options.dart
+        env:
+          FIREBASE_OPTIONS_DART: ${{ secrets.FIREBASE_OPTIONS_DART }}
+        run: |
+          if [ -n "$FIREBASE_OPTIONS_DART" ]; then
+            printf '%s\n' "$FIREBASE_OPTIONS_DART" > lib/firebase_options.dart
+            echo "Memakai firebase_options.dart dari secret."
+          else
+            cp tool/ci/firebase_options.stub.dart lib/firebase_options.dart
+            echo "Memakai stub firebase_options.dart."
+          fi
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verifikasi format kode
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run tests (dengan coverage)
+        run: flutter test --coverage --dart-define-from-file=env/development.json
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/lcov.info
+          retention-days: 14
+
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Siapkan firebase_options.dart
+        env:
+          FIREBASE_OPTIONS_DART: ${{ secrets.FIREBASE_OPTIONS_DART }}
+        run: |
+          if [ -n "$FIREBASE_OPTIONS_DART" ]; then
+            printf '%s\n' "$FIREBASE_OPTIONS_DART" > lib/firebase_options.dart
+          else
+            cp tool/ci/firebase_options.stub.dart lib/firebase_options.dart
+          fi
+
+      # android/app/google-services.json juga di-gitignore.
+      # Pakai secret GOOGLE_SERVICES_JSON bila tersedia, jika tidak pakai stub.
+      - name: Siapkan google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s\n' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            echo "Memakai google-services.json dari secret."
+          else
+            cp tool/ci/google-services.stub.json android/app/google-services.json
+            echo "Memakai stub google-services.json."
+          fi
+
+      # Environment build: pakai secret ENV_PRODUCTION_JSON bila tersedia,
+      # jika tidak pakai env/development.json dari repo.
+      - name: Siapkan environment build
+        env:
+          ENV_PRODUCTION_JSON: ${{ secrets.ENV_PRODUCTION_JSON }}
+        run: |
+          if [ -n "$ENV_PRODUCTION_JSON" ]; then
+            printf '%s\n' "$ENV_PRODUCTION_JSON" > env/build.json
+            echo "Memakai environment production dari secret."
+          else
+            cp env/development.json env/build.json
+            echo "Memakai environment development."
+          fi
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release --dart-define-from-file=env/build.json
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14

@@ -128,7 +128,9 @@ class AuthTokenManager {
       await saveTokens(
         accessToken: refreshed.accessToken,
         refreshToken: refreshed.refreshToken ?? _refreshToken,
-        expiresInSeconds: refreshed.expiresAt?.difference(DateTime.now()).inSeconds,
+        expiresInSeconds: refreshed.expiresAt
+            ?.difference(DateTime.now())
+            .inSeconds,
       );
 
       _refreshCompleter!.complete(true);

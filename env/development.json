@@ -1,0 +1,9 @@
+{
+  "APP_ENV": "development",
+  "API_PROTOCOL": "http",
+  "API_BASE_URL": "192.168.0.34:8000",
+  "API_PREFIX": "api",
+  "API_VERSION": "v1",
+  "API_TIMEOUT_SECONDS": 30,
+  "USE_API": true
+}

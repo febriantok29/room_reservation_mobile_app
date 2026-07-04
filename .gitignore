@@ -50,3 +50,10 @@ android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 lib/firebase_options.dart
 firebase.json
+
+# Environment definitions (salin dari env/production.example.json)
+env/production.json
+env/staging.json
+env/local.json
+env/build.json
+coverage/
