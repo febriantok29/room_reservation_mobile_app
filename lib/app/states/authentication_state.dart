@@ -1,5 +1,8 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/core/storage/secure_storage_service.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:rapa_track_mobile_app/app/models/auth_token.dart';
 import 'package:rapa_track_mobile_app/app/models/profile.dart';
 import 'package:rapa_track_mobile_app/app/network/route_builder.dart';
@@ -120,6 +123,8 @@ class AuthenticationState {
   }
 
   Future<void> logout() async {
+    await _revokeFcmToken();
+
     if (hasToken) {
       try {
         await RouteBuilder('Auth.logout').post();
@@ -129,20 +134,68 @@ class AuthenticationState {
     await forceLogout();
   }
 
+  Future<void> _revokeFcmToken() async {
+    try {
+      await FirebaseMessaging.instance.deleteToken();
+    } catch (_) {}
+
+    try {
+      await _service.updateFcmToken('');
+    } catch (_) {}
+  }
+
   Future<void> forceLogout() async {
     await clearSession();
 
-    final context = NavigationHandler.navigatorKey.currentState?.context;
+    final navigatorState = NavigationHandler.navigatorKey.currentState;
+    final context = navigatorState?.context;
+
     if (context != null && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sesi telah berakhir, silakan login kembali.'),
-          backgroundColor: Colors.red,
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          contentPadding: const EdgeInsets.all(AppSizes.xl),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.lock_outline,
+                color: AppColors.error,
+                size: AppSizes.iconXl,
+              ),
+              const SizedBox(height: AppSizes.md),
+              const Text(
+                'Perlu Login Ulang',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: AppSizes.fontLg,
+                ),
+              ),
+              const SizedBox(height: AppSizes.sm),
+              const Text(
+                'Anda telah logout otomatis. Silakan login kembali untuk melanjutkan.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: AppSizes.fontSm),
+              ),
+              const SizedBox(height: AppSizes.lg),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.white,
+                  ),
+                  child: const Text('OK'),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    // Redirect ke login page
     NavigationHandler.navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (route) => false,
