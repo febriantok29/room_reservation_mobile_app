@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/repositories/data_list_repository.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 
 /// Generic base page untuk list dengan infinite scroll dan dynamic filter
 class BaseListPage<T> extends StatefulWidget {
@@ -128,7 +129,7 @@ class _BaseListPageState<T> extends State<BaseListPage<T>> {
       appBar: AppBar(
         title: Text(widget.pageTitle),
         backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        foregroundColor: AppColors.white,
         elevation: 0,
         actions: [
           if (widget.customFilterBuilder != null)
@@ -147,7 +148,7 @@ class _BaseListPageState<T> extends State<BaseListPage<T>> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [AppColors.primary.withAlpha(26), Colors.white],
+            colors: [AppColors.primary.withAlpha(26), AppColors.white],
           ),
         ),
         child: Column(
@@ -174,26 +175,26 @@ class _BaseListPageState<T> extends State<BaseListPage<T>> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
+            Icon(Icons.error_outline, size: AppSizes.iconXl, color: AppColors.textDisabled),
+            const SizedBox(height: AppSizes.lg),
             Text(
               'Terjadi Kesalahan',
               style: TextStyle(
-                fontSize: 18,
-                color: Colors.grey[600],
+                fontSize: AppSizes.fontLg,
+                color: AppColors.textSecondary,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSizes.sm),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32.0),
+              padding: const EdgeInsets.symmetric(horizontal: AppSizes.xxl),
               child: Text(
                 _errorMessage ?? 'Gagal memuat data',
-                style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                style: TextStyle(fontSize: AppSizes.fontSm, color: AppColors.grey),
                 textAlign: TextAlign.center,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSizes.lg),
             ElevatedButton(
               onPressed: () =>
                   _fetchData(filters: _currentFilters, isRefresh: true),
@@ -213,14 +214,14 @@ class _BaseListPageState<T> extends State<BaseListPage<T>> {
           children: [
             SizedBox(height: MediaQuery.of(context).size.height * 0.25),
             Container(
-              margin: const EdgeInsets.symmetric(horizontal: 32.0),
-              padding: const EdgeInsets.all(24.0),
+              margin: const EdgeInsets.symmetric(horizontal: AppSizes.xxl),
+              padding: const EdgeInsets.all(AppSizes.xl),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12.0),
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(AppSizes.radiusMd),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withAlpha(13),
+                    color: AppColors.black.withAlpha(13),
                     blurRadius: 10.0,
                     offset: const Offset(0, 4),
                   ),
@@ -229,22 +230,22 @@ class _BaseListPageState<T> extends State<BaseListPage<T>> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Icon(widget.emptyIcon, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
+                  Icon(widget.emptyIcon, size: AppSizes.iconXl, color: AppColors.textDisabled),
+                  const SizedBox(height: AppSizes.lg),
                   Text(
                     widget.emptyTitle,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: AppSizes.fontLg,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey[600],
+                      color: AppColors.textSecondary,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSizes.sm),
                   Text(
                     widget.emptySubtitle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                    style: TextStyle(fontSize: AppSizes.fontSm, color: AppColors.grey),
                   ),
                 ],
               ),
@@ -258,22 +259,22 @@ class _BaseListPageState<T> extends State<BaseListPage<T>> {
     return RefreshIndicator(
       onRefresh: () => _fetchData(filters: _currentFilters, isRefresh: true),
       child: ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSizes.lg),
         itemCount: _buildListItemCount(),
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (_, __) => const SizedBox(height: AppSizes.md),
         itemBuilder: (context, index) {
           // Load more trigger (pada item terakhir)
           if (index == widget.repository.data.length) {
             if (_errorMessage != null) {
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16.0),
+                padding: const EdgeInsets.symmetric(vertical: AppSizes.lg),
                 child: Column(
                   children: [
                     Text(
                       'Gagal memuat data selanjutnya',
-                      style: TextStyle(color: Colors.grey[600]),
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSizes.sm),
                     TextButton(
                       onPressed: () => _fetchData(
                         filters: _currentFilters,
@@ -296,7 +297,7 @@ class _BaseListPageState<T> extends State<BaseListPage<T>> {
             });
 
             return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              padding: const EdgeInsets.symmetric(vertical: AppSizes.lg),
               child: Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
               ),
