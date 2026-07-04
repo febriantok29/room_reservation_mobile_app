@@ -22,6 +22,10 @@ class _RoomListPageState extends State<RoomListPage> {
   final _searchController = TextEditingController();
   Timer? _debounceTimer;
 
+  // Filter states
+  int? _selectedFloor;
+  int _minCapacity = 1;
+
   @override
   void initState() {
     super.initState();
@@ -39,8 +43,21 @@ class _RoomListPageState extends State<RoomListPage> {
   void _onSearchChanged(String keyword) {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 800), () {
-      // No need to setState since filter callback will trigger fetch
+      // Filter will be applied via callback
     });
+  }
+
+  Map<String, dynamic> _buildFilters() {
+    return {
+      if (_searchController.text.isNotEmpty) 'search': _searchController.text,
+      if (_selectedFloor != null) 'floor': _selectedFloor,
+      if (_minCapacity > 1) 'min_capacity': _minCapacity,
+    };
+  }
+
+  void _applyFilters(void Function(Map<String, dynamic>?) callback) {
+    final filters = _buildFilters();
+    callback(filters.isEmpty ? null : filters);
   }
 
   @override
@@ -105,33 +122,139 @@ class _RoomListPageState extends State<RoomListPage> {
       child: Container(
         padding: const EdgeInsets.all(12.0),
         color: Colors.grey[200],
-        child: TextField(
-          controller: _searchController,
-          decoration: InputDecoration(
-            hintText: 'Cari ruangan...',
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: _searchController.text.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      _searchController.clear();
-                      onApplyFilter(null);
-                    },
-                  )
-                : null,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(vertical: 0),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Search field
+              TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Cari ruangan...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            _applyFilters(onApplyFilter);
+                          },
+                        )
+                      : null,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                ),
+                onChanged: (value) {
+                  _onSearchChanged(value);
+                  _applyFilters(onApplyFilter);
+                },
+              ),
+              const SizedBox(height: 12),
+              // Floor filter
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.layers, size: 20, color: Colors.blue),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButton<int?>(
+                        isExpanded: true,
+                        value: _selectedFloor,
+                        hint: const Text('Pilih Lantai'),
+                        underline: const SizedBox.shrink(),
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('Semua Lantai'),
+                          ),
+                          ...List.generate(4, (i) {
+                            final floor = i + 1;
+                            return DropdownMenuItem<int?>(
+                              value: floor,
+                              child: Text('Lantai $floor'),
+                            );
+                          }),
+                        ],
+                        onChanged: (floor) {
+                          setState(() => _selectedFloor = floor);
+                          _applyFilters(onApplyFilter);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Capacity filter
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.people, size: 20, color: Colors.blue),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Kapasitas Minimal: $_minCapacity orang',
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Slider(
+                      value: _minCapacity.toDouble(),
+                      min: 1,
+                      max: 50,
+                      divisions: 49,
+                      label: '$_minCapacity',
+                      onChanged: (value) {
+                        setState(() => _minCapacity = value.toInt());
+                        _applyFilters(onApplyFilter);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Reset button
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _searchController.clear();
+                    _selectedFloor = null;
+                    _minCapacity = 1;
+                  });
+                  _applyFilters(onApplyFilter);
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reset Filter'),
+              ),
+            ],
           ),
-          onChanged: (value) {
-            _onSearchChanged(value);
-            // Apply search filter
-            onApplyFilter({if (value.isNotEmpty) 'search': value});
-          },
         ),
       ),
     );
