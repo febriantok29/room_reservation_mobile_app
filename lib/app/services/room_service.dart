@@ -1,8 +1,15 @@
 import 'package:rapa_track_mobile_app/app/models/requests/room_request.dart';
 import 'package:rapa_track_mobile_app/app/models/room.dart';
 import 'package:rapa_track_mobile_app/app/network/route_builder.dart';
+import 'package:rapa_track_mobile_app/app/services/data_list_service.dart';
 
-class RoomService {
+class RoomService extends DataListService<Room> {
+  @override
+  String get routeKey => 'Room.list';
+
+  @override
+  Room fromJson(Map<String, dynamic> json) => Room.fromJson(json);
+
   Future<List<Room>> getRoomList({
     int? floor,
     int? minCapacity,

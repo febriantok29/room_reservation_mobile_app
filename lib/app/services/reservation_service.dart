@@ -4,8 +4,15 @@ import 'package:rapa_track_mobile_app/app/models/profile.dart';
 import 'package:rapa_track_mobile_app/app/models/reservation.dart';
 import 'package:rapa_track_mobile_app/app/models/room.dart';
 import 'package:rapa_track_mobile_app/app/network/route_builder.dart';
+import 'package:rapa_track_mobile_app/app/services/data_list_service.dart';
 
-class ReservationService {
+class ReservationService extends DataListService<Reservation> {
+  @override
+  String get routeKey => 'Reservation.list';
+
+  @override
+  Reservation fromJson(Map<String, dynamic> json) => Reservation.fromJson(json);
+
   Future<ReservationListResult> getReservationList({
     String? status,
     String? dateFrom,
