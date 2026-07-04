@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 
-/// Button yang konsisten untuk seluruh aplikasi
 class AppButton extends StatelessWidget {
   final String text;
   final VoidCallback? onPressed;
   final bool isLoading;
   final bool isOutlined;
+  final bool isFullWidth;
   final Color? color;
   final double? width;
   final double height;
@@ -19,6 +19,7 @@ class AppButton extends StatelessWidget {
     this.onPressed,
     this.isLoading = false,
     this.isOutlined = false,
+    this.isFullWidth = false,
     this.color,
     this.width,
     this.height = AppSizes.buttonHeightMd,
@@ -27,8 +28,8 @@ class AppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final buttonColor = color ?? theme.colorScheme.primary;
+    final buttonColor = color ?? AppColors.primary;
+    final foreground = isOutlined ? buttonColor : AppColors.white;
 
     final child = Row(
       mainAxisSize: MainAxisSize.min,
@@ -41,27 +42,23 @@ class AppButton extends StatelessWidget {
               height: AppSizes.iconSm,
               child: CircularProgressIndicator(
                 strokeWidth: AppSizes.borderWidth,
-                valueColor: AlwaysStoppedAnimation(
-                  isOutlined ? buttonColor : AppColors.white,
-                ),
+                valueColor: AlwaysStoppedAnimation(foreground),
               ),
             ),
           )
         else if (icon != null)
           Padding(
             padding: const EdgeInsets.only(right: AppSizes.sm),
-            child: Icon(
-              icon,
-              size: AppSizes.iconSm,
-              color: isOutlined ? buttonColor : AppColors.white,
-            ),
+            child: Icon(icon, size: AppSizes.iconSm, color: foreground),
           ),
         Text(text),
       ],
     );
 
+    final effectiveWidth = isFullWidth ? double.infinity : width;
+
     return SizedBox(
-      width: width,
+      width: effectiveWidth,
       height: height,
       child: isOutlined
           ? OutlinedButton(
@@ -80,12 +77,52 @@ class AppButton extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: buttonColor,
                 foregroundColor: AppColors.white,
+                disabledBackgroundColor: buttonColor.withValues(alpha: 0.5),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppSizes.radiusSm),
                 ),
               ),
               child: child,
             ),
+    );
+  }
+}
+
+class AppTextButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onPressed;
+  final IconData? icon;
+  final Color? color;
+
+  const AppTextButton({
+    super.key,
+    required this.label,
+    this.onPressed,
+    this.icon,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveColor = color ?? AppColors.primary;
+
+    if (icon != null) {
+      return TextButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, color: effectiveColor),
+        label: Text(
+          label,
+          style: TextStyle(color: effectiveColor, fontWeight: FontWeight.w600),
+        ),
+      );
+    }
+
+    return TextButton(
+      onPressed: onPressed,
+      child: Text(
+        label,
+        style: TextStyle(color: effectiveColor, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }
