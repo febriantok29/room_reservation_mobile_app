@@ -177,10 +177,22 @@ class _CalendarPageState extends State<CalendarPage> {
           tooltip: 'Tampilan',
           onSelected: _changeView,
           itemBuilder: (_) => [
-            _viewMenuItem(CalendarView.month, Icons.calendar_month_outlined, 'Bulan'),
-            _viewMenuItem(CalendarView.week, Icons.view_week_outlined, 'Minggu'),
+            _viewMenuItem(
+              CalendarView.month,
+              Icons.calendar_month_outlined,
+              'Bulan',
+            ),
+            _viewMenuItem(
+              CalendarView.week,
+              Icons.view_week_outlined,
+              'Minggu',
+            ),
             _viewMenuItem(CalendarView.day, Icons.view_day_outlined, 'Hari'),
-            _viewMenuItem(CalendarView.schedule, Icons.list_alt_outlined, 'Jadwal'),
+            _viewMenuItem(
+              CalendarView.schedule,
+              Icons.list_alt_outlined,
+              'Jadwal',
+            ),
           ],
         ),
       ],
@@ -212,7 +224,11 @@ class _CalendarPageState extends State<CalendarPage> {
           ),
           if (isSelected) ...[
             const Spacer(),
-            const Icon(Icons.check, size: AppSizes.iconSm, color: AppColors.primary),
+            const Icon(
+              Icons.check,
+              size: AppSizes.iconSm,
+              color: AppColors.primary,
+            ),
           ],
         ],
       ),
@@ -289,7 +305,11 @@ class _CalendarPageState extends State<CalendarPage> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 13, color: isSelected ? color : AppColors.textSecondary),
+            Icon(
+              icon,
+              size: 13,
+              color: isSelected ? color : AppColors.textSecondary,
+            ),
             const SizedBox(width: AppSizes.xxs),
             Text(
               label,
@@ -376,8 +396,11 @@ class _CalendarPageState extends State<CalendarPage> {
       onViewChanged: (details) {
         final mid = details.visibleDates[details.visibleDates.length ~/ 2];
         if (mid.year != _visibleDate.year || mid.month != _visibleDate.month) {
-          setState(() => _visibleDate = mid);
-          _loadCalendar();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() => _visibleDate = mid);
+            _loadCalendar();
+          });
         }
       },
     );
@@ -415,14 +438,20 @@ class _CalendarPageState extends State<CalendarPage> {
           const Expanded(
             child: Text(
               'Gagal memuat data.',
-              style: TextStyle(fontSize: AppSizes.fontXs, color: AppColors.error),
+              style: TextStyle(
+                fontSize: AppSizes.fontXs,
+                color: AppColors.error,
+              ),
             ),
           ),
           TextButton(
             onPressed: () => _loadCalendar(invalidateCache: true),
             child: const Text(
               'Coba Lagi',
-              style: TextStyle(fontSize: AppSizes.fontXs, color: AppColors.error),
+              style: TextStyle(
+                fontSize: AppSizes.fontXs,
+                color: AppColors.error,
+              ),
             ),
           ),
         ],
@@ -491,9 +520,17 @@ class _CalendarPageState extends State<CalendarPage> {
               const SizedBox(height: AppSizes.lg),
               const Divider(height: 1),
               const SizedBox(height: AppSizes.md),
-              _buildSheetRow(Icons.person_outline, 'Pemesan', booker?.name ?? '-'),
+              _buildSheetRow(
+                Icons.person_outline,
+                'Pemesan',
+                booker?.name ?? '-',
+              ),
               if (room?.location != null)
-                _buildSheetRow(Icons.location_on_outlined, 'Lokasi', room!.location),
+                _buildSheetRow(
+                  Icons.location_on_outlined,
+                  'Lokasi',
+                  room!.location,
+                ),
               _buildSheetRow(
                 Icons.schedule_outlined,
                 'Waktu Mulai',
@@ -513,7 +550,8 @@ class _CalendarPageState extends State<CalendarPage> {
                 'Jumlah Tamu',
                 '${reservation.visitorCount ?? 0} orang',
               ),
-              if (reservation.purpose != null && reservation.purpose!.isNotEmpty)
+              if (reservation.purpose != null &&
+                  reservation.purpose!.isNotEmpty)
                 _buildSheetRow(
                   Icons.description_outlined,
                   'Keperluan',
@@ -614,11 +652,5 @@ class _CalendarPageState extends State<CalendarPage> {
     if (result == true) _loadCalendar(invalidateCache: true);
   }
 
-  String _monthName(int month) {
-    const months = [
-      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
-    ];
-    return months[month - 1];
-  }
+  String _monthName(int month) => DateFormatter.getMonthName(month);
 }

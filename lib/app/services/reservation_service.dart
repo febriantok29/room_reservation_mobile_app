@@ -80,6 +80,8 @@ class ReservationService extends DataListService<Reservation> {
     required String purpose,
     required int visitorCount,
     String? userId,
+    bool? withSnack,
+    bool? withLunch,
   }) async {
     final body = <String, dynamic>{
       'room_id': roomId,
@@ -88,6 +90,8 @@ class ReservationService extends DataListService<Reservation> {
       'purpose': purpose,
       'visitor_count': visitorCount,
       if (userId != null) 'user_id': userId,
+      if (withSnack != null) 'with_snack': withSnack,
+      if (withLunch != null) 'with_lunch': withLunch,
     };
 
     final response = await RouteBuilder('Reservation.create').post(body: body);
