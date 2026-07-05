@@ -50,47 +50,61 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSizes.xxl),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Icon(
-                    Icons.meeting_room_rounded,
-                    size: 80,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(height: AppSizes.lg),
-
-                  Text(
-                    'Reservasi Ruangan',
-                    style: Theme.of(context).textTheme.displaySmall,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppSizes.xxxl),
-
-                  ..._buildForms(),
-
-                  if (_errorMessage.isNotEmpty) ...[
-                    Text(
-                      _errorMessage,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: AppColors.error),
-                      textAlign: TextAlign.center,
+    return GestureDetector(
+      onTap: () {
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSizes.xxl),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Icon(
+                      Icons.meeting_room_rounded,
+                      size: 80,
+                      color: AppColors.primary,
                     ),
                     const SizedBox(height: AppSizes.lg),
-                  ],
 
-                  _buildLoginButton(),
-                ],
+                    Text(
+                      'RapaTrack',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 28.0,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppSizes.xs),
+                    Text(
+                      'Sistem Reservasi Ruang Rapat',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppSizes.xxxl),
+
+                    ..._buildForms(),
+
+                    if (_errorMessage.isNotEmpty) ...[
+                      Text(
+                        _errorMessage,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.error,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: AppSizes.lg),
+                    ],
+
+                    _buildLoginButton(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -165,11 +179,17 @@ class _LoginPageState extends State<LoginPage> {
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 16),
         textStyle: const TextStyle(fontSize: 16),
+        backgroundColor: AppColors.white,
+        foregroundColor: AppColors.primary,
       ),
     );
   }
 
   Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
     final credential = _credentialController.text.trim();
     final password = _passwordController.text.trim();
 
@@ -183,6 +203,7 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() {
       _isLoading = true;
+      _errorMessage = '';
     });
 
     try {
