@@ -127,4 +127,8 @@ class DateFormatter {
   static String formatTimeOfDay(TimeOfDay time) {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
+
+  static String apiDate(DateTime date) {
+    return DateFormat('yyyy-MM-dd').format(date.toLocal());
+  }
 }
