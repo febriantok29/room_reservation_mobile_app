@@ -1,541 +1,541 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:room_reservation_mobile_app/app/core/config/app_feature_flags.dart';
-import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/pages/room/room_list_modal_bottom_sheet.dart';
-import 'package:room_reservation_mobile_app/app/providers/room_providers.dart';
-import 'package:room_reservation_mobile_app/app/services/room_service.dart';
+import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/models/room.dart';
+import 'package:rapa_track_mobile_app/app/pages/base_list_page.dart';
+import 'package:rapa_track_mobile_app/app/pages/room/room_detail_page.dart';
+import 'package:rapa_track_mobile_app/app/repositories/room_list_repository.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 
-class RoomListPage extends ConsumerStatefulWidget {
+class RoomListPage extends StatefulWidget {
   final Profile user;
 
   const RoomListPage({super.key, required this.user});
 
   @override
-  ConsumerState<RoomListPage> createState() => _RoomListPageState();
+  State<RoomListPage> createState() => _RoomListPageState();
 }
 
-class _RoomListPageState extends ConsumerState<RoomListPage> {
-  final _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
-
-  final _roomService = RoomService.getInstance();
-
-  // State untuk filter
-  bool _showAll = false;
-  String _searchKeyword = '';
+class _RoomListPageState extends State<RoomListPage> {
+  late RoomListRepository _repository;
   final _searchController = TextEditingController();
-  int _refreshNonce = 0;
-
-  // Debounce timer untuk pencarian
   Timer? _debounceTimer;
 
-  bool get _canMutateRoom => widget.user.isAdmin && !AppFeatureFlags.useApi;
+  int _listKey = 0;
+
+  int? _selectedFloor;
+  int _minCapacity = 1;
+
+  bool get _hasActiveFilters =>
+      _searchController.text.isNotEmpty ||
+      _selectedFloor != null ||
+      _minCapacity > 1;
 
   @override
   void initState() {
     super.initState();
+    _repository = RoomListRepository();
   }
 
   @override
   void dispose() {
     _debounceTimer?.cancel();
     _searchController.dispose();
+    _repository.dispose();
     super.dispose();
   }
 
-  void _loadRooms({bool forceRefresh = false}) {
-    setState(() {
-      if (forceRefresh) {
-        _refreshNonce++;
-      }
-    });
+  Map<String, dynamic> _buildFilters() {
+    return {
+      if (_searchController.text.isNotEmpty) 'search': _searchController.text,
+      if (_selectedFloor != null) 'floor': _selectedFloor,
+      if (_minCapacity > 1) 'min_capacity': _minCapacity,
+    };
   }
 
-  // Fungsi pencarian dengan debounce
-  void _searchRooms(String keyword) {
-    // Batalkan timer sebelumnya jika masih berjalan
-    _debounceTimer?.cancel();
+  void _applyFilters(void Function(Map<String, dynamic>?) callback) {
+    final filters = _buildFilters();
+    callback(filters.isEmpty ? null : filters);
+  }
 
-    // Atur timer baru (2 detik)
-    _debounceTimer = Timer(const Duration(milliseconds: 800), () {
-      if (_searchKeyword != keyword) {
-        setState(() {
-          _searchKeyword = keyword;
-        });
-      }
+  void _resetFilters(void Function(Map<String, dynamic>?) onApplyFilter) {
+    setState(() {
+      _searchController.clear();
+      _selectedFloor = null;
+      _minCapacity = 1;
     });
+    onApplyFilter(null);
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).requestFocus(FocusNode());
-      },
-      child: RefreshIndicator(
-        key: _refreshIndicatorKey,
-        onRefresh: () async {
-          _loadRooms(forceRefresh: true);
-          ref.invalidate(
-            roomListByQueryProvider(
-              RoomListQuery(
-                showDeleted: _showAll,
-                searchKeyword: _searchKeyword,
-                forceRefresh: true,
-              ),
-            ),
-          );
-        },
-        child: Scaffold(
-          appBar: AppBar(title: const Text('Daftar Ruangan Meeting')),
-          floatingActionButton: _addRoomButton(),
-          body: Column(children: [_buildFilterSection(), _buildContent()]),
-        ),
+    return BaseListPage<Room>(
+      key: ValueKey(_listKey),
+      pageTitle: 'Daftar Ruangan Meeting',
+      repository: _repository,
+      itemBuilder: _buildRoomCard,
+      emptyIcon: Icons.meeting_room_outlined,
+      emptyTitle: 'Tidak Ada Ruangan',
+      emptySubtitle: 'Belum ada ruangan yang tersedia',
+      floatingActionButton: widget.user.isAdmin
+          ? FloatingActionButton(
+              onPressed: _navigateToAddRoom,
+              backgroundColor: AppColors.primary,
+              child: const Icon(Icons.add, color: AppColors.white),
+            )
+          : null,
+      customFilterBuilder: _buildFilterSection,
+      onFetchData: _repository.fetchList,
+    );
+  }
+
+  Future<void> _navigateToAddRoom() async {
+    final needsRefresh = await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => RoomDetailPage(user: widget.user)),
+    );
+    if (needsRefresh == true) _forceRefreshList();
+  }
+
+  Future<void> _navigateToEditRoom(Room room) async {
+    final needsRefresh = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RoomDetailPage(user: widget.user, room: room),
+      ),
+    );
+    if (needsRefresh == true) _forceRefreshList();
+  }
+
+  void _forceRefreshList() {
+    _repository.reset();
+    setState(() => _listKey++);
+  }
+
+  void _navigateToViewRoom(Room room) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RoomDetailPage.view(user: widget.user, room: room),
       ),
     );
   }
 
-  Widget _buildFilterSection() {
-    final filter = <Widget>[
-      // Kolom pencarian
-      Padding(
-        padding: const EdgeInsets.only(bottom: 8.0),
-        child: TextField(
-          controller: _searchController,
-          decoration: InputDecoration(
-            hintText: 'Cari ruangan...',
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: _searchController.text.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      _searchController.clear();
-                      _searchRooms('');
-                    },
-                  )
-                : null,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(vertical: 0),
-          ),
-          onChanged: _searchRooms,
+  Widget _buildFilterSection(
+    void Function(Map<String, dynamic>?) onApplyFilter,
+  ) {
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Container(
+        color: AppColors.white,
+        padding: const EdgeInsets.fromLTRB(
+          AppSizes.md,
+          AppSizes.md,
+          AppSizes.md,
+          AppSizes.sm,
         ),
-      ),
-    ];
-
-    // Filter untuk admin
-    if (_canMutateRoom) {
-      filter.add(
-        Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Expanded(child: Text('Lihat semua ruangan')),
-            Switch(
-              value: _showAll,
-              onChanged: (_) {
-                setState(() {
-                  _showAll = !_showAll;
-                });
-              },
-            ),
+            _buildSearchField(onApplyFilter),
+            const SizedBox(height: AppSizes.sm),
+            _buildFilterChips(onApplyFilter),
           ],
         ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
-      color: Colors.grey[200],
-      child: Column(children: filter),
+      ),
     );
   }
 
-  Widget _buildContent() {
-    final query = RoomListQuery(
-      showDeleted: _showAll,
-      searchKeyword: _searchKeyword,
-      forceRefresh: _refreshNonce > 0,
+  Widget _buildSearchField(void Function(Map<String, dynamic>?) onApplyFilter) {
+    return TextField(
+      controller: _searchController,
+      decoration: InputDecoration(
+        hintText: 'Cari ruangan...',
+        hintStyle: const TextStyle(
+          fontSize: AppSizes.fontSm,
+          color: AppColors.grey,
+        ),
+        prefixIcon: const Icon(
+          Icons.search,
+          size: AppSizes.iconSm,
+          color: AppColors.grey,
+        ),
+        suffixIcon: _searchController.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.close, size: AppSizes.iconSm),
+                onPressed: () {
+                  _searchController.clear();
+                  _applyFilters(onApplyFilter);
+                  setState(() {});
+                },
+              )
+            : null,
+        filled: true,
+        fillColor: AppColors.background,
+        contentPadding: const EdgeInsets.symmetric(vertical: AppSizes.sm),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          borderSide: const BorderSide(color: AppColors.primary),
+        ),
+      ),
+      onChanged: (v) {
+        setState(() {});
+        _debounceTimer?.cancel();
+        _debounceTimer = Timer(const Duration(milliseconds: 600), () {
+          _applyFilters(onApplyFilter);
+        });
+      },
     );
+  }
 
-    final roomState = ref.watch(roomListByQueryProvider(query));
-
-    return roomState.when(
-      loading: () {
-        return const Center(
-          child: Padding(
-            padding: EdgeInsets.only(top: 24.0),
-            child: CircularProgressIndicator(),
-          ),
-        );
-      },
-      error: (error, stack) {
-        return Center(
-          child: Padding(
-            padding: EdgeInsets.only(top: 24.0),
-
-            child: Text('Gagal memuat ruangan: $error'),
-          ),
-        );
-      },
-      data: (data) {
-        if (_refreshNonce > 0) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              setState(() {
-                _refreshNonce = 0;
-              });
-            }
-          });
-        }
-
-        // Tampilkan pesan kosong yang berbeda berdasarkan pencarian
-        if (data.isEmpty) {
-          return Padding(
-            padding: EdgeInsets.only(top: 24.0),
-            child: Center(
-              child: _searchKeyword.isNotEmpty
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.search_off,
-                          size: 64,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Tidak ada ruangan dengan kata kunci "$_searchKeyword"',
-                        ),
-                      ],
-                    )
-                  : const Text('Tidak ada ruangan tersedia.'),
+  Widget _buildFilterChips(void Function(Map<String, dynamic>?) onApplyFilter) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          ...[null, 1, 2, 3, 4].map((floorVal) {
+            final label = floorVal == null ? 'Semua' : 'Lantai $floorVal';
+            final isSelected = _selectedFloor == floorVal;
+            return Padding(
+              padding: const EdgeInsets.only(right: AppSizes.xs),
+              child: ChoiceChip(
+                label: Text(label),
+                selected: isSelected,
+                showCheckmark: false,
+                onSelected: (_) {
+                  setState(() => _selectedFloor = floorVal);
+                  _applyFilters(onApplyFilter);
+                },
+                selectedColor: AppColors.primary.withAlpha(30),
+                backgroundColor: AppColors.white,
+                side: BorderSide(
+                  color: isSelected ? AppColors.primary : AppColors.border,
+                ),
+                labelStyle: TextStyle(
+                  fontSize: AppSizes.fontXs,
+                  color:
+                      isSelected ? AppColors.primary : AppColors.textSecondary,
+                  fontWeight:
+                      isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: AppSizes.xs),
+                visualDensity: VisualDensity.compact,
+              ),
+            );
+          }),
+          const SizedBox(width: AppSizes.xs),
+          ActionChip(
+            avatar: Icon(
+              Icons.people_outline,
+              size: 14,
+              color: _minCapacity > 1 ? AppColors.primary : AppColors.grey,
             ),
-          );
-        }
-
-        return Flexible(
-          child: ListView.builder(
-            itemCount: data.length,
-            itemBuilder: (_, index) {
-              final room = data[index];
-
-              Widget card = _buildCard(room);
-
-              if (_canMutateRoom) {
-                card = Slidable(
-                  key: ValueKey(room.id),
-                  endActionPane: ActionPane(
-                    motion: const ScrollMotion(),
-                    children: [
-                      SlidableAction(
-                        onPressed: (_) => _showRoomBottomSheet(room),
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        icon: Icons.edit,
-                        label: 'Edit',
-                      ),
-                      SlidableAction(
-                        onPressed: (_) => _confirmDeleteRoom(room),
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        icon: Icons.delete,
-                        label: 'Hapus',
-                      ),
-                    ],
-                  ),
-                  child: card,
-                );
-              }
-
-              final isLast = index == data.length - 1;
-              if (isLast) {
-                card = Padding(
-                  padding: const EdgeInsets.only(bottom: 96.0),
-                  child: card,
-                );
-              }
-
-              return card;
-            },
+            label: Text(
+              _minCapacity > 1 ? 'Min. $_minCapacity org' : 'Kapasitas',
+              style: TextStyle(
+                fontSize: AppSizes.fontXs,
+                color: _minCapacity > 1
+                    ? AppColors.primary
+                    : AppColors.textSecondary,
+                fontWeight:
+                    _minCapacity > 1 ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+            onPressed: () => _showCapacityDialog(onApplyFilter),
+            backgroundColor: _minCapacity > 1
+                ? AppColors.primary.withAlpha(20)
+                : AppColors.white,
+            side: BorderSide(
+              color: _minCapacity > 1 ? AppColors.primary : AppColors.border,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: AppSizes.xs),
+            visualDensity: VisualDensity.compact,
           ),
-        );
-      },
+          if (_hasActiveFilters) ...[
+            const SizedBox(width: AppSizes.xs),
+            ActionChip(
+              avatar: Icon(
+                Icons.close,
+                size: 14,
+                color: AppColors.error.withAlpha(200),
+              ),
+              label: const Text(
+                'Reset',
+                style: TextStyle(fontSize: AppSizes.fontXs),
+              ),
+              onPressed: () => _resetFilters(onApplyFilter),
+              backgroundColor: AppColors.error.withAlpha(15),
+              side: BorderSide(color: AppColors.error.withAlpha(80)),
+              labelStyle: TextStyle(color: AppColors.error.withAlpha(200)),
+              padding: const EdgeInsets.symmetric(horizontal: AppSizes.xs),
+              visualDensity: VisualDensity.compact,
+            ),
+          ],
+        ],
+      ),
     );
   }
 
-  /// Widget untuk menampilkan detail ruangan dalam bentuk kartu
-  Widget _buildCard(Room room) {
+  Future<void> _showCapacityDialog(
+    void Function(Map<String, dynamic>?) onApplyFilter,
+  ) async {
+    double temp = _minCapacity.toDouble();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        contentPadding: const EdgeInsets.all(AppSizes.xl),
+        content: StatefulBuilder(
+          builder: (_, setLocal) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.people,
+                size: AppSizes.iconXl,
+                color: AppColors.primary,
+              ),
+              const SizedBox(height: AppSizes.md),
+              const Text(
+                'Kapasitas Minimal',
+                style: TextStyle(
+                  fontSize: AppSizes.fontLg,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: AppSizes.sm),
+              Text(
+                '${temp.toInt()} orang',
+                style: const TextStyle(
+                  fontSize: AppSizes.fontXl,
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Slider(
+                value: temp,
+                min: 1,
+                max: 50,
+                divisions: 49,
+                activeColor: AppColors.primary,
+                onChanged: (v) => setLocal(() => temp = v),
+              ),
+              const SizedBox(height: AppSizes.sm),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Batal'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSizes.md),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        setState(() => _minCapacity = temp.toInt());
+                        _applyFilters(onApplyFilter);
+                        Navigator.pop(ctx);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.white,
+                      ),
+                      child: const Text('Terapkan'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoomCard(Room room) {
+    final isMaintenance = room.isMaintenance == true;
+    final statusColor = isMaintenance ? AppColors.warning : AppColors.primary;
+
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 12.0),
-      width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8.0),
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.2),
-            spreadRadius: 2,
-            blurRadius: 5,
-            offset: const Offset(0, 3),
+            color: AppColors.black.withAlpha(15),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            // Icon ruangan di sebelah kiri
-            Container(
-              padding: const EdgeInsets.all(12.0),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: Icon(
-                Icons.meeting_room,
-                size: 32,
-                color: Colors.blue.shade700,
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Informasi ruangan
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+        child: InkWell(
+          onTap: () => _navigateToViewRoom(room),
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Nama ruangan
-                  Text(
-                    room.name ?? '(Tanpa Nama)',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-
-                  // Lokasi
-                  _buildRoomInfoRow(
-                    icon: Icons.location_on,
-                    value: room.location ?? '-',
-                  ),
-                  const SizedBox(height: 4),
-
-                  // Kapasitas
-                  _buildRoomInfoRow(
-                    icon: Icons.people,
-                    value: 'Kapasitas: ${room.capacity ?? '-'} orang',
-                  ),
-
-                  // Status maintenance
-                  if (room.isMaintenance == true)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: _buildStatusTag(
-                        Icons.build,
-                        'DALAM PERAWATAN',
-                        Colors.orange.shade800,
+                  Container(width: 4, color: statusColor),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSizes.md,
+                        vertical: AppSizes.md,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(AppSizes.sm),
+                            decoration: BoxDecoration(
+                              color: statusColor.withAlpha(25),
+                              borderRadius: BorderRadius.circular(
+                                AppSizes.radiusSm,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.meeting_room,
+                              size: AppSizes.iconLg,
+                              color: statusColor,
+                            ),
+                          ),
+                          const SizedBox(width: AppSizes.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  room.name ?? '(Tanpa Nama)',
+                                  style: const TextStyle(
+                                    fontSize: AppSizes.fontMd,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: AppSizes.xxs),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.location_on_outlined,
+                                      size: 13,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      room.location,
+                                      style: const TextStyle(
+                                        fontSize: AppSizes.fontXs,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppSizes.sm),
+                                    const Icon(
+                                      Icons.people_outline,
+                                      size: 13,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      '${room.capacity ?? '-'} orang',
+                                      style: const TextStyle(
+                                        fontSize: AppSizes.fontXs,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (isMaintenance) ...[
+                                  const SizedBox(height: AppSizes.xs),
+                                  _buildStatusBadge(
+                                    Icons.build_outlined,
+                                    'Dalam Perawatan',
+                                    AppColors.warning,
+                                  ),
+                                ],
+                                if (room.deletedAt != null &&
+                                    widget.user.isAdmin) ...[
+                                  const SizedBox(height: AppSizes.xs),
+                                  _buildStatusBadge(
+                                    Icons.delete_outlined,
+                                    'Dihapus ${room.deletedAtFormatted}',
+                                    AppColors.error,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (widget.user.isAdmin)
+                            IconButton(
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                size: AppSizes.iconSm,
+                                color: AppColors.primary,
+                              ),
+                              onPressed: () => _navigateToEditRoom(room),
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              tooltip: 'Edit',
+                            ),
+                          const Icon(
+                            Icons.chevron_right,
+                            size: AppSizes.iconMd,
+                            color: AppColors.textDisabled,
+                          ),
+                        ],
                       ),
                     ),
-
-                  // Status hapus untuk admin
-                  if (room.deletedAt != null && widget.user.isAdmin)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: _buildStatusTag(
-                        Icons.delete,
-                        'Dihapus pada ${room.deletedAtFormatted}',
-                        Colors.red.shade800,
-                      ),
-                    ),
+                  ),
                 ],
               ),
             ),
-
-            // Tombol Book di sebelah kanan
-            ElevatedButton(
-              onPressed: () {
-                // TODO: Implementasi navigasi ke halaman booking
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              child: const Text(
-                'Book',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  /// Widget untuk menampilkan baris informasi ruangan dengan ikon
-  Widget _buildRoomInfoRow({required IconData icon, required String value}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 16, color: Colors.grey[600]),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(color: Colors.grey[700], fontSize: 13),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Widget untuk menampilkan status khusus (maintenance, deleted)
-  Widget _buildStatusTag(IconData icon, String label, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8.0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(4.0),
-          border: Border.all(color: color.withValues(alpha: 0.5)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ],
-        ),
+  Widget _buildStatusBadge(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSizes.sm,
+        vertical: 2,
       ),
-    );
-  }
-
-  Widget? _addRoomButton() {
-    if (!_canMutateRoom) {
-      return null;
-    }
-
-    return FloatingActionButton(
-      onPressed: () => _showRoomBottomSheet(),
-      tooltip: 'Tambah Ruangan',
-      child: const Icon(Icons.add, color: Colors.white),
-    );
-  }
-
-  /// Menampilkan bottom sheet untuk tambah/edit ruangan
-  /// Menggunakan widget RoomListModalBottomSheet yang sudah direfaktor
-  void _showRoomBottomSheet([Room? room]) async {
-    // Menggunakan factory method static untuk menampilkan bottom sheet
-    final bool? needRefresh = await RoomListModalBottomSheet.show(
-      context: context,
-      user: widget.user,
-      room: room,
-      onSuccess: null,
-    );
-
-    // Refresh daftar ruangan jika berhasil menambahkan/mengubah ruangan
-    if (needRefresh == true) {
-      _loadRooms(forceRefresh: true);
-      ref.invalidate(
-        roomListByQueryProvider(
-          RoomListQuery(
-            showDeleted: _showAll,
-            searchKeyword: _searchKeyword,
-            forceRefresh: true,
-          ),
-        ),
-      );
-    }
-  }
-
-  /// Menampilkan konfirmasi sebelum menghapus ruangan
-  void _confirmDeleteRoom(Room room) async {
-    bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Konfirmasi Hapus'),
-        content: Text(
-          'Apakah Anda yakin ingin menghapus ruangan "${room.name}"?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('BATAL'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('HAPUS', style: TextStyle(color: Colors.red)),
+      decoration: BoxDecoration(
+        color: color.withAlpha(25),
+        borderRadius: BorderRadius.circular(AppSizes.radiusXs),
+        border: Border.all(color: color.withAlpha(100)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: AppSizes.xxs),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
     );
-
-    if (confirmed == true) {
-      try {
-        // Hapus ruangan (soft delete)
-        await _roomService.deleteRoom(room);
-
-        // Reload daftar ruangan
-        _loadRooms(forceRefresh: true);
-        ref.invalidate(
-          roomListByQueryProvider(
-            RoomListQuery(
-              showDeleted: _showAll,
-              searchKeyword: _searchKeyword,
-              forceRefresh: true,
-            ),
-          ),
-        );
-
-        if (!mounted) {
-          return;
-        }
-
-        // Tampilkan snackbar
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ruangan ${room.name} berhasil dihapus'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } catch (e) {
-        if (!mounted) {
-          return;
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal menghapus ruangan: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 }

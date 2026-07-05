@@ -1,15 +1,14 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/models/room_facility.dart';
-import 'package:room_reservation_mobile_app/app/providers/room_providers.dart';
-import 'package:room_reservation_mobile_app/app/services/room_service.dart';
-import 'package:room_reservation_mobile_app/app/services/room_facility_service.dart';
-import 'package:room_reservation_mobile_app/app/ui_items/room_facility_filter.dart';
-import 'package:room_reservation_mobile_app/app/ui_items/room_facility_chips.dart';
 
-class RoomSelectorSection extends ConsumerStatefulWidget {
+import 'package:flutter/material.dart';
+import 'package:rapa_track_mobile_app/app/models/room.dart';
+import 'package:rapa_track_mobile_app/app/models/room_facility.dart';
+import 'package:rapa_track_mobile_app/app/services/facility_service.dart';
+import 'package:rapa_track_mobile_app/app/services/room_service.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/room_facility_chips.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/room_facility_filter.dart';
+
+class RoomSelectorSection extends StatefulWidget {
   final DateTime? startDateTime;
   final DateTime? endDateTime;
   final String? selectedRoomId;
@@ -22,10 +21,8 @@ class RoomSelectorSection extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<RoomSelectorSection> createState() =>
-      _RoomSelectorSectionState();
+  State<RoomSelectorSection> createState() => _RoomSelectorSectionState();
 
-  /// Menampilkan bottom sheet untuk memilih ruangan
   static Future<Room?> showBottomSheet({
     required BuildContext context,
     DateTime? startDateTime,
@@ -68,16 +65,15 @@ class RoomSelectorSection extends ConsumerStatefulWidget {
   }
 }
 
-class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
-  final _roomService = RoomService.getInstance();
-  final _facilityService = RoomFacilityService.getInstance();
+class _RoomSelectorSectionState extends State<RoomSelectorSection> {
+  final _roomApiService = RoomService();
+  final _facilityApiService = FacilityService();
   final _searchController = TextEditingController();
 
   String _searchKeyword = '';
   List<String> _selectedFacilityIds = [];
   List<RoomFacility> _availableFacilities = [];
   Future<List<Room>>? _roomsFuture;
-  int _refreshNonce = 0;
   Timer? _debounceTimer;
 
   bool get _isTimeBasedQuery =>
@@ -86,10 +82,8 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
   @override
   void initState() {
     super.initState();
-    if (_isTimeBasedQuery) {
-      _roomsFuture = _loadRooms();
-    }
-    _loadFacilities();
+    _roomsFuture = _loadRooms();
+    _loadFacilitiesFromApi();
   }
 
   @override
@@ -99,11 +93,10 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
     super.dispose();
   }
 
-  /// Load daftar fasilitas yang tersedia
-  Future<void> _loadFacilities({bool forceRefresh = false}) async {
+  Future<void> _loadFacilitiesFromApi({bool forceRefresh = false}) async {
     try {
-      final facilities = await _facilityService.getAllFacilities(
-        forceRefresh: forceRefresh,
+      final facilities = await _facilityApiService.getFacilityList(
+        perPage: 100,
       );
 
       if (mounted) {
@@ -112,99 +105,56 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
         });
       }
     } catch (e) {
-      // Gagal load facilities tidak fatal, cukup log saja
       debugPrint('Failed to load facilities: $e');
     }
   }
 
-  /// Load daftar ruangan yang tersedia
   Future<List<Room>> _loadRooms({bool forceRefresh = false}) async {
     try {
-      List<Room> rooms;
+      final rooms = await _roomApiService.getRoomList(
+        search: _searchKeyword.isNotEmpty ? _searchKeyword : null,
+        availableOnly: _isTimeBasedQuery
+            ? true
+            : null, // If not time based, don't filter available
+        startTime: widget.startDateTime,
+        endTime: widget.endDateTime,
+        facilityIds: _selectedFacilityIds.isNotEmpty
+            ? _selectedFacilityIds
+            : null,
+        perPage: 100,
+      );
 
-      // Jika waktu tidak ditentukan, tampilkan semua ruangan
-      if (widget.startDateTime == null || widget.endDateTime == null) {
-        rooms = await _roomService.getRoomList(
-          searchKeyword: _searchKeyword,
-          showMaintenance: false,
-          facilityIds: _selectedFacilityIds.isNotEmpty
-              ? _selectedFacilityIds
-              : null,
-          forceRefresh: forceRefresh,
-        );
-
-        // Filter ruangan yang maintenance
-        rooms = rooms.where((room) => room.isMaintenance != true).toList();
-      } else {
-        // Jika waktu ditentukan, filter ruangan yang available pada waktu tersebut
-        // Sekarang bisa langsung pass searchKeyword dan facilityIds ke getAvailableRoom
-        rooms = await _roomService.getAvailableRoom(
-          start: widget.startDateTime!,
-          end: widget.endDateTime!,
-          forceRefresh: forceRefresh,
-          searchKeyword: _searchKeyword,
-          facilityIds: _selectedFacilityIds.isNotEmpty
-              ? _selectedFacilityIds
-              : null,
-        );
-      }
-
-      return rooms;
+      // Manual filtering for facilities if backend doesn't support facilityIds fully
+      return _filterByFacilities(rooms);
     } catch (e) {
       throw 'Gagal memuat ruangan: ${e.toString()}';
     }
   }
 
-  /// Reload rooms dengan keyword baru (dengan debounce)
   void _onSearchChanged(String value) {
-    // Cancel timer sebelumnya jika ada
     _debounceTimer?.cancel();
 
-    // Buat timer baru dengan delay 1 detik
-    _debounceTimer = Timer(const Duration(seconds: 1), () {
+    _debounceTimer = Timer(const Duration(milliseconds: 800), () {
       setState(() {
         _searchKeyword = value;
-        if (_isTimeBasedQuery) {
-          _roomsFuture = _loadRooms();
-        }
+        _roomsFuture = _loadRooms();
       });
     });
   }
 
-  /// Handle perubahan facility filter
   void _onFacilityFilterChanged(List<String> selectedIds) {
     setState(() {
       _selectedFacilityIds = selectedIds;
-      if (_isTimeBasedQuery) {
-        _roomsFuture = _loadRooms();
-      }
+      _roomsFuture = _loadRooms();
     });
   }
 
-  /// Handle pull to refresh
   Future<void> _onRefresh() async {
     setState(() {
-      if (_isTimeBasedQuery) {
-        _roomsFuture = _loadRooms(forceRefresh: true);
-      } else {
-        _refreshNonce++;
-      }
+      _roomsFuture = _loadRooms(forceRefresh: true);
     });
 
-    if (!_isTimeBasedQuery) {
-      ref.invalidate(
-        roomListByQueryProvider(
-          RoomListQuery(
-            showDeleted: false,
-            showMaintenance: false,
-            searchKeyword: _searchKeyword,
-            forceRefresh: true,
-          ),
-        ),
-      );
-    }
-
-    await _loadFacilities(forceRefresh: true);
+    await _loadFacilitiesFromApi(forceRefresh: true);
   }
 
   @override
@@ -234,56 +184,6 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
   }
 
   Widget _buildContent() {
-    if (!_isTimeBasedQuery) {
-      final query = RoomListQuery(
-        showDeleted: false,
-        showMaintenance: false,
-        searchKeyword: _searchKeyword,
-        forceRefresh: _refreshNonce > 0,
-      );
-
-      final roomState = ref.watch(roomListByQueryProvider(query));
-
-      return RefreshIndicator(
-        onRefresh: _onRefresh,
-        child: roomState.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stack) => _buildRefreshableState(
-            icon: Icons.error_outline,
-            iconColor: Colors.red.shade300,
-            message: error.toString(),
-            messageColor: Colors.red.shade700,
-          ),
-          data: (rooms) {
-            if (_refreshNonce > 0) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  setState(() {
-                    _refreshNonce = 0;
-                  });
-                }
-              });
-            }
-
-            final filteredRooms = _filterByFacilities(rooms);
-
-            if (filteredRooms.isEmpty) {
-              return _buildRefreshableState(
-                icon: Icons.meeting_room_outlined,
-                iconColor: Colors.grey.shade400,
-                message: _searchKeyword.isNotEmpty
-                    ? 'Tidak ada ruangan dengan kata kunci "$_searchKeyword"'
-                    : 'Tidak ada ruangan tersedia',
-                messageColor: Colors.grey.shade600,
-              );
-            }
-
-            return _buildRoomList(filteredRooms);
-          },
-        ),
-      );
-    }
-
     return RefreshIndicator(
       onRefresh: _onRefresh,
       child: FutureBuilder<List<Room>>(
@@ -327,17 +227,21 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
     }
 
     return rooms.where((room) {
-      final roomFacilities = room.facilityIds;
+      final roomFacilities = room.facilities;
 
       if (roomFacilities == null || roomFacilities.isEmpty) {
         return false;
       }
 
-      return _selectedFacilityIds.every(roomFacilities.contains);
+      final roomFacilityNames = roomFacilities
+          .map((f) => f.name.toLowerCase())
+          .toSet();
+      return _selectedFacilityIds.every(
+        (id) => roomFacilityNames.contains(id.toLowerCase()),
+      );
     }).toList();
   }
 
-  /// Widget search field
   Widget _buildSearchField() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
@@ -363,7 +267,6 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
     );
   }
 
-  /// Generic widget untuk state yang bisa di-refresh (error/empty)
   Widget _buildRefreshableState({
     required IconData icon,
     required Color iconColor,
@@ -408,15 +311,15 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
     );
   }
 
-  /// Widget daftar ruangan
   Widget _buildRoomList(List<Room> rooms) {
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       shrinkWrap: true,
       itemCount: rooms.length,
       itemBuilder: (_, index) {
         final room = rooms[index];
         final isSelected = room.id == widget.selectedRoomId;
-        final facilities = _facilityService.getFacilitiesFromRoom(room);
+        final facilities = room.facilities ?? [];
 
         return Card(
           margin: const EdgeInsets.only(bottom: 8.0),
@@ -458,7 +361,7 @@ class _RoomSelectorSectionState extends ConsumerState<RoomSelectorSection> {
                   ),
                   const SizedBox(height: 4.0),
                   Text(
-                    room.location ?? 'Lokasi tidak diketahui',
+                    room.location,
                     style: TextStyle(
                       fontSize: 14.0,
                       color: Colors.grey.shade700,

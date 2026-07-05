@@ -1,104 +1,69 @@
-import 'dart:io';
+import 'package:haleyora_package/haleyora_package.dart';
 
-import 'package:http/http.dart' as http;
+const _apiHost = String.fromEnvironment(
+  'API_HOST',
+  defaultValue: '192.168.100.9:8000',
+);
+const _apiProtocol = String.fromEnvironment(
+  'API_PROTOCOL',
+  defaultValue: 'http',
+);
 
-class DefaultApi {
-  final String protocol;
-  final String baseUrl;
-  final String? prefix;
-  final String? version;
-  final DefaultApiRoutes _routes;
-  final http.Client _client;
-  final Duration timeout;
-  final Map<String, String> defaultHeaders;
+class DefaultApi extends ApiConfig {
+  @override
+  String get protocol => _apiProtocol;
 
-  DefaultApi({
-    this.protocol = 'http',
-    this.baseUrl = '192.168.0.34:8000',
-    this.prefix = 'api',
-    this.version = 'v1',
-    DefaultApiRoutes routes = const DefaultApiRoutes(),
-    http.Client? client,
-    this.timeout = const Duration(seconds: 30),
-    Map<String, String> defaultHeaders = const {
-      HttpHeaders.acceptHeader: 'application/json',
-    },
-  }) : _routes = routes,
-       _client = client ?? http.Client(),
-       defaultHeaders = Map<String, String>.unmodifiable(defaultHeaders);
+  @override
+  ApiEndpoints get endpoints => DefaultApiRoutes();
 
-  String get url {
-    String currentUrl = '$protocol://$baseUrl';
+  @override
+  String? get prefix => 'api';
 
-    if (prefix != null && prefix!.isNotEmpty) {
-      currentUrl += '/$prefix';
-    }
+  @override
+  List<String> get hosts => [_apiHost];
 
-    if (version != null && version!.isNotEmpty) {
-      currentUrl += '/$version';
-    }
-
-    return currentUrl;
-  }
-
-  http.Client get client => _client;
-  DefaultApiRoutes get routes => _routes;
-
-  Uri buildUri({
-    required String moduleUrl,
-    Map<String, dynamic> params = const {},
-    Map<String, dynamic> queries = const {},
-  }) {
-    final mappedRoute = routes.get(moduleUrl);
-    var endpoint = mappedRoute;
-
-    if (params.isNotEmpty) {
-      params.forEach((key, value) {
-        endpoint = endpoint.replaceAll(':$key', Uri.encodeComponent('$value'));
-      });
-    }
-
-    final normalized = endpoint.startsWith('/')
-        ? endpoint.substring(1)
-        : endpoint;
-    final fullPath =
-        '${url.endsWith('/') ? url.substring(0, url.length - 1) : url}/$normalized';
-
-    final queryParams = <String, String>{};
-    queries.forEach((key, value) {
-      if (value == null) {
-        return;
-      }
-
-      queryParams[key] = '$value';
-    });
-
-    return Uri.parse(
-      fullPath,
-    ).replace(queryParameters: queryParams.isEmpty ? null : queryParams);
-  }
+  @override
+  String? get version => 'v1';
 }
 
-class DefaultApiRoutes {
-  const DefaultApiRoutes({Map<String, String> routes = _defaultRoutes})
-    : _routes = routes;
-
-  static const Map<String, String> _defaultRoutes = {
+class DefaultApiRoutes extends ApiEndpoints {
+  @override
+  Map<String, String> get routes => {
     'Auth.login': 'auth/login',
     'Auth.refresh': 'auth/refresh',
     'Auth.logout': 'auth/logout',
     'Auth.me': 'auth/me',
+    'Auth.updateFcmToken': 'auth/fcm-token',
     'Room.list': 'rooms',
+    'Room.available': 'rooms/available',
     'Room.detail': 'rooms/:id',
+    'Room.create': 'rooms',
+    'Room.update': 'rooms/:id',
+    'Room.delete': 'rooms/:id',
+    'Room.availability': 'rooms/:id/availability',
+    'Facility.list': 'facilities',
+    'Facility.detail': 'facilities/:id',
+    'Facility.create': 'facilities',
+    'Facility.update': 'facilities/:id',
+    'Facility.delete': 'facilities/:id',
     'Reservation.list': 'reservations',
+    'Reservation.calendar': 'reservations/calendar',
+    'Reservation.create': 'reservations',
     'Reservation.detail': 'reservations/:id',
+    'Reservation.update': 'reservations/:id',
+    'Reservation.cancel': 'reservations/:id/cancel',
+    'Reservation.approve': 'reservations/:id/approve',
+    'Reservation.reject': 'reservations/:id/reject',
+    'Reservation.complete': 'reservations/:id/complete',
+    'User.list': 'users',
+    'Complaint.list': 'complaints',
+    'Complaint.detail': 'complaints/:id',
+    'Complaint.create': 'complaints',
+    'Complaint.updateStatus': 'complaints/:id/status',
+    'Notification.list': 'notifications',
+    'Notification.unreadCount': 'notifications/unread-count',
+    'Notification.markRead': 'notifications/:id/read',
+    'Notification.markAllRead': 'notifications/read-all',
+    'Notification.delete': 'notifications/:id',
   };
-
-  final Map<String, String> _routes;
-
-  String get(String route) => _routes[route] ?? route;
-
-  DefaultApiRoutes copyWith(Map<String, String> routes) {
-    return DefaultApiRoutes(routes: {..._routes, ...routes});
-  }
 }

@@ -1,77 +1,48 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/enums/reservation_status.dart';
+import 'package:rapa_track_mobile_app/app/enums/reservation_status.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 
-/// Widget untuk menampilkan status badge reservasi
-///
-/// Menampilkan status dengan warna yang sesuai:
-/// - CONFIRMED: Blue
-/// - UPCOMING: Orange
-/// - ONGOING: Green
-/// - COMPLETED: Grey
-/// - CANCELLED: Red
 class ReservationStatusBadge extends StatelessWidget {
   final ReservationStatus status;
   final bool showDescription;
-  final double fontSize;
-  final EdgeInsetsGeometry? padding;
 
   const ReservationStatusBadge({
     super.key,
     required this.status,
     this.showDescription = false,
-    this.fontSize = 12,
-    this.padding,
   });
-
-  Color _getColor() {
-    final hex = status.colorHex.substring(1); // Remove #
-    return Color(int.parse(hex, radix: 16) + 0xFF000000);
-  }
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
+        Icon(status.icon, size: AppSizes.iconSm, color: status.color),
+        const SizedBox(width: AppSizes.sm),
         Expanded(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 180),
-            padding:
-                padding ??
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: _getColor(),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  status.displayName,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: fontSize,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 2,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                status.displayName,
+                style: TextStyle(
+                  fontSize: AppSizes.fontSm,
+                  fontWeight: FontWeight.w600,
+                  color: status.color,
                 ),
-                if (showDescription) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    status.description,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      fontSize: fontSize - 2,
-                    ),
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 3,
+              ),
+              if (showDescription) ...[
+                const SizedBox(height: 2),
+                Text(
+                  status.description,
+                  style: const TextStyle(
+                    fontSize: AppSizes.fontXs,
+                    color: AppColors.textSecondary,
                   ),
-                ],
+                ),
               ],
-            ),
+            ],
           ),
         ),
       ],
@@ -79,7 +50,6 @@ class ReservationStatusBadge extends StatelessWidget {
   }
 }
 
-/// Widget untuk menampilkan status sebagai chip (smaller version)
 class ReservationStatusChip extends StatelessWidget {
   final ReservationStatus status;
   final bool showIcon;
@@ -90,148 +60,60 @@ class ReservationStatusChip extends StatelessWidget {
     this.showIcon = true,
   });
 
-  Color _getColor() {
-    final hex = status.colorHex.substring(1);
-    return Color(int.parse(hex, radix: 16) + 0xFF000000);
-  }
-
-  IconData _getIcon() {
-    switch (status) {
-      case ReservationStatus.confirmed:
-        return Icons.check_circle_outline;
-      case ReservationStatus.upcoming:
-        return Icons.schedule;
-      case ReservationStatus.ongoing:
-        return Icons.play_circle_outline;
-      case ReservationStatus.completed:
-        return Icons.done_all;
-      case ReservationStatus.cancelled:
-        return Icons.cancel_outlined;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(maxWidth: 200),
-      child: Chip(
-        side: BorderSide.none,
-        avatar: showIcon
-            ? Icon(_getIcon(), size: 16, color: Colors.white)
-            : null,
-        label: Text(
-          status.displayName,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSizes.sm,
+        vertical: AppSizes.xs,
+      ),
+      decoration: BoxDecoration(
+        color: status.color.withAlpha(20),
+        borderRadius: BorderRadius.circular(AppSizes.radiusXxl),
+        border: Border.all(color: status.color.withAlpha(80)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showIcon) ...[
+            Icon(status.icon, size: 13, color: status.color),
+            const SizedBox(width: AppSizes.xxs),
+          ],
+          Flexible(
+            child: Text(
+              status.displayName,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: status.color,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
           ),
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-        ),
-        backgroundColor: _getColor(),
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        visualDensity: VisualDensity.compact,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ],
       ),
     );
   }
 }
 
-/// Widget untuk status indicator dengan timeline
 class ReservationStatusTimeline extends StatelessWidget {
   final ReservationStatus status;
 
   const ReservationStatusTimeline({super.key, required this.status});
 
-  List<_TimelineStep> _getSteps() {
-    return [
-      _TimelineStep(
-        label: 'Terkonfirmasi',
-        status: ReservationStatus.confirmed,
-      ),
-      _TimelineStep(label: 'Akan Dimulai', status: ReservationStatus.upcoming),
-      _TimelineStep(label: 'Berlangsung', status: ReservationStatus.ongoing),
-      _TimelineStep(label: 'Selesai', status: ReservationStatus.completed),
-    ];
-  }
-
-  bool _isStepActive(_TimelineStep step) {
-    final currentIndex = _getCurrentIndex();
-    final stepIndex = _getStepIndex(step.status);
-    return stepIndex <= currentIndex;
-  }
-
-  int _getCurrentIndex() {
-    switch (status) {
-      case ReservationStatus.confirmed:
-        return 0;
-      case ReservationStatus.upcoming:
-        return 1;
-      case ReservationStatus.ongoing:
-        return 2;
-      case ReservationStatus.completed:
-        return 3;
-      case ReservationStatus.cancelled:
-        return -1; // Special case
-    }
-  }
-
-  int _getStepIndex(ReservationStatus s) {
-    switch (s) {
-      case ReservationStatus.confirmed:
-        return 0;
-      case ReservationStatus.upcoming:
-        return 1;
-      case ReservationStatus.ongoing:
-        return 2;
-      case ReservationStatus.completed:
-        return 3;
-      case ReservationStatus.cancelled:
-        return -1;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Special case for cancelled
-    if (status == ReservationStatus.cancelled) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.red.shade50,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.red.shade200),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.cancel, color: Colors.red.shade700),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Dibatalkan',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Reservasi telah dibatalkan',
-                    style: TextStyle(fontSize: 12, color: Colors.red.shade600),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
+    if (status == ReservationStatus.rejected ||
+        status == ReservationStatus.cancelled) {
+      return _buildTerminalBox();
     }
 
-    final steps = _getSteps();
+    final steps = [
+      _Step('Pending', ReservationStatus.pending),
+      _Step('Disetujui', ReservationStatus.approved),
+      _Step('Selesai', ReservationStatus.completed),
+    ];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -241,8 +123,8 @@ class ReservationStatusTimeline extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (int i = 0; i < steps.length; i++) ...[
-              _buildStepCircle(steps[i]),
-              if (i < steps.length - 1) _buildConnector(i),
+              _buildStepNode(steps[i], steps),
+              if (i < steps.length - 1) _buildConnector(steps[i + 1], steps),
             ],
           ],
         ),
@@ -250,9 +132,63 @@ class ReservationStatusTimeline extends StatelessWidget {
     );
   }
 
-  Widget _buildStepCircle(_TimelineStep step) {
-    final isActive = _isStepActive(step);
+  Widget _buildTerminalBox() {
+    final isRejected = status == ReservationStatus.rejected;
+    return Container(
+      padding: const EdgeInsets.all(AppSizes.md),
+      decoration: BoxDecoration(
+        color: AppColors.error.withAlpha(15),
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+        border: Border.all(color: AppColors.error.withAlpha(60)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isRejected ? Icons.block : Icons.cancel,
+            color: AppColors.error,
+            size: AppSizes.iconMd,
+          ),
+          const SizedBox(width: AppSizes.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isRejected ? 'Ditolak' : 'Dibatalkan',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.error,
+                    fontSize: AppSizes.fontSm,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  isRejected
+                      ? 'Reservasi telah ditolak oleh admin'
+                      : 'Reservasi telah dibatalkan',
+                  style: const TextStyle(
+                    fontSize: AppSizes.fontXs,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _isActive(_Step step, List<_Step> steps) {
+    final current = steps.indexWhere((s) => s.status == status);
+    final idx = steps.indexWhere((s) => s.status == step.status);
+    return idx <= current;
+  }
+
+  Widget _buildStepNode(_Step step, List<_Step> steps) {
+    final isActive = _isActive(step, steps);
     final isCurrent = step.status == status;
+    final color = isActive ? AppColors.success : AppColors.border;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -262,27 +198,27 @@ class ReservationStatusTimeline extends StatelessWidget {
           height: 32,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isActive ? Colors.green : Colors.grey.shade300,
+            color: color,
             border: Border.all(
-              color: isCurrent ? Colors.green.shade700 : Colors.transparent,
+              color: isCurrent ? AppColors.success : Colors.transparent,
               width: 2,
             ),
           ),
           child: Icon(
             isActive ? Icons.check : Icons.circle,
             size: 16,
-            color: Colors.white,
+            color: AppColors.white,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSizes.xs),
         SizedBox(
           width: 60,
           child: Text(
             step.label,
             style: TextStyle(
-              fontSize: 10,
+              fontSize: AppSizes.fontXs,
               fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-              color: isActive ? Colors.black87 : Colors.grey,
+              color: isActive ? AppColors.textPrimary : AppColors.textDisabled,
             ),
             textAlign: TextAlign.center,
             maxLines: 2,
@@ -293,21 +229,19 @@ class ReservationStatusTimeline extends StatelessWidget {
     );
   }
 
-  Widget _buildConnector(int index) {
-    final isActive = _isStepActive(_getSteps()[index + 1]);
-
+  Widget _buildConnector(_Step nextStep, List<_Step> steps) {
+    final isActive = _isActive(nextStep, steps);
     return Container(
       width: 40,
       height: 2,
-      margin: const EdgeInsets.only(top: 16),
-      color: isActive ? Colors.green : Colors.grey.shade300,
+      margin: const EdgeInsets.only(top: 15),
+      color: isActive ? AppColors.success : AppColors.border,
     );
   }
 }
 
-class _TimelineStep {
+class _Step {
   final String label;
   final ReservationStatus status;
-
-  _TimelineStep({required this.label, required this.status});
+  const _Step(this.label, this.status);
 }

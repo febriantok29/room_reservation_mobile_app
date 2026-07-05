@@ -1,43 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Status reservasi dalam sistem full-otomatis
-///
-/// Flow normal:
-/// CONFIRMED → UPCOMING → ONGOING → COMPLETED
-///
-/// Flow cancellation:
-/// CONFIRMED/UPCOMING → CANCELLED
-enum ReservationStatus {
-  /// Reservasi sudah dikonfirmasi otomatis (setelah pass CSP validation)
-  /// - User baru submit dan CSP valid
-  /// - Menunggu waktu mulai
-  /// - Can be: cancelled, rescheduled (by user/admin)
-  confirmed,
-
-  /// 30 menit sebelum waktu mulai
-  /// - Auto-transition dari CONFIRMED
-  /// - Segera dimulai
-  /// - Can be: cancelled (urgent), viewed
-  /// - Cannot be: rescheduled (too close)
-  upcoming,
-
-  /// Sedang berlangsung (waktu mulai sudah tercapai)
-  /// - Auto-transition dari UPCOMING
-  /// - Cannot be: cancelled, rescheduled
-  /// - Can be: extended (admin only, with CSP check)
-  ongoing,
-
-  /// Reservasi selesai normal
-  /// - Auto-transition dari ONGOING saat waktu selesai
-  /// - Read-only
-  completed,
-
-  /// Dibatalkan oleh user atau admin
-  /// - Can happen from: CONFIRMED, UPCOMING
-  /// - Cannot happen from: ONGOING, COMPLETED
-  /// - Reason should be recorded
-  cancelled,
-}
+enum ReservationStatus { pending, approved, rejected, completed, cancelled }
 
 extension ReservationStatusExtension on ReservationStatus {
   Color get color {
@@ -46,12 +9,12 @@ extension ReservationStatusExtension on ReservationStatus {
 
   IconData get icon {
     switch (this) {
-      case ReservationStatus.confirmed:
+      case ReservationStatus.pending:
+        return Icons.hourglass_empty;
+      case ReservationStatus.approved:
         return Icons.check_circle_outline;
-      case ReservationStatus.upcoming:
-        return Icons.access_time;
-      case ReservationStatus.ongoing:
-        return Icons.play_circle_fill;
+      case ReservationStatus.rejected:
+        return Icons.block;
       case ReservationStatus.completed:
         return Icons.check_circle;
       case ReservationStatus.cancelled:
@@ -59,15 +22,14 @@ extension ReservationStatusExtension on ReservationStatus {
     }
   }
 
-  /// Display name untuk UI
   String get displayName {
     switch (this) {
-      case ReservationStatus.confirmed:
-        return 'Terkonfirmasi';
-      case ReservationStatus.upcoming:
-        return 'Akan Segera Dimulai';
-      case ReservationStatus.ongoing:
-        return 'Sedang Berlangsung';
+      case ReservationStatus.pending:
+        return 'Menunggu Persetujuan';
+      case ReservationStatus.approved:
+        return 'Disetujui';
+      case ReservationStatus.rejected:
+        return 'Ditolak';
       case ReservationStatus.completed:
         return 'Selesai';
       case ReservationStatus.cancelled:
@@ -75,15 +37,14 @@ extension ReservationStatusExtension on ReservationStatus {
     }
   }
 
-  /// Deskripsi status
   String get description {
     switch (this) {
-      case ReservationStatus.confirmed:
-        return 'Reservasi Anda sudah dikonfirmasi dan menunggu waktu pelaksanaan';
-      case ReservationStatus.upcoming:
-        return 'Reservasi akan segera dimulai dalam 30 menit';
-      case ReservationStatus.ongoing:
-        return 'Reservasi sedang berlangsung';
+      case ReservationStatus.pending:
+        return 'Reservasi menunggu persetujuan dari admin';
+      case ReservationStatus.approved:
+        return 'Reservasi telah disetujui dan siap digunakan';
+      case ReservationStatus.rejected:
+        return 'Reservasi ditolak oleh admin';
       case ReservationStatus.completed:
         return 'Reservasi telah selesai';
       case ReservationStatus.cancelled:
@@ -91,71 +52,67 @@ extension ReservationStatusExtension on ReservationStatus {
     }
   }
 
-  /// Warna untuk UI indicator
   String get colorHex {
     switch (this) {
-      case ReservationStatus.confirmed:
-        return '#2196F3'; // Blue
-      case ReservationStatus.upcoming:
-        return '#FF9800'; // Orange
-      case ReservationStatus.ongoing:
-        return '#4CAF50'; // Green
+      case ReservationStatus.pending:
+        return '#FF9800';
+      case ReservationStatus.approved:
+        return '#4CAF50';
+      case ReservationStatus.rejected:
+        return '#F44336';
       case ReservationStatus.completed:
-        return '#9E9E9E'; // Grey
+        return '#117cd4';
       case ReservationStatus.cancelled:
-        return '#F44336'; // Red
+        return '#F44336';
     }
   }
 
-  /// Apakah bisa dibatalkan
   bool get canBeCancelled {
-    return this == ReservationStatus.confirmed ||
-        this == ReservationStatus.upcoming;
+    return this == ReservationStatus.pending ||
+        this == ReservationStatus.approved;
   }
 
-  /// Apakah bisa di-reschedule
-  bool get canBeRescheduled {
-    return this == ReservationStatus.confirmed;
+  bool get canBeApproved {
+    return this == ReservationStatus.pending;
   }
 
-  /// Apakah bisa di-extend (perpanjang waktu)
-  bool get canBeExtended {
-    return this == ReservationStatus.ongoing;
+  bool get canBeRejected {
+    return this == ReservationStatus.pending;
   }
 
-  /// Apakah masih aktif (belum selesai/batal)
+  bool get canBeCompleted {
+    return this == ReservationStatus.approved;
+  }
+
   bool get isActive {
-    return this == ReservationStatus.confirmed ||
-        this == ReservationStatus.upcoming ||
-        this == ReservationStatus.ongoing;
+    return this == ReservationStatus.pending ||
+        this == ReservationStatus.approved;
   }
 
-  /// Apakah sudah final (tidak bisa diubah)
   bool get isFinal {
     return this == ReservationStatus.completed ||
-        this == ReservationStatus.cancelled;
+        this == ReservationStatus.cancelled ||
+        this == ReservationStatus.rejected;
   }
 
-  /// Convert dari string (untuk Firestore)
   static ReservationStatus fromString(String status) {
     switch (status.toLowerCase()) {
-      case 'confirmed':
-        return ReservationStatus.confirmed;
-      case 'upcoming':
-        return ReservationStatus.upcoming;
-      case 'ongoing':
-        return ReservationStatus.ongoing;
+      case 'pending':
+        return ReservationStatus.pending;
+      case 'approved':
+        return ReservationStatus.approved;
+      case 'rejected':
+        return ReservationStatus.rejected;
       case 'completed':
         return ReservationStatus.completed;
       case 'cancelled':
         return ReservationStatus.cancelled;
       default:
-        return ReservationStatus.confirmed; // Default fallback
+        return ReservationStatus.pending;
     }
   }
 
-  /// Convert ke string (untuk Firestore)
-  String toFirestoreString() {
-    return toString().split('.').last;
+  String toApiString() {
+    return name;
   }
 }

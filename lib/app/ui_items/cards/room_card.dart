@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/theme/app_colors.dart';
-import 'package:room_reservation_mobile_app/app/theme/app_sizes.dart';
-import 'package:room_reservation_mobile_app/app/ui_items/app_card.dart';
+import 'package:rapa_track_mobile_app/app/models/room.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/app_card.dart';
 
 class RoomCard extends StatelessWidget {
   final Room room;
@@ -80,7 +80,7 @@ class RoomCard extends StatelessWidget {
               const SizedBox(width: AppSizes.xs),
               Expanded(
                 child: Text(
-                  room.location ?? 'Unknown location',
+                  room.location,
                   style: theme.textTheme.bodyMedium,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

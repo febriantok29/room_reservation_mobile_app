@@ -1,12 +1,11 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/models/reservation.dart';
-import 'package:room_reservation_mobile_app/app/models/room.dart';
-import 'package:room_reservation_mobile_app/app/pages/reservation/room_selector_section.dart';
-import 'package:room_reservation_mobile_app/app/pages/reservation/user_selector_section.dart';
-import 'package:room_reservation_mobile_app/app/services/reservation_service.dart';
-import 'package:room_reservation_mobile_app/app/utils/date_formatter.dart';
+import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/models/reservation.dart';
+import 'package:rapa_track_mobile_app/app/models/room.dart';
+import 'package:rapa_track_mobile_app/app/pages/reservation/room_selector_section.dart';
+import 'package:rapa_track_mobile_app/app/pages/reservation/user_selector_section.dart';
+import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
+import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
 
 class ReservationModalBottomSheet extends StatefulWidget {
   final Profile user;
@@ -50,7 +49,7 @@ class ReservationModalBottomSheet extends StatefulWidget {
 
 class _ReservationModalBottomSheetState
     extends State<ReservationModalBottomSheet> {
-  final _reservationService = ReservationService.getInstance();
+  final _reservationService = ReservationService();
 
   // Form fields
   DateTime? _selectedDate;
@@ -834,49 +833,37 @@ class _ReservationModalBottomSheetState
     });
 
     try {
-      Reservation reservation;
-
       if (_isEditMode) {
         // Edit mode - update existing reservation
-        reservation = widget.initialReservation!.copyWith(
-          startDateTime: _startDateTime,
-          endDateTime: _endDateTime,
-          visitorCount: _visitorCount,
-          purpose: _purposeController.text.trim(),
-        );
-
-        // Persiapkan untuk update
-        reservation.prepareForUpdate();
-
-        // Update reservation
-        await _reservationService.updateReservation(reservation);
-      } else {
-        // Create mode - create new reservation
-        // Create user reference for selected user or current user
-        final userRef = _isAdmin && _selectedUser != null
-            ? FirebaseFirestore.instance
-                  .collection(Profile.collectionName)
-                  .doc(_selectedUser!.id)
-            : FirebaseFirestore.instance
-                  .collection(Profile.collectionName)
-                  .doc(widget.user.id);
-
-        // Create room reference
-        final roomRef = FirebaseFirestore.instance
-            .collection(Room.collectionName)
-            .doc(_selectedRoom!.id);
-
-        reservation = Reservation(
-          userRef: userRef,
-          roomRef: roomRef,
+        final updated = widget.initialReservation!.copyWith(
           startTime: _startDateTime,
           endTime: _endDateTime,
           visitorCount: _visitorCount,
           purpose: _purposeController.text.trim(),
         );
 
-        // Create reservation
-        await _reservationService.createReservation(reservation);
+        await _reservationService.updateReservation(
+          reservationId: updated.id!,
+          roomId: _selectedRoom?.id,
+          startTime: _startDateTime,
+          endTime: _endDateTime,
+          visitorCount: _visitorCount,
+          purpose: _purposeController.text.trim(),
+        );
+      } else {
+        // Create mode - buat reservasi baru via API
+        final userId = _isAdmin && _selectedUser != null
+            ? _selectedUser!.id
+            : widget.user.id;
+
+        await _reservationService.createReservation(
+          roomId: _selectedRoom!.id!,
+          startTime: _startDateTime!,
+          endTime: _endDateTime!,
+          purpose: _purposeController.text.trim(),
+          visitorCount: _visitorCount,
+          userId: userId,
+        );
       }
 
       // Close modal and refresh parent

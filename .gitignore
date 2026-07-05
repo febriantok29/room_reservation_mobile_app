@@ -50,3 +50,10 @@ android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 lib/firebase_options.dart
 firebase.json
+
+# Environment configs (use .env.example.json as template)
+.env.dev.json
+.env.prod.json
+
+# Claude Code
+CLAUDE.md

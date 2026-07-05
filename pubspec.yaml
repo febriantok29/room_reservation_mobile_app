@@ -1,4 +1,4 @@
-name: room_reservation_mobile_app
+name: rapa_track_mobile_app
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -34,7 +34,6 @@ dependencies:
     sdk: flutter
 
   http: ^1.5.0
-  flutter_riverpod: ^2.6.1
   flutter_secure_storage: ^9.2.2
   shared_preferences: ^2.5.3
   intl: ^0.20.2
@@ -42,10 +41,14 @@ dependencies:
   crypto: ^3.0.3
   firebase_core: ^3.15.2
   firebase_messaging: ^15.2.10
-  cloud_firestore: ^5.0.0
   flutter_slidable: ^3.0.1
   syncfusion_flutter_calendar: ^28.1.38
-#  firebase_auth: ^5.0.0
+  image_picker: ^1.1.2
+
+  haleyora_package:
+    git:
+      url: https://github.com/febriantok29/haleyora_package.git
+      ref: 72f0eae90be87f79c959d0732224b05ceb5d705a
 
 dev_dependencies:
   flutter_test:

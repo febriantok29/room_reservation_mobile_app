@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
 /// Utility class untuk format tanggal yang readable
@@ -8,9 +7,7 @@ class DateFormatter {
 
     DateTime? result;
 
-    if (timestamp is Timestamp) {
-      result = timestamp.toDate();
-    } else if (timestamp is int) {
+    if (timestamp is int) {
       result = DateTime.fromMillisecondsSinceEpoch(timestamp);
     } else {
       result = DateTime.tryParse('$timestamp');
@@ -55,6 +52,9 @@ class DateFormatter {
     final month = _monthNames[date.month] ?? '';
     return '$day, ${date.day} $month ${date.year}';
   }
+
+  /// Alias untuk fullDate (untuk backward compatibility)
+  static String longDate(DateTime date) => fullDate(date);
 
   /// Format: "31 Des 2024"
   static String shortDate(DateTime date) {

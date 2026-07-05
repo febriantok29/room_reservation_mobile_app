@@ -1,28 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:room_reservation_mobile_app/app/pages/home_page.dart';
-import 'package:room_reservation_mobile_app/app/providers/auth_providers.dart';
-import 'package:room_reservation_mobile_app/app/theme/app_colors.dart';
-import 'package:room_reservation_mobile_app/app/theme/app_sizes.dart';
-import 'package:room_reservation_mobile_app/app/utils/mounted_state_mixin.dart';
+import 'package:rapa_track_mobile_app/app/pages/home_page.dart';
+import 'package:rapa_track_mobile_app/app/states/authentication_state.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Halaman login untuk aplikasi reservasi ruangan
-class LoginPage extends ConsumerStatefulWidget {
+class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
   @override
-  ConsumerState<LoginPage> createState() => _LoginPageState();
+  State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends ConsumerState<LoginPage> with MountedStateMixin {
+class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers untuk form
   final _credentialController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  // UI state
   bool _isLoading = false;
   String _errorMessage = '';
   bool _obscurePassword = true;
@@ -35,12 +30,13 @@ class _LoginPageState extends ConsumerState<LoginPage> with MountedStateMixin {
 
   Future<void> _loadLastLoggedInUser() async {
     final prefs = await SharedPreferences.getInstance();
-    final lastUser = prefs.getString('employeeId');
-    if (lastUser == null || lastUser.isEmpty) {
+    final lastUser = prefs.getString(AuthenticationState.keySavedUsername);
+
+    if (lastUser == null || lastUser.isEmpty || !mounted) {
       return;
     }
 
-    setStateIfMounted(() {
+    setState(() {
       _credentialController.text = lastUser;
     });
   }
@@ -66,7 +62,6 @@ class _LoginPageState extends ConsumerState<LoginPage> with MountedStateMixin {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Logo atau icon aplikasi
                   const Icon(
                     Icons.meeting_room_rounded,
                     size: 80,
@@ -74,7 +69,6 @@ class _LoginPageState extends ConsumerState<LoginPage> with MountedStateMixin {
                   ),
                   const SizedBox(height: AppSizes.lg),
 
-                  // Judul aplikasi
                   Text(
                     'Reservasi Ruangan',
                     style: Theme.of(context).textTheme.displaySmall,
@@ -84,7 +78,6 @@ class _LoginPageState extends ConsumerState<LoginPage> with MountedStateMixin {
 
                   ..._buildForms(),
 
-                  // Error message
                   if (_errorMessage.isNotEmpty) ...[
                     Text(
                       _errorMessage,
@@ -108,7 +101,6 @@ class _LoginPageState extends ConsumerState<LoginPage> with MountedStateMixin {
 
   List<Widget> _buildForms() {
     return [
-      // Form login
       TextFormField(
         controller: _credentialController,
         decoration: const InputDecoration(
@@ -140,7 +132,7 @@ class _LoginPageState extends ConsumerState<LoginPage> with MountedStateMixin {
               _obscurePassword ? Icons.visibility : Icons.visibility_off,
             ),
             onPressed: () {
-              setStateIfMounted(() {
+              setState(() {
                 _obscurePassword = !_obscurePassword;
               });
             },
@@ -177,59 +169,39 @@ class _LoginPageState extends ConsumerState<LoginPage> with MountedStateMixin {
     );
   }
 
-  /// Login user
   Future<void> _login() async {
-    // Validate form
     final credential = _credentialController.text.trim();
     final password = _passwordController.text.trim();
 
     if (credential.isEmpty || password.isEmpty) {
-      setStateIfMounted(() {
+      setState(() {
         _errorMessage = 'No. Induk Pegawai / Email dan password harus diisi';
       });
 
       return;
     }
 
-    setStateIfMounted(() {
+    setState(() {
       _isLoading = true;
     });
 
     try {
-      await ref
-          .read(authSessionProvider.notifier)
-          .login(login: credential, password: password);
+      final authState = AuthenticationState();
 
-      final user = ref.read(authSessionProvider).valueOrNull;
+      final isLoggedIn = await authState.login(credential, password);
 
-      if (user == null) {
-        throw 'Sesi login tidak terbentuk';
+      if (isLoggedIn && mounted) {
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
       }
-
-      final prefs = await SharedPreferences.getInstance();
-
-      if (user.employeeId != null) {
-        await prefs.setString('employeeId', user.employeeId!);
-      }
-
-      await prefs.setInt('lastLoginAt', DateTime.now().millisecondsSinceEpoch);
-
-      _credentialController.clear();
-      _passwordController.clear();
-
-      if (!mounted) {
-        return;
-      }
-
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
     } catch (e) {
-      setStateIfMounted(() {
+      setState(() {
+        _isLoading = false;
         _errorMessage = 'Error login: ${e.toString()}';
       });
     } finally {
-      setStateIfMounted(() {
+      setState(() {
         _isLoading = false;
       });
     }

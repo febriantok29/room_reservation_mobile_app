@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/theme/app_colors.dart';
-import 'package:room_reservation_mobile_app/app/theme/app_sizes.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 
 /// Kelas utama yang mengatur tema aplikasi
 class AppTheme {

@@ -1,6 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:room_reservation_mobile_app/app/models/profile.dart';
-import 'package:room_reservation_mobile_app/app/services/user_service.dart';
+import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/services/user_service.dart';
 
 class UserSelectorSection extends StatefulWidget {
   final String? selectedUserId;
@@ -10,7 +12,6 @@ class UserSelectorSection extends StatefulWidget {
   @override
   State<UserSelectorSection> createState() => _UserSelectorSectionState();
 
-  /// Menampilkan bottom sheet untuk memilih user
   static Future<Profile?> showBottomSheet({
     required BuildContext context,
     String? selectedUserId,
@@ -46,6 +47,9 @@ class _UserSelectorSectionState extends State<UserSelectorSection> {
   List<Profile> _users = [];
   bool _isLoading = true;
   String? _errorMessage;
+  Timer? _debounceTimer;
+
+  final _userService = UserService();
 
   @override
   void initState() {
@@ -53,7 +57,12 @@ class _UserSelectorSectionState extends State<UserSelectorSection> {
     _loadUsers();
   }
 
-  /// Load daftar pengguna
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _loadUsers() async {
     setState(() {
       _isLoading = true;
@@ -61,35 +70,27 @@ class _UserSelectorSectionState extends State<UserSelectorSection> {
     });
 
     try {
-      // Ambil semua pengguna
-      final users = await UserService.getAllUsers(forceRefresh: true);
+      final users = await _userService.getUsers(search: _searchKeyword);
 
-      // Filter berdasarkan keyword jika ada
-      if (_searchKeyword.isNotEmpty) {
-        final keyword = _searchKeyword.toLowerCase();
-        setState(() {
-          _users = users.where((user) {
-            final name = user.name.toLowerCase();
-            final email = user.email?.toLowerCase() ?? '';
-            final employeeId = user.employeeId?.toLowerCase() ?? '';
-            return name.contains(keyword) ||
-                email.contains(keyword) ||
-                employeeId.contains(keyword);
-          }).toList();
-        });
-      } else {
+      if (mounted) {
         setState(() {
           _users = users;
         });
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Error: ${e.toString()}';
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Gagal memuat pengguna: ${e.toString()}';
+        });
+      }
+
+      rethrow;
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -110,7 +111,6 @@ class _UserSelectorSectionState extends State<UserSelectorSection> {
     );
   }
 
-  /// Widget search field
   Widget _buildSearchField() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
@@ -122,16 +122,18 @@ class _UserSelectorSectionState extends State<UserSelectorSection> {
           contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
         ),
         onChanged: (value) {
-          setState(() {
-            _searchKeyword = value;
+          _debounceTimer?.cancel();
+          _debounceTimer = Timer(const Duration(milliseconds: 800), () {
+            setState(() {
+              _searchKeyword = value;
+            });
+            _loadUsers();
           });
-          _loadUsers();
         },
       ),
     );
   }
 
-  /// Widget daftar pengguna
   Widget _buildUserList() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());

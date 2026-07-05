@@ -1,25 +1,34 @@
 class MetaDataResponse {
-  final num? totalItems;
-  final num? itemsPerPage;
-  final num? currentPage;
-  final num? totalPages;
-  final bool? hasNextPage;
-  final bool? hasPreviousPage;
+  final int? total;
+  final int? perPage;
+  final int? currentPage;
+  final int? lastPage;
+  final int? from;
+  final int? to;
 
   MetaDataResponse({
-    this.totalItems,
-    this.itemsPerPage,
+    this.total,
+    this.perPage,
     this.currentPage,
-    this.totalPages,
-    this.hasNextPage,
-    this.hasPreviousPage,
+    this.lastPage,
+    this.from,
+    this.to,
   });
 
-  MetaDataResponse.fromJson(dynamic json)
-    : totalItems = json['totalItems'],
-      itemsPerPage = json['itemsPerPage'],
-      currentPage = json['currentPage'],
-      totalPages = json['totalPages'],
-      hasNextPage = json['hasNextPage'],
-      hasPreviousPage = json['hasPreviousPage'];
+  bool get hasNextPage =>
+      currentPage != null && lastPage != null && currentPage! < lastPage!;
+
+  bool get hasPreviousPage => currentPage != null && currentPage! > 1;
+
+  factory MetaDataResponse.fromJson(dynamic json) {
+    if (json is! Map<String, dynamic>) return MetaDataResponse();
+    return MetaDataResponse(
+      total: int.tryParse('${json['total'] ?? ''}'),
+      perPage: int.tryParse('${json['per_page'] ?? ''}'),
+      currentPage: int.tryParse('${json['current_page'] ?? ''}'),
+      lastPage: int.tryParse('${json['last_page'] ?? ''}'),
+      from: int.tryParse('${json['from'] ?? ''}'),
+      to: int.tryParse('${json['to'] ?? ''}'),
+    );
+  }
 }
