@@ -175,7 +175,7 @@ class _UserSelectorSectionState extends State<UserSelectorSection> {
                   CircleAvatar(
                     backgroundColor: Colors.grey.shade200,
                     child: Text(
-                      user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                      user.initials,
                       style: TextStyle(
                         color: Theme.of(context).primaryColor,
                         fontWeight: FontWeight.bold,
