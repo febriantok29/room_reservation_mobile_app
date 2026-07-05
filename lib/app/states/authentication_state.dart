@@ -15,8 +15,8 @@ class AuthenticationState {
   static const String keySavedUsername = 'AuthRequest.SavedUsername';
   static const String keyTokenData = 'AuthRequest.TokenData';
 
-  final int? _accessTokenTtl = 9000;
-  final int? _refreshTokenTtl = 9000;
+  final int? _accessTokenTtl = null;
+  final int? _refreshTokenTtl = null;
 
   static AuthenticationState? _instance;
 
