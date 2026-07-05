@@ -7,6 +7,7 @@ import 'package:rapa_track_mobile_app/app/repositories/complaint_list_repository
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
+import 'package:rapa_track_mobile_app/app/widgets/filter_bottom_sheet.dart';
 
 class ComplaintListPage extends StatefulWidget {
   final Profile user;
@@ -38,7 +39,8 @@ class _ComplaintListPageState extends State<ComplaintListPage> {
       emptyTitle: 'Belum Ada Keluhan',
       emptySubtitle: 'Ada masalah dengan fasilitas ruangan?\nLaporkan di sini!',
       itemBuilder: _buildComplaintCard,
-      customFilterBuilder: _buildFilterWidget,
+      onFilterPressed: _showFilterSheet,
+      activeFilterCount: _filterStatus != null ? 1 : 0,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _navigateToCreate,
         icon: const Icon(Icons.add, color: AppColors.white),
@@ -51,91 +53,44 @@ class _ComplaintListPageState extends State<ComplaintListPage> {
     );
   }
 
-  Widget _buildFilterWidget(
+  Future<void> _showFilterSheet(
     void Function(Map<String, dynamic>?) onApplyFilter,
-  ) {
-    return StatefulBuilder(
-      builder: (context, setChipState) {
-        void select(ComplaintStatus? status) {
-          setChipState(() => _filterStatus = status);
-          onApplyFilter(
-            status == null ? null : {'status': status.name},
-          );
-        }
+  ) async {
+    ComplaintStatus? tempStatus = _filterStatus;
 
-        return Container(
-          color: AppColors.white,
-          padding: const EdgeInsets.fromLTRB(
-            AppSizes.lg,
-            AppSizes.sm,
-            AppSizes.lg,
-            AppSizes.sm,
-          ),
-          child: Wrap(
-            spacing: AppSizes.xs,
-            runSpacing: AppSizes.xs,
-            children: [
-              _buildChip(
-                label: 'Semua',
-                icon: Icons.list_outlined,
-                isSelected: _filterStatus == null,
-                chipColor: AppColors.textSecondary,
-                onTap: () => select(null),
-              ),
-              ...ComplaintStatus.values.map(
-                (s) => _buildChip(
-                  label: s.displayName,
-                  icon: s.icon,
-                  isSelected: _filterStatus == s,
-                  chipColor: s.color,
-                  onTap: () => select(s),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildChip({
-    required String label,
-    required IconData icon,
-    required bool isSelected,
-    required Color chipColor,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSizes.sm,
-          vertical: AppSizes.xs,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected ? chipColor.withAlpha(25) : AppColors.white,
-          borderRadius: BorderRadius.circular(AppSizes.radiusXxl),
-          border: Border.all(
-            color: isSelected ? chipColor : AppColors.border,
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+    await FilterBottomSheet.show(
+      context: context,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (_, setSheetState) => FilterBottomSheet(
+          title: 'Filter Keluhan',
+          onReset: () => setSheetState(() => tempStatus = null),
+          onApply: () {
+            setState(() => _filterStatus = tempStatus);
+            onApplyFilter(
+              tempStatus == null ? null : {'status': tempStatus!.name},
+            );
+            Navigator.of(sheetContext).pop();
+          },
           children: [
-            Icon(
-              icon,
-              size: 13,
-              color: isSelected ? chipColor : AppColors.textSecondary,
-            ),
-            const SizedBox(width: AppSizes.xxs),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: AppSizes.fontXs,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected ? chipColor : AppColors.textSecondary,
+            FilterSection(
+              label: 'Status',
+              child: Wrap(
+                spacing: AppSizes.sm,
+                runSpacing: AppSizes.sm,
+                children: [
+                  FilterPill(
+                    label: 'Semua',
+                    isSelected: tempStatus == null,
+                    onTap: () => setSheetState(() => tempStatus = null),
+                  ),
+                  ...ComplaintStatus.values.map(
+                    (s) => FilterPill(
+                      label: s.displayName,
+                      isSelected: tempStatus == s,
+                      onTap: () => setSheetState(() => tempStatus = s),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

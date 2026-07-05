@@ -8,6 +8,7 @@ import 'package:rapa_track_mobile_app/app/pages/room/room_detail_page.dart';
 import 'package:rapa_track_mobile_app/app/repositories/room_list_repository.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
+import 'package:rapa_track_mobile_app/app/widgets/filter_bottom_sheet.dart';
 
 class RoomListPage extends StatefulWidget {
   final Profile user;
@@ -28,10 +29,8 @@ class _RoomListPageState extends State<RoomListPage> {
   int? _selectedFloor;
   int _minCapacity = 1;
 
-  bool get _hasActiveFilters =>
-      _searchController.text.isNotEmpty ||
-      _selectedFloor != null ||
-      _minCapacity > 1;
+  int get _activeFilterCount =>
+      (_selectedFloor != null ? 1 : 0) + (_minCapacity > 1 ? 1 : 0);
 
   @override
   void initState() {
@@ -60,13 +59,93 @@ class _RoomListPageState extends State<RoomListPage> {
     callback(filters.isEmpty ? null : filters);
   }
 
-  void _resetFilters(void Function(Map<String, dynamic>?) onApplyFilter) {
-    setState(() {
-      _searchController.clear();
-      _selectedFloor = null;
-      _minCapacity = 1;
-    });
-    onApplyFilter(null);
+  Future<void> _showFilterSheet(
+    void Function(Map<String, dynamic>?) onApplyFilter,
+  ) async {
+    int? tempFloor = _selectedFloor;
+    final capacityController = TextEditingController(
+      text: _minCapacity > 1 ? '$_minCapacity' : '',
+    );
+
+    await FilterBottomSheet.show(
+      context: context,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (_, setSheetState) => FilterBottomSheet(
+          title: 'Filter Ruangan',
+          onReset: () => setSheetState(() {
+            tempFloor = null;
+            capacityController.clear();
+          }),
+          onApply: () {
+            final parsed = int.tryParse(capacityController.text.trim());
+            setState(() {
+              _selectedFloor = tempFloor;
+              _minCapacity = (parsed == null || parsed < 1) ? 1 : parsed;
+            });
+            _applyFilters(onApplyFilter);
+            Navigator.of(sheetContext).pop();
+          },
+          children: [
+            FilterSection(
+              label: 'Lantai',
+              child: Wrap(
+                spacing: AppSizes.sm,
+                runSpacing: AppSizes.sm,
+                children: [null, 1, 2, 3, 4]
+                    .map(
+                      (floor) => FilterPill(
+                        label: floor == null ? 'Semua' : 'Lantai $floor',
+                        isSelected: tempFloor == floor,
+                        onTap: () => setSheetState(() => tempFloor = floor),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+            FilterSection(
+              label: 'Kapasitas Minimal',
+              child: TextField(
+                controller: capacityController,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(fontSize: AppSizes.fontSm),
+                decoration: InputDecoration(
+                  hintText: 'Semua kapasitas',
+                  hintStyle: const TextStyle(
+                    fontSize: AppSizes.fontSm,
+                    color: AppColors.textDisabled,
+                  ),
+                  suffixText: 'orang',
+                  suffixStyle: const TextStyle(
+                    fontSize: AppSizes.fontSm,
+                    color: AppColors.textSecondary,
+                  ),
+                  filled: true,
+                  fillColor: AppColors.background,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSizes.md,
+                    vertical: AppSizes.md,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+                    borderSide: const BorderSide(color: AppColors.primary),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    capacityController.dispose();
   }
 
   @override
@@ -87,6 +166,8 @@ class _RoomListPageState extends State<RoomListPage> {
             )
           : null,
       customFilterBuilder: _buildFilterSection,
+      onFilterPressed: _showFilterSheet,
+      activeFilterCount: _activeFilterCount,
       onFetchData: _repository.fetchList,
     );
   }
@@ -134,15 +215,7 @@ class _RoomListPageState extends State<RoomListPage> {
           AppSizes.md,
           AppSizes.sm,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildSearchField(onApplyFilter),
-            const SizedBox(height: AppSizes.sm),
-            _buildFilterChips(onApplyFilter),
-          ],
-        ),
+        child: _buildSearchField(onApplyFilter),
       ),
     );
   }
@@ -194,169 +267,6 @@ class _RoomListPageState extends State<RoomListPage> {
           _applyFilters(onApplyFilter);
         });
       },
-    );
-  }
-
-  Widget _buildFilterChips(void Function(Map<String, dynamic>?) onApplyFilter) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          ...[null, 1, 2, 3, 4].map((floorVal) {
-            final label = floorVal == null ? 'Semua' : 'Lantai $floorVal';
-            final isSelected = _selectedFloor == floorVal;
-            return Padding(
-              padding: const EdgeInsets.only(right: AppSizes.xs),
-              child: ChoiceChip(
-                label: Text(label),
-                selected: isSelected,
-                showCheckmark: false,
-                onSelected: (_) {
-                  setState(() => _selectedFloor = floorVal);
-                  _applyFilters(onApplyFilter);
-                },
-                selectedColor: AppColors.primary.withAlpha(30),
-                backgroundColor: AppColors.white,
-                side: BorderSide(
-                  color: isSelected ? AppColors.primary : AppColors.border,
-                ),
-                labelStyle: TextStyle(
-                  fontSize: AppSizes.fontXs,
-                  color:
-                      isSelected ? AppColors.primary : AppColors.textSecondary,
-                  fontWeight:
-                      isSelected ? FontWeight.w600 : FontWeight.normal,
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: AppSizes.xs),
-                visualDensity: VisualDensity.compact,
-              ),
-            );
-          }),
-          const SizedBox(width: AppSizes.xs),
-          ActionChip(
-            avatar: Icon(
-              Icons.people_outline,
-              size: 14,
-              color: _minCapacity > 1 ? AppColors.primary : AppColors.grey,
-            ),
-            label: Text(
-              _minCapacity > 1 ? 'Min. $_minCapacity org' : 'Kapasitas',
-              style: TextStyle(
-                fontSize: AppSizes.fontXs,
-                color: _minCapacity > 1
-                    ? AppColors.primary
-                    : AppColors.textSecondary,
-                fontWeight:
-                    _minCapacity > 1 ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-            onPressed: () => _showCapacityDialog(onApplyFilter),
-            backgroundColor: _minCapacity > 1
-                ? AppColors.primary.withAlpha(20)
-                : AppColors.white,
-            side: BorderSide(
-              color: _minCapacity > 1 ? AppColors.primary : AppColors.border,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: AppSizes.xs),
-            visualDensity: VisualDensity.compact,
-          ),
-          if (_hasActiveFilters) ...[
-            const SizedBox(width: AppSizes.xs),
-            ActionChip(
-              avatar: Icon(
-                Icons.close,
-                size: 14,
-                color: AppColors.error.withAlpha(200),
-              ),
-              label: const Text(
-                'Reset',
-                style: TextStyle(fontSize: AppSizes.fontXs),
-              ),
-              onPressed: () => _resetFilters(onApplyFilter),
-              backgroundColor: AppColors.error.withAlpha(15),
-              side: BorderSide(color: AppColors.error.withAlpha(80)),
-              labelStyle: TextStyle(color: AppColors.error.withAlpha(200)),
-              padding: const EdgeInsets.symmetric(horizontal: AppSizes.xs),
-              visualDensity: VisualDensity.compact,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showCapacityDialog(
-    void Function(Map<String, dynamic>?) onApplyFilter,
-  ) async {
-    double temp = _minCapacity.toDouble();
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        contentPadding: const EdgeInsets.all(AppSizes.xl),
-        content: StatefulBuilder(
-          builder: (_, setLocal) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.people,
-                size: AppSizes.iconXl,
-                color: AppColors.primary,
-              ),
-              const SizedBox(height: AppSizes.md),
-              const Text(
-                'Kapasitas Minimal',
-                style: TextStyle(
-                  fontSize: AppSizes.fontLg,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: AppSizes.sm),
-              Text(
-                '${temp.toInt()} orang',
-                style: const TextStyle(
-                  fontSize: AppSizes.fontXl,
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Slider(
-                value: temp,
-                min: 1,
-                max: 50,
-                divisions: 49,
-                activeColor: AppColors.primary,
-                onChanged: (v) => setLocal(() => temp = v),
-              ),
-              const SizedBox(height: AppSizes.sm),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Batal'),
-                    ),
-                  ),
-                  const SizedBox(width: AppSizes.md),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        setState(() => _minCapacity = temp.toInt());
-                        _applyFilters(onApplyFilter);
-                        Navigator.pop(ctx);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: AppColors.white,
-                      ),
-                      child: const Text('Terapkan'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
