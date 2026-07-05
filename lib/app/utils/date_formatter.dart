@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:intl/intl.dart';
 
 /// Utility class untuk format tanggal yang readable
@@ -121,5 +122,9 @@ class DateFormatter {
   /// Format DateTime ke ISO string
   static String toIso(DateTime date) {
     return date.toUtc().toIso8601String();
+  }
+
+  static String formatTimeOfDay(TimeOfDay time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 }

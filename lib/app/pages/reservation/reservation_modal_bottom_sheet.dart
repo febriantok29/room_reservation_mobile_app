@@ -414,12 +414,7 @@ class _ReservationModalBottomSheetState
     );
   }
 
-  // Helper function untuk format waktu
-  String _formatTime(TimeOfDay time) {
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
-  }
+  String _formatTime(TimeOfDay time) => DateFormatter.formatTimeOfDay(time);
 
   // Function untuk memilih tanggal
   Future<void> _selectDate() async {

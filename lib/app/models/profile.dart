@@ -71,5 +71,12 @@ class Profile extends BaseModel {
 
   String get name => '${firstName ?? ''} ${lastName ?? ''}'.trim();
 
+  String get initials {
+    final first = (firstName?.isNotEmpty == true) ? firstName![0].toUpperCase() : '';
+    final last = (lastName?.isNotEmpty == true) ? lastName![0].toUpperCase() : '';
+    if (first.isEmpty) return 'U';
+    return last.isNotEmpty ? '$first$last' : first;
+  }
+
   bool get isAdmin => role == UserRole.admin;
 }

@@ -5,16 +5,10 @@ import 'package:rapa_track_mobile_app/app/pages/reservation/room_selector_sectio
 import 'package:rapa_track_mobile_app/app/pages/reservation/user_selector_section.dart';
 import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:rapa_track_mobile_app/app/ui_items/app_snackbar.dart';
 import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
 
-/// Wizard untuk membuat reservasi baru dengan langkah-langkah yang user-friendly
-///
-/// Flow:
-/// 1. Pilih Tanggal & Waktu
-/// 2. Pilih Ruangan (berdasarkan availability)
-/// 3. Isi Detail Reservasi (purpose, visitor count)
-/// 4. Review & Konfirmasi
 class CreateReservationWizardPage extends StatefulWidget {
   final Profile currentUser;
   final DateTime? initialDate;
@@ -38,17 +32,18 @@ class _CreateReservationWizardPageState
   final _purposeController = TextEditingController();
   final _pageController = PageController();
 
-  // Wizard state
   int _currentStep = 0;
   bool _isSubmitting = false;
 
-  // Form data
   DateTime? _selectedDate;
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
   Room? _selectedRoom;
-  Profile? _selectedUser; // Hanya untuk admin
+  Profile? _selectedUser;
   int _visitorCount = 1;
+  bool _withSnack = false;
+  bool _withLunch = false;
+  late final TextEditingController _visitorCountController;
 
   bool get _isAdmin => widget.currentUser.isAdmin;
 
@@ -78,7 +73,6 @@ class _CreateReservationWizardPageState
   void initState() {
     super.initState();
 
-    // Set initial values
     if (widget.initialDate != null) {
       _selectedDate = DateTime(
         widget.initialDate!.year,
@@ -90,12 +84,15 @@ class _CreateReservationWizardPageState
     if (widget.initialRoom != null) {
       _selectedRoom = widget.initialRoom;
     }
+
+    _visitorCountController = TextEditingController(text: '$_visitorCount');
   }
 
   @override
   void dispose() {
     _purposeController.dispose();
     _pageController.dispose();
+    _visitorCountController.dispose();
     super.dispose();
   }
 
@@ -103,41 +100,43 @@ class _CreateReservationWizardPageState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Buat Reservasi Baru'), elevation: 0),
-      body: Column(
-        children: [
-          _buildStepIndicator(),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              onPageChanged: (index) {
-                setState(() {
-                  _currentStep = index;
-                });
-              },
-              children: [
-                _buildStep1DateTimeSelection(),
-                _buildStep2RoomSelection(),
-                _buildStep3Details(),
-                _buildStep4Review(),
-              ],
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          children: [
+            _buildStepIndicator(),
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                onPageChanged: (index) => setState(() => _currentStep = index),
+                children: [
+                  _buildStep1DateTimeSelection(),
+                  _buildStep2RoomSelection(),
+                  _buildStep3Details(),
+                  _buildStep4Review(),
+                ],
+              ),
             ),
-          ),
-          _buildNavigationButtons(),
-        ],
+            _buildNavigationButtons(),
+          ],
+        ),
       ),
     );
   }
 
-  /// Step Indicator (Progress Bar)
   Widget _buildStepIndicator() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSizes.lg,
+        vertical: AppSizes.md,
+      ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.shade200,
+            color: AppColors.black.withAlpha(18),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -165,30 +164,36 @@ class _CreateReservationWizardPageState
       child: Column(
         children: [
           Container(
-            width: 32,
-            height: 32,
+            width: AppSizes.avatarSm,
+            height: AppSizes.avatarSm,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isCompleted
                   ? AppColors.success
                   : isActive
                   ? AppColors.primary
-                  : Colors.grey.shade300,
+                  : AppColors.lightGrey,
             ),
             child: Center(
               child: isCompleted
-                  ? const Icon(Icons.check, color: Colors.white, size: 18)
+                  ? const Icon(
+                      Icons.check,
+                      color: AppColors.white,
+                      size: AppSizes.fontLg,
+                    )
                   : Text(
                       '${step + 1}',
                       style: TextStyle(
-                        color: isActive ? Colors.white : Colors.grey.shade600,
+                        color: isActive
+                            ? AppColors.white
+                            : AppColors.textSecondary,
                         fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontSize: AppSizes.fontSm,
                       ),
                     ),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSizes.xs),
           Text(
             label,
             style: TextStyle(
@@ -197,7 +202,7 @@ class _CreateReservationWizardPageState
                   ? AppColors.primary
                   : isCompleted
                   ? AppColors.success
-                  : Colors.grey.shade600,
+                  : AppColors.textSecondary,
               fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
             ),
           ),
@@ -211,53 +216,54 @@ class _CreateReservationWizardPageState
 
     return Expanded(
       child: Container(
-        height: 2,
-        margin: const EdgeInsets.only(bottom: 24),
-        color: isCompleted ? AppColors.success : Colors.grey.shade300,
+        height: AppSizes.borderWidthThick,
+        margin: const EdgeInsets.only(bottom: AppSizes.xl),
+        color: isCompleted ? AppColors.success : AppColors.lightGrey,
       ),
     );
   }
 
-  /// STEP 1: Date & Time Selection
   Widget _buildStep1DateTimeSelection() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSizes.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
             'Pilih Tanggal & Waktu',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: AppSizes.fontXxl,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
+          const SizedBox(height: AppSizes.sm),
+          const Text(
             'Tentukan kapan Anda membutuhkan ruangan',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+            style: TextStyle(
+              fontSize: AppSizes.fontSm,
+              color: AppColors.textSecondary,
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSizes.xl),
 
-          // User Selector (Admin only)
           if (_isAdmin) ...[
             _buildUserSelectorCard(),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSizes.lg),
           ],
 
-          // Date Selector
           _buildDateSelectorCard(),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSizes.lg),
 
-          // Time Range
           Row(
             children: [
               Expanded(child: _buildStartTimeCard()),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSizes.md),
               Expanded(child: _buildEndTimeCard()),
             ],
           ),
 
-          // Duration Info
           if (_startTime != null && _endTime != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSizes.lg),
             _buildDurationInfo(),
           ],
         ],
@@ -267,54 +273,58 @@ class _CreateReservationWizardPageState
 
   Widget _buildUserSelectorCard() {
     return Card(
-      elevation: 2,
+      elevation: AppSizes.elevationSm,
       child: InkWell(
         onTap: _showUserSelector,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppSizes.radiusSm),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSizes.lg),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSizes.md),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusSm),
                 ),
-                child: Icon(Icons.person, color: AppColors.primary, size: 24),
+                child: const Icon(
+                  Icons.person,
+                  color: AppColors.primary,
+                  size: AppSizes.iconMd,
+                ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: AppSizes.lg),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Reservasi untuk',
                       style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
+                        fontSize: AppSizes.fontXs,
+                        color: AppColors.textSecondary,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSizes.xs),
                     Text(
                       _selectedUser?.name ?? 'Pilih Karyawan',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: AppSizes.fontMd,
                         fontWeight: _selectedUser != null
                             ? FontWeight.w600
                             : FontWeight.normal,
                         color: _selectedUser != null
-                            ? Colors.black87
-                            : Colors.grey.shade400,
+                            ? AppColors.textPrimary
+                            : AppColors.textDisabled,
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(
+              const Icon(
                 Icons.arrow_forward_ios,
-                size: 16,
-                color: Colors.grey.shade400,
+                size: AppSizes.iconXs,
+                color: AppColors.textDisabled,
               ),
             ],
           ),
@@ -325,60 +335,60 @@ class _CreateReservationWizardPageState
 
   Widget _buildDateSelectorCard() {
     return Card(
-      elevation: 2,
+      elevation: AppSizes.elevationSm,
       child: InkWell(
         onTap: _selectDate,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppSizes.radiusSm),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSizes.lg),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSizes.md),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(AppSizes.radiusSm),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.calendar_today,
                   color: AppColors.primary,
-                  size: 24,
+                  size: AppSizes.iconMd,
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: AppSizes.lg),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Tanggal',
                       style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
+                        fontSize: AppSizes.fontXs,
+                        color: AppColors.textSecondary,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSizes.xs),
                     Text(
                       _selectedDate != null
                           ? DateFormatter.longDate(_selectedDate!)
                           : 'Pilih Tanggal',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: AppSizes.fontMd,
                         fontWeight: _selectedDate != null
                             ? FontWeight.w600
                             : FontWeight.normal,
                         color: _selectedDate != null
-                            ? Colors.black87
-                            : Colors.grey.shade400,
+                            ? AppColors.textPrimary
+                            : AppColors.textDisabled,
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(
+              const Icon(
                 Icons.arrow_forward_ios,
-                size: 16,
-                color: Colors.grey.shade400,
+                size: AppSizes.iconXs,
+                color: AppColors.textDisabled,
               ),
             ],
           ),
@@ -391,13 +401,13 @@ class _CreateReservationWizardPageState
     final isEnabled = _selectedDate != null;
 
     return Card(
-      elevation: 2,
-      color: isEnabled ? null : Colors.grey.shade100,
+      elevation: AppSizes.elevationSm,
+      color: isEnabled ? null : AppColors.background,
       child: InkWell(
         onTap: isEnabled ? _selectStartTime : null,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppSizes.radiusSm),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSizes.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -405,25 +415,30 @@ class _CreateReservationWizardPageState
                 children: [
                   Icon(
                     Icons.access_time,
-                    color: isEnabled ? AppColors.primary : Colors.grey.shade400,
-                    size: 20,
+                    color: isEnabled
+                        ? AppColors.primary
+                        : AppColors.textDisabled,
+                    size: AppSizes.iconSm,
                   ),
-                  const SizedBox(width: 8),
-                  Text(
+                  const SizedBox(width: AppSizes.sm),
+                  const Text(
                     'Mulai',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    style: TextStyle(
+                      fontSize: AppSizes.fontXs,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSizes.sm),
               Text(
                 _startTime != null ? _formatTime(_startTime!) : '--:--',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: AppSizes.fontXxl,
                   fontWeight: FontWeight.bold,
                   color: _startTime != null && isEnabled
-                      ? Colors.black87
-                      : Colors.grey.shade400,
+                      ? AppColors.textPrimary
+                      : AppColors.textDisabled,
                 ),
               ),
             ],
@@ -437,13 +452,13 @@ class _CreateReservationWizardPageState
     final isEnabled = _selectedDate != null && _startTime != null;
 
     return Card(
-      elevation: 2,
-      color: isEnabled ? null : Colors.grey.shade100,
+      elevation: AppSizes.elevationSm,
+      color: isEnabled ? null : AppColors.background,
       child: InkWell(
         onTap: isEnabled ? _selectEndTime : null,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppSizes.radiusSm),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSizes.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -451,25 +466,30 @@ class _CreateReservationWizardPageState
                 children: [
                   Icon(
                     Icons.access_time,
-                    color: isEnabled ? AppColors.primary : Colors.grey.shade400,
-                    size: 20,
+                    color: isEnabled
+                        ? AppColors.primary
+                        : AppColors.textDisabled,
+                    size: AppSizes.iconSm,
                   ),
-                  const SizedBox(width: 8),
-                  Text(
+                  const SizedBox(width: AppSizes.sm),
+                  const Text(
                     'Selesai',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    style: TextStyle(
+                      fontSize: AppSizes.fontXs,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSizes.sm),
               Text(
                 _endTime != null ? _formatTime(_endTime!) : '--:--',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: AppSizes.fontXxl,
                   fontWeight: FontWeight.bold,
                   color: _endTime != null && isEnabled
-                      ? Colors.black87
-                      : Colors.grey.shade400,
+                      ? AppColors.textPrimary
+                      : AppColors.textDisabled,
                 ),
               ),
             ],
@@ -487,19 +507,23 @@ class _CreateReservationWizardPageState
     final minutes = duration.inMinutes.remainder(60);
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSizes.md),
       decoration: BoxDecoration(
         color: AppColors.info.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppSizes.radiusSm),
         border: Border.all(color: AppColors.info.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(Icons.schedule, color: AppColors.info, size: 20),
-          const SizedBox(width: 8),
+          const Icon(
+            Icons.schedule,
+            color: AppColors.info,
+            size: AppSizes.iconSm,
+          ),
+          const SizedBox(width: AppSizes.sm),
           Text(
             'Durasi: ${hours > 0 ? '$hours jam' : ''} ${minutes > 0 ? '$minutes menit' : ''}',
-            style: TextStyle(
+            style: const TextStyle(
               color: AppColors.info,
               fontWeight: FontWeight.w600,
             ),
@@ -509,34 +533,45 @@ class _CreateReservationWizardPageState
     );
   }
 
-  /// STEP 2: Room Selection
   Widget _buildStep2RoomSelection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(AppSizes.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Pilih Ruangan',
+                  style: TextStyle(
+                    fontSize: AppSizes.fontXxl,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: AppSizes.sm),
+                const Text(
+                  'Ruangan tersedia untuk waktu yang dipilih',
+                  style: TextStyle(
+                    fontSize: AppSizes.fontSm,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Row(
             children: [
-              const Text(
-                'Pilih Ruangan',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Ruangan tersedia untuk waktu yang dipilih',
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              Expanded(
+                child: _selectedRoom == null
+                    ? _buildRoomSelectorPlaceholder()
+                    : _buildSelectedRoomCard(),
               ),
             ],
           ),
-        ),
-        Expanded(
-          child: _selectedRoom == null
-              ? _buildRoomSelectorPlaceholder()
-              : _buildSelectedRoomCard(),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -545,32 +580,35 @@ class _CreateReservationWizardPageState
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
+          const Icon(
             Icons.meeting_room_outlined,
             size: 80,
-            color: Colors.grey.shade300,
+            color: AppColors.lightGrey,
           ),
-          const SizedBox(height: 16),
-          Text(
+          const SizedBox(height: AppSizes.lg),
+          const Text(
             'Belum ada ruangan dipilih',
             style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey.shade600,
+              fontSize: AppSizes.fontLg,
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
+          const SizedBox(height: AppSizes.sm),
+          const Text(
             'Ketuk tombol di bawah untuk memilih',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+            style: TextStyle(fontSize: AppSizes.fontSm, color: AppColors.grey),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSizes.xl),
           ElevatedButton.icon(
             onPressed: _showRoomSelector,
             icon: const Icon(Icons.add),
             label: const Text('Pilih Ruangan'),
             style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSizes.xl,
+                vertical: AppSizes.md,
+              ),
             ),
           ),
         ],
@@ -582,27 +620,26 @@ class _CreateReservationWizardPageState
     final room = _selectedRoom!;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg),
       child: Column(
         children: [
           Card(
-            elevation: 4,
+            elevation: AppSizes.elevationMd,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Room Image
                 Container(
                   height: 160,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
+                    color: AppColors.background,
                     borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(8),
+                      top: Radius.circular(AppSizes.radiusSm),
                     ),
                   ),
                   child: room.imageUrl.isNotEmpty
                       ? ClipRRect(
                           borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(8),
+                            top: Radius.circular(AppSizes.radiusSm),
                           ),
                           child: Image.network(
                             room.imageUrl,
@@ -613,69 +650,67 @@ class _CreateReservationWizardPageState
                         )
                       : _buildRoomPlaceholder(),
                 ),
-
-                // Room Info
                 Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(AppSizes.lg),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         room.name ?? 'Ruangan',
                         style: const TextStyle(
-                          fontSize: 20,
+                          fontSize: AppSizes.fontXl,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSizes.sm),
                       Row(
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.location_on,
-                            size: 16,
-                            color: Colors.grey.shade600,
+                            size: AppSizes.iconXs,
+                            color: AppColors.textSecondary,
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: AppSizes.xs),
                           Text(
                             room.location,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade600,
+                            style: const TextStyle(
+                              fontSize: AppSizes.fontSm,
+                              color: AppColors.textSecondary,
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Icon(
+                          const SizedBox(width: AppSizes.lg),
+                          const Icon(
                             Icons.people,
-                            size: 16,
-                            color: Colors.grey.shade600,
+                            size: AppSizes.iconXs,
+                            color: AppColors.textSecondary,
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: AppSizes.xs),
                           Text(
                             'Kapasitas: ${room.capacity ?? 0} orang',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade600,
+                            style: const TextStyle(
+                              fontSize: AppSizes.fontSm,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         ],
                       ),
                       if (room.description != null &&
                           room.description!.isNotEmpty) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: AppSizes.md),
                         Text(
                           room.description!,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 13,
-                            color: Colors.grey.shade700,
+                            color: AppColors.darkGrey,
                           ),
                         ),
                       ],
                       if (room.facilities != null &&
                           room.facilities!.isNotEmpty) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: AppSizes.md),
                         Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
+                          spacing: AppSizes.sm,
+                          runSpacing: AppSizes.sm,
                           children: room.facilities!
                               .map(
                                 (f) => Chip(
@@ -684,7 +719,7 @@ class _CreateReservationWizardPageState
                                     style: const TextStyle(fontSize: 11),
                                   ),
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
+                                    horizontal: AppSizes.sm,
                                     vertical: 0,
                                   ),
                                   materialTapTargetSize:
@@ -700,7 +735,7 @@ class _CreateReservationWizardPageState
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSizes.lg),
           OutlinedButton.icon(
             onPressed: _showRoomSelector,
             icon: const Icon(Icons.swap_horiz),
@@ -712,180 +747,282 @@ class _CreateReservationWizardPageState
   }
 
   Widget _buildRoomPlaceholder() {
-    return Center(
-      child: Icon(Icons.meeting_room, size: 48, color: Colors.grey.shade400),
+    return const Center(
+      child: Icon(
+        Icons.meeting_room,
+        size: AppSizes.avatarXl,
+        color: AppColors.textDisabled,
+      ),
     );
   }
 
-  /// STEP 3: Details (Purpose & Visitor Count)
   Widget _buildStep3Details() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSizes.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
             'Detail Reservasi',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: AppSizes.fontXxl,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
+          const SizedBox(height: AppSizes.sm),
+          const Text(
             'Lengkapi informasi reservasi Anda',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 24),
-
-          // Purpose Field
-          TextField(
-            controller: _purposeController,
-            maxLines: 4,
-            maxLength: 500,
-            decoration: InputDecoration(
-              labelText: 'Tujuan/Agenda Rapat',
-              hintText: 'Contoh: Rapat koordinasi tim marketing Q2 2026',
-              border: const OutlineInputBorder(),
-              prefixIcon: const Icon(Icons.description),
-              helperText: 'Jelaskan tujuan penggunaan ruangan',
+            style: TextStyle(
+              fontSize: AppSizes.fontSm,
+              color: AppColors.textSecondary,
             ),
           ),
-          const SizedBox(height: 24),
-
-          // Visitor Count
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.people, color: AppColors.primary),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Jumlah Peserta',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton.filled(
-                        onPressed: _visitorCount > 1
-                            ? () {
-                                setState(() {
-                                  _visitorCount--;
-                                });
-                              }
-                            : null,
-                        icon: const Icon(Icons.remove),
-                        style: IconButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                        ),
-                      ),
-                      Column(
-                        children: [
-                          Text(
-                            '$_visitorCount',
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            'orang',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton.filled(
-                        onPressed: () {
-                          final maxCapacity = _selectedRoom?.capacity ?? 100;
-                          if (_visitorCount < maxCapacity) {
-                            setState(() {
-                              _visitorCount++;
-                            });
-                          } else {
-                            AppSnackBar.show(
-                              context,
-                              'Kapasitas ruangan maksimal $maxCapacity orang',
-                              type: SnackBarType.warning,
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.add),
-                        style: IconButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_selectedRoom?.capacity != null) ...[
-                    const SizedBox(height: 8),
-                    Center(
-                      child: Text(
-                        'Kapasitas maksimal: ${_selectedRoom!.capacity} orang',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
+          const SizedBox(height: AppSizes.xl),
+          _buildPurposeField(),
+          const SizedBox(height: AppSizes.lg),
+          _buildVisitorCountCard(),
+          const SizedBox(height: AppSizes.lg),
+          _buildMealOptionsCard(),
         ],
       ),
     );
   }
 
-  /// STEP 4: Review & Confirmation
+  Widget _buildPurposeField() {
+    return Card(
+      elevation: AppSizes.elevationSm,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSizes.lg),
+        child: TextField(
+          controller: _purposeController,
+          maxLines: 4,
+          maxLength: 500,
+          decoration: const InputDecoration(
+            labelText: 'Tujuan/Agenda Rapat',
+            hintText: 'Contoh: Rapat koordinasi tim marketing Q2 2026',
+            border: OutlineInputBorder(),
+            filled: true,
+            fillColor: AppColors.white,
+            prefixIcon: Icon(Icons.description),
+            helperText: 'Jelaskan tujuan penggunaan ruangan',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVisitorCountCard() {
+    final maxCapacity = _selectedRoom?.capacity ?? 100;
+
+    return Card(
+      elevation: AppSizes.elevationSm,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSizes.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.people, color: AppColors.primary),
+                SizedBox(width: AppSizes.sm),
+                Text(
+                  'Jumlah Peserta',
+                  style: TextStyle(
+                    fontSize: AppSizes.fontMd,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSizes.lg),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton.filled(
+                  onPressed: _visitorCount > 1
+                      ? () => setState(() {
+                          _visitorCount--;
+                          _visitorCountController.text = '$_visitorCount';
+                        })
+                      : null,
+                  icon: const Icon(Icons.remove),
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                  ),
+                ),
+                SizedBox(
+                  width: 80,
+                  child: TextField(
+                    controller: _visitorCountController,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: AppSizes.fontXxl,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                        vertical: AppSizes.sm,
+                      ),
+                      isDense: true,
+                    ),
+                    onChanged: (value) {
+                      final parsed = int.tryParse(value);
+                      if (parsed != null && parsed >= 1) {
+                        final clamped = parsed.clamp(1, maxCapacity);
+                        setState(() => _visitorCount = clamped.toInt());
+                        if (clamped != parsed) {
+                          _visitorCountController.text = '$clamped';
+                          _visitorCountController.selection =
+                              TextSelection.fromPosition(
+                                TextPosition(
+                                  offset: _visitorCountController.text.length,
+                                ),
+                              );
+                        }
+                      }
+                    },
+                    onSubmitted: (value) {
+                      final parsed = int.tryParse(value) ?? 1;
+                      final clamped = parsed.clamp(1, maxCapacity);
+                      setState(() => _visitorCount = clamped.toInt());
+                      _visitorCountController.text = '$clamped';
+                    },
+                  ),
+                ),
+                IconButton.filled(
+                  onPressed: _visitorCount < maxCapacity
+                      ? () => setState(() {
+                          _visitorCount++;
+                          _visitorCountController.text = '$_visitorCount';
+                        })
+                      : null,
+                  icon: const Icon(Icons.add),
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+            if (_selectedRoom?.capacity != null) ...[
+              const SizedBox(height: AppSizes.sm),
+              Center(
+                child: Text(
+                  'Kapasitas maksimal: ${_selectedRoom!.capacity} orang',
+                  style: const TextStyle(
+                    fontSize: AppSizes.fontXs,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMealOptionsCard() {
+    return Card(
+      elevation: AppSizes.elevationSm,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSizes.lg,
+              AppSizes.lg,
+              AppSizes.lg,
+              AppSizes.xs,
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.restaurant_menu,
+                  color: AppColors.primary,
+                  size: AppSizes.iconSm,
+                ),
+                const SizedBox(width: AppSizes.sm),
+                const Text(
+                  'Kebutuhan Konsumsi',
+                  style: TextStyle(
+                    fontSize: AppSizes.fontMd,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          CheckboxListTile(
+            title: const Text('Snack'),
+            subtitle: const Text('Tambahkan snack untuk peserta'),
+            value: _withSnack,
+            activeColor: AppColors.primary,
+            onChanged: (v) => setState(() => _withSnack = v ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: const EdgeInsets.symmetric(horizontal: AppSizes.lg),
+          ),
+          const Divider(height: 1, indent: AppSizes.lg, endIndent: AppSizes.lg),
+          CheckboxListTile(
+            title: const Text('Makan Siang'),
+            subtitle: const Text('Tambahkan makan siang untuk peserta'),
+            value: _withLunch,
+            activeColor: AppColors.primary,
+            onChanged: (v) => setState(() => _withLunch = v ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: const EdgeInsets.symmetric(horizontal: AppSizes.lg),
+          ),
+          const SizedBox(height: AppSizes.sm),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStep4Review() {
+    final meals = [
+      if (_withSnack) 'Snack',
+      if (_withLunch) 'Makan Siang',
+    ].join(', ');
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSizes.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
             'Review Reservasi',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: AppSizes.fontXxl,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
+          const SizedBox(height: AppSizes.sm),
+          const Text(
             'Periksa kembali detail reservasi Anda',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+            style: TextStyle(
+              fontSize: AppSizes.fontSm,
+              color: AppColors.textSecondary,
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSizes.xl),
 
-          // Reservation Summary Card
           Card(
-            elevation: 4,
+            elevation: AppSizes.elevationMd,
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSizes.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // User (Admin only)
                   if (_isAdmin && _selectedUser != null) ...[
                     _buildReviewItem(
                       icon: Icons.person,
                       label: 'Reservasi untuk',
                       value: _selectedUser!.name,
                     ),
-                    const Divider(height: 24),
+                    const Divider(height: AppSizes.xl),
                   ],
 
-                  // Date & Time
                   _buildReviewItem(
                     icon: Icons.calendar_today,
                     label: 'Tanggal',
@@ -893,7 +1030,8 @@ class _CreateReservationWizardPageState
                         ? DateFormatter.longDate(_selectedDate!)
                         : '-',
                   ),
-                  const Divider(height: 24),
+                  const Divider(height: AppSizes.xl),
+
                   _buildReviewItem(
                     icon: Icons.access_time,
                     label: 'Waktu',
@@ -901,25 +1039,22 @@ class _CreateReservationWizardPageState
                         ? '${_formatTime(_startTime!)} - ${_formatTime(_endTime!)}'
                         : '-',
                   ),
-                  const Divider(height: 24),
+                  const Divider(height: AppSizes.xl),
 
-                  // Room
                   _buildReviewItem(
                     icon: Icons.meeting_room,
                     label: 'Ruangan',
                     value: _selectedRoom?.name ?? '-',
                   ),
-                  const Divider(height: 24),
+                  const Divider(height: AppSizes.xl),
 
-                  // Visitor Count
                   _buildReviewItem(
                     icon: Icons.people,
                     label: 'Jumlah Peserta',
                     value: '$_visitorCount orang',
                   ),
-                  const Divider(height: 24),
+                  const Divider(height: AppSizes.xl),
 
-                  // Purpose
                   _buildReviewItem(
                     icon: Icons.description,
                     label: 'Tujuan',
@@ -927,33 +1062,43 @@ class _CreateReservationWizardPageState
                         ? '(Belum diisi)'
                         : _purposeController.text,
                   ),
+                  const Divider(height: AppSizes.xl),
+
+                  _buildReviewItem(
+                    icon: Icons.restaurant_menu,
+                    label: 'Konsumsi',
+                    value: meals.isEmpty ? 'Tidak ada' : meals,
+                  ),
                 ],
               ),
             ),
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSizes.xl),
 
-          // Warning Info
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSizes.md),
             decoration: BoxDecoration(
               color: AppColors.warning.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppSizes.radiusSm),
               border: Border.all(
                 color: AppColors.warning.withValues(alpha: 0.3),
               ),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                Icon(Icons.info_outline, color: AppColors.warning, size: 20),
-                const SizedBox(width: 12),
+                Icon(
+                  Icons.info_outline,
+                  color: AppColors.warning,
+                  size: AppSizes.iconSm,
+                ),
+                SizedBox(width: AppSizes.md),
                 Expanded(
                   child: Text(
                     'Reservasi Anda akan menunggu persetujuan admin sebelum dapat digunakan.',
                     style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.warning.withValues(alpha: 0.8),
+                      fontSize: AppSizes.fontXs,
+                      color: AppColors.warning,
                     ),
                   ),
                 ),
@@ -973,21 +1118,24 @@ class _CreateReservationWizardPageState
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: AppColors.primary, size: 20),
-        const SizedBox(width: 12),
+        Icon(icon, color: AppColors.primary, size: AppSizes.iconSm),
+        const SizedBox(width: AppSizes.md),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 label,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: const TextStyle(
+                  fontSize: AppSizes.fontXs,
+                  color: AppColors.textSecondary,
+                ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSizes.xs),
               Text(
                 value,
                 style: const TextStyle(
-                  fontSize: 16,
+                  fontSize: AppSizes.fontMd,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -998,15 +1146,14 @@ class _CreateReservationWizardPageState
     );
   }
 
-  /// Navigation Buttons
   Widget _buildNavigationButtons() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSizes.lg),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.shade200,
+            color: AppColors.black.withAlpha(18),
             blurRadius: 4,
             offset: const Offset(0, -2),
           ),
@@ -1020,19 +1167,25 @@ class _CreateReservationWizardPageState
                 onPressed: _isSubmitting ? null : _previousStep,
                 icon: const Icon(Icons.arrow_back),
                 label: const Text('Kembali'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, AppSizes.buttonHeightLg),
+                  padding: const EdgeInsets.symmetric(vertical: AppSizes.md),
+                ),
               ),
             ),
-          if (_currentStep > 0) const SizedBox(width: 12),
+          if (_currentStep > 0) const SizedBox(width: AppSizes.md),
           Expanded(
             child: ElevatedButton.icon(
               onPressed: _isSubmitting ? null : _nextStep,
               icon: _isSubmitting
                   ? const SizedBox(
-                      width: 20,
-                      height: 20,
+                      width: AppSizes.iconSm,
+                      height: AppSizes.iconSm,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AppColors.white,
+                        ),
                       ),
                     )
                   : Icon(_currentStep < 3 ? Icons.arrow_forward : Icons.check),
@@ -1044,7 +1197,8 @@ class _CreateReservationWizardPageState
                     : 'Buat Reservasi',
               ),
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                minimumSize: const Size(0, AppSizes.buttonHeightLg),
+                padding: const EdgeInsets.symmetric(vertical: AppSizes.md),
               ),
             ),
           ),
@@ -1052,10 +1206,6 @@ class _CreateReservationWizardPageState
       ),
     );
   }
-
-  // ============================================
-  // HELPER METHODS
-  // ============================================
 
   void _previousStep() {
     if (_currentStep > 0) {
@@ -1067,10 +1217,7 @@ class _CreateReservationWizardPageState
   }
 
   void _nextStep() {
-    // Validation per step
-    if (!_validateCurrentStep()) {
-      return;
-    }
+    if (!_validateCurrentStep()) return;
 
     if (_currentStep < 3) {
       _pageController.nextPage(
@@ -1084,7 +1231,7 @@ class _CreateReservationWizardPageState
 
   bool _validateCurrentStep() {
     switch (_currentStep) {
-      case 0: // Date & Time
+      case 0:
         if (_selectedDate == null) {
           AppSnackBar.show(
             context,
@@ -1119,7 +1266,7 @@ class _CreateReservationWizardPageState
         }
         return true;
 
-      case 1: // Room
+      case 1:
         if (_selectedRoom == null) {
           AppSnackBar.show(
             context,
@@ -1130,7 +1277,7 @@ class _CreateReservationWizardPageState
         }
         return true;
 
-      case 2: // Details
+      case 2:
         if (_purposeController.text.trim().isEmpty) {
           AppSnackBar.show(
             context,
@@ -1149,9 +1296,6 @@ class _CreateReservationWizardPageState
         }
         return true;
 
-      case 3: // Review
-        return true;
-
       default:
         return true;
     }
@@ -1164,9 +1308,7 @@ class _CreateReservationWizardPageState
       return;
     }
 
-    setState(() {
-      _isSubmitting = true;
-    });
+    setState(() => _isSubmitting = true);
 
     try {
       await _reservationService.createReservation(
@@ -1176,6 +1318,8 @@ class _CreateReservationWizardPageState
         purpose: _purposeController.text.trim(),
         visitorCount: _visitorCount,
         userId: _selectedUser?.id,
+        withSnack: _withSnack,
+        withLunch: _withLunch,
       );
 
       if (!mounted) return;
@@ -1186,7 +1330,6 @@ class _CreateReservationWizardPageState
         type: SnackBarType.success,
       );
 
-      // Kembali ke halaman sebelumnya dengan result true
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -1197,11 +1340,7 @@ class _CreateReservationWizardPageState
         type: SnackBarType.error,
       );
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -1224,10 +1363,7 @@ class _CreateReservationWizardPageState
     if (picked != null) {
       setState(() {
         _selectedDate = picked;
-        // Reset room selection if date changed
-        if (_selectedRoom != null) {
-          _selectedRoom = null;
-        }
+        if (_selectedRoom != null) _selectedRoom = null;
       });
     }
   }
@@ -1244,16 +1380,13 @@ class _CreateReservationWizardPageState
       helpText: 'Pilih Waktu Mulai',
       cancelText: 'Batal',
       confirmText: 'OK',
-      builder: (_, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-          child: child!,
-        );
-      },
+      builder: (_, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
+      ),
     );
 
     if (picked != null) {
-      // Validate: tidak boleh di masa lalu jika hari ini
       if (_selectedDate != null) {
         final isToday =
             _selectedDate!.year == now.year &&
@@ -1283,14 +1416,15 @@ class _CreateReservationWizardPageState
 
       setState(() {
         _startTime = picked;
-        // Reset end time & room if start time changed
         if (_endTime != null && !_isTimeAfter(_endTime!, picked)) {
           _endTime = null;
         }
-        if (_selectedRoom != null) {
-          _selectedRoom = null;
-        }
+        if (_selectedRoom != null) _selectedRoom = null;
       });
+
+      if (_endTime == null && mounted) {
+        await _selectEndTime();
+      }
     }
   }
 
@@ -1311,16 +1445,13 @@ class _CreateReservationWizardPageState
       helpText: 'Pilih Waktu Selesai',
       cancelText: 'Batal',
       confirmText: 'OK',
-      builder: (_, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-          child: child!,
-        );
-      },
+      builder: (_, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
+      ),
     );
 
     if (picked != null) {
-      // Validate: end time must be after start time
       if (!_isTimeAfter(picked, _startTime!)) {
         if (!mounted) return;
         AppSnackBar.show(
@@ -1333,10 +1464,7 @@ class _CreateReservationWizardPageState
 
       setState(() {
         _endTime = picked;
-        // Reset room if time changed
-        if (_selectedRoom != null) {
-          _selectedRoom = null;
-        }
+        if (_selectedRoom != null) _selectedRoom = null;
       });
     }
   }
@@ -1347,11 +1475,7 @@ class _CreateReservationWizardPageState
       selectedUserId: _selectedUser?.id,
     );
 
-    if (selectedUser != null) {
-      setState(() {
-        _selectedUser = selectedUser;
-      });
-    }
+    if (selectedUser != null) setState(() => _selectedUser = selectedUser);
   }
 
   Future<void> _showRoomSelector() async {
@@ -1371,18 +1495,10 @@ class _CreateReservationWizardPageState
       selectedRoomId: _selectedRoom?.id,
     );
 
-    if (selectedRoom != null) {
-      setState(() {
-        _selectedRoom = selectedRoom;
-      });
-    }
+    if (selectedRoom != null) setState(() => _selectedRoom = selectedRoom);
   }
 
-  String _formatTime(TimeOfDay time) {
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
-  }
+  String _formatTime(TimeOfDay time) => DateFormatter.formatTimeOfDay(time);
 
   bool _isTimeAfter(TimeOfDay time1, TimeOfDay time2) {
     if (time1.hour > time2.hour) return true;
@@ -1392,13 +1508,11 @@ class _CreateReservationWizardPageState
 
   Duration? _calculateDuration() {
     if (_startTime == null || _endTime == null) return null;
-
     final start = Duration(
       hours: _startTime!.hour,
       minutes: _startTime!.minute,
     );
     final end = Duration(hours: _endTime!.hour, minutes: _endTime!.minute);
-
     return end - start;
   }
 }

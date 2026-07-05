@@ -137,7 +137,10 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
           Expanded(
             child: Text(
               'Keluhan hanya dapat dibuat untuk reservasi yang sudah selesai',
-              style: TextStyle(fontSize: AppSizes.fontSm, color: AppColors.primary),
+              style: TextStyle(
+                fontSize: AppSizes.fontSm,
+                color: AppColors.primary,
+              ),
             ),
           ),
         ],
@@ -192,7 +195,9 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
                         padding: const EdgeInsets.all(AppSizes.sm),
                         decoration: BoxDecoration(
                           color: AppColors.primary.withAlpha(20),
-                          borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+                          borderRadius: BorderRadius.circular(
+                            AppSizes.radiusSm,
+                          ),
                         ),
                         child: const Icon(
                           Icons.event_available,
@@ -278,7 +283,9 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
         ),
         const SizedBox(height: AppSizes.sm),
         InkWell(
-          onTap: (_isSubmitting || _isLoadingFacilities) ? null : _showFacilitySelector,
+          onTap: (_isSubmitting || _isLoadingFacilities)
+              ? null
+              : _showFacilitySelector,
           borderRadius: BorderRadius.circular(AppSizes.radiusSm),
           child: Container(
             padding: const EdgeInsets.all(AppSizes.md),
@@ -338,7 +345,7 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Judul Keluhan *',
+          'Keluhan *',
           style: TextStyle(
             fontSize: AppSizes.fontSm,
             fontWeight: FontWeight.w600,
@@ -374,7 +381,7 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Deskripsi Keluhan *',
+          'Detail yang jadi keluhan *',
           style: TextStyle(
             fontSize: AppSizes.fontSm,
             fontWeight: FontWeight.w600,
@@ -461,7 +468,10 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
                 onPressed: _isSubmitting
                     ? null
                     : () => _pickPhoto(ImageSource.camera),
-                icon: const Icon(Icons.camera_alt_outlined, size: AppSizes.iconSm),
+                icon: const Icon(
+                  Icons.camera_alt_outlined,
+                  size: AppSizes.iconSm,
+                ),
                 label: const Text('Kamera'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
@@ -476,7 +486,10 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
                 onPressed: _isSubmitting
                     ? null
                     : () => _pickPhoto(ImageSource.gallery),
-                icon: const Icon(Icons.photo_library_outlined, size: AppSizes.iconSm),
+                icon: const Icon(
+                  Icons.photo_library_outlined,
+                  size: AppSizes.iconSm,
+                ),
                 label: const Text('Galeri'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
@@ -592,8 +605,7 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
               controller: scrollController,
               padding: const EdgeInsets.all(AppSizes.md),
               itemCount: _completedReservations.length,
-              separatorBuilder: (_, __) =>
-                  const SizedBox(height: AppSizes.xs),
+              separatorBuilder: (_, __) => const SizedBox(height: AppSizes.xs),
               itemBuilder: (context, index) {
                 final r = _completedReservations[index];
                 final isSelected = _selectedReservation?.id == r.id;
@@ -608,7 +620,9 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
                           : AppColors.white,
                       borderRadius: BorderRadius.circular(AppSizes.radiusSm),
                       border: Border.all(
-                        color: isSelected ? AppColors.primary : AppColors.border,
+                        color: isSelected
+                            ? AppColors.primary
+                            : AppColors.border,
                         width: isSelected ? 1.5 : 1,
                       ),
                     ),
@@ -769,9 +783,7 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
                 facility?.name ?? 'Tidak dipilih',
                 style: TextStyle(
                   fontSize: AppSizes.fontSm,
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.textPrimary,
+                  color: isSelected ? AppColors.primary : AppColors.textPrimary,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
