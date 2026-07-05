@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/repositories/data_list_repository.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/filter_icon_button.dart';
 
 /// Generic base page untuk list dengan infinite scroll dan dynamic filter
 class BaseListPage<T> extends StatefulWidget {
@@ -22,6 +23,15 @@ class BaseListPage<T> extends StatefulWidget {
   )?
   customFilterBuilder;
 
+  /// Callback saat icon filter di AppBar ditekan - menerima apply filter callback
+  final void Function(
+    void Function(Map<String, dynamic>? filters) onApplyFilter,
+  )?
+  onFilterPressed;
+
+  /// Jumlah filter aktif untuk badge di icon filter
+  final int activeFilterCount;
+
   /// Custom fetch data handler - override default fetchList
   final Future<void> Function({
     Map<String, dynamic>? filters,
@@ -39,6 +49,8 @@ class BaseListPage<T> extends StatefulWidget {
     required this.emptySubtitle,
     this.floatingActionButton,
     this.customFilterBuilder,
+    this.onFilterPressed,
+    this.activeFilterCount = 0,
     this.onFetchData,
   });
 
@@ -49,7 +61,6 @@ class BaseListPage<T> extends StatefulWidget {
 class _BaseListPageState<T> extends State<BaseListPage<T>> {
   bool _isInitialLoading = true;
   String? _errorMessage;
-  bool _showFilterCard = false;
 
   Map<String, dynamic>? _currentFilters;
 
@@ -132,14 +143,10 @@ class _BaseListPageState<T> extends State<BaseListPage<T>> {
         foregroundColor: AppColors.white,
         elevation: 0,
         actions: [
-          if (widget.customFilterBuilder != null)
-            IconButton(
-              icon: Icon(
-                _showFilterCard ? Icons.filter_list_off : Icons.filter_list,
-              ),
-              onPressed: () {
-                setState(() => _showFilterCard = !_showFilterCard);
-              },
+          if (widget.onFilterPressed != null)
+            FilterIconButton(
+              activeCount: widget.activeFilterCount,
+              onPressed: () => widget.onFilterPressed!(_applyFilter),
             ),
         ],
       ),
@@ -153,8 +160,7 @@ class _BaseListPageState<T> extends State<BaseListPage<T>> {
         ),
         child: Column(
           children: [
-            if (_showFilterCard && widget.customFilterBuilder != null)
-              _buildFilterSection(),
+            if (widget.customFilterBuilder != null) _buildFilterSection(),
             Expanded(child: _buildContent()),
           ],
         ),
