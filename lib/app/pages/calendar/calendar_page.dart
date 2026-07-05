@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/enums/reservation_status.dart';
 import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/models/reservation.dart';
 import 'package:rapa_track_mobile_app/app/models/reservation_appointment.dart';
 import 'package:rapa_track_mobile_app/app/pages/reservation/create_reservation_wizard_page.dart';
 import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
@@ -557,6 +558,17 @@ class _CalendarPageState extends State<CalendarPage> {
                   'Keperluan',
                   reservation.purpose!,
                 ),
+              if (_canModerate(reservation) || _canCancel(reservation)) ...[
+                const SizedBox(height: AppSizes.sm),
+                const Divider(height: 1),
+                const SizedBox(height: AppSizes.lg),
+                if (_canModerate(reservation)) ...[
+                  _buildModerationButtons(reservation),
+                  if (_canCancel(reservation))
+                    const SizedBox(height: AppSizes.sm),
+                ],
+                if (_canCancel(reservation)) _buildCancelButton(reservation),
+              ],
               const SizedBox(height: AppSizes.xl),
             ],
           ),
@@ -626,6 +638,279 @@ class _CalendarPageState extends State<CalendarPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  bool _canCancel(Reservation reservation) {
+    if (reservation.id == null) return false;
+
+    final isOwner =
+        reservation.userId != null && reservation.userId == widget.user.id;
+    if (!isOwner && !widget.user.isAdmin) return false;
+
+    final statusAllowed =
+        reservation.status == ReservationStatus.pending ||
+        reservation.status == ReservationStatus.approved;
+    if (!statusAllowed) return false;
+
+    return reservation.startTime != null &&
+        reservation.startTime!.isAfter(DateTime.now());
+  }
+
+  bool _canModerate(Reservation reservation) {
+    return reservation.id != null &&
+        widget.user.isAdmin &&
+        reservation.status == ReservationStatus.pending;
+  }
+
+  Widget _buildCancelButton(Reservation reservation) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => _handleReservationAction(
+          action: () => _reservationService.cancelReservation(reservation.id!),
+          icon: Icons.event_busy_outlined,
+          color: AppColors.error,
+          title: 'Batalkan Reservasi?',
+          message:
+              'Reservasi ${reservation.room?.name ?? 'ruangan'} pada '
+              '${reservation.startTime != null ? DateFormatter.shortDateTime(reservation.startTime!) : '-'} '
+              'akan dibatalkan.',
+          confirmLabel: 'Ya, Batalkan',
+          successMessage: 'Reservasi berhasil dibatalkan.',
+        ),
+        icon: const Icon(Icons.event_busy_outlined, size: AppSizes.iconSm),
+        label: const Text('Batalkan Reservasi'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.error,
+          side: const BorderSide(color: AppColors.error),
+          minimumSize: const Size(0, AppSizes.buttonHeightLg),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModerationButtons(Reservation reservation) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => _handleReservationAction(
+              action: () =>
+                  _reservationService.rejectReservation(reservation.id!),
+              icon: Icons.close_outlined,
+              color: AppColors.error,
+              title: 'Tolak Reservasi?',
+              message:
+                  'Reservasi dari ${reservation.user?.name ?? 'karyawan'} akan ditolak.',
+              confirmLabel: 'Ya, Tolak',
+              successMessage: 'Reservasi berhasil ditolak.',
+            ),
+            icon: const Icon(Icons.close_outlined, size: AppSizes.iconSm),
+            label: const Text('Tolak'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.error,
+              side: const BorderSide(color: AppColors.error),
+              minimumSize: const Size(0, AppSizes.buttonHeightLg),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSizes.md),
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => _handleReservationAction(
+              action: () =>
+                  _reservationService.approveReservation(reservation.id!),
+              icon: Icons.check_circle_outline,
+              color: AppColors.success,
+              title: 'Setujui Reservasi?',
+              message:
+                  'Reservasi dari ${reservation.user?.name ?? 'karyawan'} akan disetujui.',
+              confirmLabel: 'Ya, Setujui',
+              successMessage: 'Reservasi berhasil disetujui.',
+            ),
+            icon: const Icon(Icons.check_outlined, size: AppSizes.iconSm),
+            label: const Text('Setujui'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: AppColors.white,
+              minimumSize: const Size(0, AppSizes.buttonHeightLg),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _handleReservationAction({
+    required Future<void> Function() action,
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String message,
+    required String confirmLabel,
+    required String successMessage,
+  }) async {
+    final confirmed = await _showConfirmDialog(
+      icon: icon,
+      color: color,
+      title: title,
+      message: message,
+      confirmLabel: confirmLabel,
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    Navigator.of(context).pop();
+
+    setState(() => _isLoading = true);
+
+    try {
+      await action();
+      if (!mounted) return;
+      await _loadCalendar(invalidateCache: true);
+      if (!mounted) return;
+      _showResultDialog(
+        icon: Icons.check_circle_outline,
+        color: AppColors.success,
+        title: 'Berhasil',
+        message: successMessage,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showResultDialog(
+        icon: Icons.error_outline,
+        color: AppColors.error,
+        title: 'Gagal',
+        message: e.toString(),
+      );
+    }
+  }
+
+  Future<bool?> _showConfirmDialog({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+        ),
+        contentPadding: const EdgeInsets.all(AppSizes.xl),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: AppSizes.iconXl),
+            const SizedBox(height: AppSizes.md),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: AppSizes.fontLg,
+              ),
+            ),
+            const SizedBox(height: AppSizes.sm),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: AppSizes.fontSm,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSizes.lg),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    child: const Text('Batal'),
+                  ),
+                ),
+                const SizedBox(width: AppSizes.sm),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: color,
+                      foregroundColor: AppColors.white,
+                    ),
+                    child: Text(confirmLabel),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showResultDialog({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String message,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+        ),
+        contentPadding: const EdgeInsets.all(AppSizes.xl),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: AppSizes.iconXl),
+            const SizedBox(height: AppSizes.md),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: AppSizes.fontLg,
+              ),
+            ),
+            const SizedBox(height: AppSizes.sm),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: AppSizes.fontSm,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSizes.lg),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.white,
+                ),
+                child: const Text('OK'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
