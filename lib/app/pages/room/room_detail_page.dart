@@ -8,6 +8,7 @@ import 'package:rapa_track_mobile_app/app/services/room_service.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:rapa_track_mobile_app/app/ui_items/app_button.dart';
+import 'package:rapa_track_mobile_app/app/widgets/form_items.dart';
 
 class RoomDetailPage extends StatefulWidget {
   final Profile user;
@@ -33,9 +34,10 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
 
   late final TextEditingController _nameController;
   late final TextEditingController _capacityController;
-  late final TextEditingController _floorController;
   late final TextEditingController _descriptionController;
 
+  int? _selectedFloor;
+  String? _floorError;
   bool _isMaintenance = false;
   bool _isSubmitting = false;
 
@@ -52,12 +54,10 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     _capacityController = TextEditingController(
       text: _currentRoom?.capacity?.toString() ?? '',
     );
-    _floorController = TextEditingController(
-      text: _currentRoom?.floor?.toString() ?? '',
-    );
     _descriptionController = TextEditingController(
       text: _currentRoom?.description ?? '',
     );
+    _selectedFloor = _currentRoom?.floor;
     _isMaintenance = _currentRoom?.isMaintenance ?? false;
     if (_currentRoom?.facilities != null) {
       _selectedFacilities.addAll(_currentRoom!.facilities!);
@@ -68,7 +68,6 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
   void dispose() {
     _nameController.dispose();
     _capacityController.dispose();
-    _floorController.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
@@ -98,29 +97,44 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
           foregroundColor: AppColors.white,
           elevation: 0,
         ),
-        body: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSizes.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildInfoCard(),
-                const SizedBox(height: AppSizes.md),
-                _buildFacilitiesCard(),
-                const SizedBox(height: AppSizes.md),
-                _buildStatusCard(),
-                if (widget.editable) ...[
-                  const SizedBox(height: AppSizes.lg),
-                  AppButton(
-                    text: 'Simpan Ruangan',
-                    isFullWidth: true,
-                    isLoading: _isSubmitting,
-                    onPressed: _isSubmitting ? null : _submit,
-                  ),
-                  const SizedBox(height: AppSizes.xxl),
+        body: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          behavior: HitTestBehavior.opaque,
+          child: Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSizes.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SectionLabel('Informasi Dasar'),
+                  _buildInfoSection(),
+                  const SizedBox(height: AppSizes.xl),
+                  const SectionLabel('Lantai'),
+                  _buildFloorSection(),
+                  if (_floorError != null) _buildFloorError(),
+                  const SizedBox(height: AppSizes.xl),
+                  if (_currentRoom?.imageUrl != null) ...[
+                    const SectionLabel('Gambar Ruangan'),
+                    _buildImageSection(),
+                    const SizedBox(height: AppSizes.xl),
+                  ],
+                  const SectionLabel('Fasilitas'),
+                  _buildFacilitiesSection(),
+                  const SizedBox(height: AppSizes.xl),
+                  _buildStatusSection(),
+                  if (widget.editable) ...[
+                    const SizedBox(height: AppSizes.xl),
+                    AppButton(
+                      text: 'Simpan Ruangan',
+                      isFullWidth: true,
+                      isLoading: _isSubmitting,
+                      onPressed: _isSubmitting ? null : _submit,
+                    ),
+                    const SizedBox(height: AppSizes.xxl),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -128,88 +142,144 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     );
   }
 
-  Widget _buildInfoCard() {
-    return _buildCard(
-      title: 'Informasi Dasar',
+  Widget _buildInfoSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildTextField(
+        SoftTextField(
           controller: _nameController,
-          label: 'Nama Ruangan',
+          hint: 'Nama ruangan',
+          readOnly: !widget.editable,
           validator: _validateRoomName,
         ),
         const SizedBox(height: AppSizes.md),
-        Row(
-          children: [
-            Expanded(
-              child: _buildTextField(
-                controller: _capacityController,
-                label: 'Kapasitas (orang)',
-                keyboardType: TextInputType.number,
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Wajib diisi';
-                  final cap = int.tryParse(v);
-                  if (cap == null) return 'Harus angka';
-                  if (cap < 1) return 'Min. 1 orang';
-                  if (cap > 100) return 'Max. 100 orang';
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: AppSizes.md),
-            Expanded(
-              child: _buildTextField(
-                controller: _floorController,
-                label: 'Lantai',
-                keyboardType: TextInputType.number,
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Wajib diisi';
-                  final floor = int.tryParse(v);
-                  if (floor == null) return 'Harus angka';
-                  if (floor < 1 || floor > 4) return 'Lantai 1–4';
-                  return null;
-                },
-              ),
-            ),
-          ],
+        SoftTextField(
+          controller: _capacityController,
+          hint: 'Kapasitas',
+          suffixText: 'orang',
+          keyboardType: TextInputType.number,
+          readOnly: !widget.editable,
+          validator: (v) {
+            if (v == null || v.isEmpty) return 'Kapasitas wajib diisi';
+            final cap = int.tryParse(v);
+            if (cap == null) return 'Harus angka';
+            if (cap < 1) return 'Min. 1 orang';
+            if (cap > 100) return 'Max. 100 orang';
+            return null;
+          },
         ),
         const SizedBox(height: AppSizes.md),
-        _buildTextField(
+        SoftTextField(
           controller: _descriptionController,
-          label: 'Deskripsi (opsional)',
+          hint: 'Deskripsi (opsional)',
           maxLines: 3,
+          readOnly: !widget.editable,
         ),
       ],
     );
   }
 
-  Widget _buildFacilitiesCard() {
-    return _buildCard(
-      title: 'Fasilitas',
-      action: widget.editable
-          ? TextButton.icon(
-              onPressed: _openFacilitySelector,
-              icon: const Icon(Icons.edit_outlined, size: 16),
-              label: const Text('Kelola'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-              ),
-            )
-          : null,
+  Widget _buildFloorSection() {
+    return Column(
       children: [
-        if (_selectedFacilities.isEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: AppSizes.md),
-            child: Row(
+        Row(
+          children: [
+            Expanded(child: _buildFloorCard(1)),
+            const SizedBox(width: AppSizes.md),
+            Expanded(child: _buildFloorCard(2)),
+          ],
+        ),
+        const SizedBox(height: AppSizes.md),
+        Row(
+          children: [
+            Expanded(child: _buildFloorCard(3)),
+            const SizedBox(width: AppSizes.md),
+            Expanded(child: _buildFloorCard(4)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFloorCard(int floor) {
+    return ChoiceCard(
+      label: 'Lantai $floor',
+      isSelected: _selectedFloor == floor,
+      onTap: widget.editable
+          ? () => setState(() {
+              _selectedFloor = floor;
+              _floorError = null;
+            })
+          : null,
+    );
+  }
+
+  Widget _buildFloorError() {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSizes.sm),
+      child: Text(
+        _floorError!,
+        style: const TextStyle(
+          fontSize: AppSizes.fontXs,
+          color: AppColors.error,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFacilitiesSection() {
+    return SoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Fasilitas Ruangan',
+                  style: TextStyle(
+                    fontSize: AppSizes.fontSm,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (widget.editable)
+                GestureDetector(
+                  onTap: _openFacilitySelector,
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.edit_outlined,
+                        size: AppSizes.iconXs,
+                        color: AppColors.primary,
+                      ),
+                      SizedBox(width: AppSizes.xs),
+                      Text(
+                        'Kelola',
+                        style: TextStyle(
+                          fontSize: AppSizes.fontSm,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSizes.md),
+          if (_selectedFacilities.isEmpty)
+            const Row(
               children: [
                 Icon(
                   Icons.info_outline,
                   size: AppSizes.iconSm,
                   color: AppColors.textDisabled,
                 ),
-                const SizedBox(width: AppSizes.sm),
-                const Text(
+                SizedBox(width: AppSizes.sm),
+                Text(
                   'Belum ada fasilitas dipilih',
                   style: TextStyle(
                     fontSize: AppSizes.fontSm,
@@ -217,68 +287,61 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                   ),
                 ),
               ],
-            ),
-          )
-        else
-          Wrap(
-            spacing: AppSizes.sm,
-            runSpacing: AppSizes.sm,
-            children: _selectedFacilities.map((facility) {
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSizes.sm,
-                  vertical: AppSizes.xs,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withAlpha(20),
-                  borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-                  border: Border.all(color: AppColors.primary.withAlpha(80)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (facility.icon != null) ...[
-                      Icon(
-                        facility.icon,
-                        size: 14,
-                        color: AppColors.primary,
+            )
+          else
+            Wrap(
+              spacing: AppSizes.sm,
+              runSpacing: AppSizes.sm,
+              children: _selectedFacilities.map((facility) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSizes.md,
+                    vertical: AppSizes.xs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withAlpha(20),
+                    borderRadius: BorderRadius.circular(AppSizes.radiusXxl),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (facility.icon != null) ...[
+                        Icon(
+                          facility.icon,
+                          size: 14,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: AppSizes.xxs),
+                      ],
+                      Text(
+                        facility.name,
+                        style: const TextStyle(
+                          fontSize: AppSizes.fontXs,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      const SizedBox(width: AppSizes.xxs),
                     ],
-                    Text(
-                      facility.name,
-                      style: const TextStyle(
-                        fontSize: AppSizes.fontXs,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-      ],
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
     );
   }
 
-  Widget _buildStatusCard() {
+  Widget _buildStatusSection() {
     if (widget.editable) {
-      return _buildCard(
-        title: 'Status Ruangan',
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            decoration: BoxDecoration(
-              color: _isMaintenance
-                  ? AppColors.warning.withAlpha(15)
-                  : AppColors.background,
-              borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-              border: Border.all(
-                color: _isMaintenance
-                    ? AppColors.warning.withAlpha(100)
-                    : AppColors.border,
-              ),
-            ),
+          const SectionLabel('Status Ruangan'),
+          SoftCard(
+            padding: EdgeInsets.zero,
+            color: _isMaintenance
+                ? AppColors.warning.withAlpha(15)
+                : AppColors.white,
             child: SwitchListTile(
               title: const Text(
                 'Sedang Maintenance',
@@ -303,10 +366,11 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
               activeTrackColor: AppColors.warning.withAlpha(128),
               onChanged: (val) => setState(() => _isMaintenance = val),
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: AppSizes.md,
+                horizontal: AppSizes.lg,
+                vertical: AppSizes.xs,
               ),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+                borderRadius: BorderRadius.circular(AppSizes.radiusLg),
               ),
             ),
           ),
@@ -322,15 +386,15 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
           borderRadius: BorderRadius.circular(AppSizes.radiusMd),
           border: Border.all(color: AppColors.warning.withAlpha(100)),
         ),
-        child: Row(
+        child: const Row(
           children: [
-            const Icon(
+            Icon(
               Icons.warning_amber_rounded,
               color: AppColors.warning,
               size: AppSizes.iconMd,
             ),
-            const SizedBox(width: AppSizes.md),
-            const Expanded(
+            SizedBox(width: AppSizes.md),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -361,105 +425,10 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     return const SizedBox.shrink();
   }
 
-  Widget _buildCard({
-    required String title,
-    Widget? action,
-    required List<Widget> children,
-  }) {
-    return Card(
-      elevation: AppSizes.elevationXs,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSizes.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 3,
-                  height: AppSizes.fontLg,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(AppSizes.radiusXs),
-                  ),
-                ),
-                const SizedBox(width: AppSizes.sm),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: AppSizes.fontMd,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-                if (action != null) action,
-              ],
-            ),
-            const SizedBox(height: AppSizes.md),
-            ...children,
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    TextInputType keyboardType = TextInputType.text,
-    int maxLines = 1,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(
-          fontSize: AppSizes.fontSm,
-          color: AppColors.textSecondary,
-        ),
-        filled: true,
-        fillColor: widget.editable ? AppColors.white : AppColors.background,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-          borderSide: const BorderSide(color: AppColors.error),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-          borderSide: const BorderSide(color: AppColors.error, width: 2),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSizes.md,
-          vertical: AppSizes.md,
-        ),
-      ),
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      readOnly: !widget.editable,
-      validator: validator,
-    );
-  }
-
   String? _validateRoomName(String? value) {
-    if (value == null || value.isEmpty) return 'Nama ruangan tidak boleh kosong';
+    if (value == null || value.isEmpty) {
+      return 'Nama ruangan tidak boleh kosong';
+    }
     if (value.length < 3) return 'Nama minimal 3 karakter';
     return null;
   }
@@ -494,7 +463,14 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    final isFormValid = _formKey.currentState!.validate();
+
+    if (_selectedFloor == null) {
+      setState(() => _floorError = 'Silakan pilih lantai ruangan');
+    }
+
+    if (!isFormValid || _selectedFloor == null) return;
+
     setState(() => _isSubmitting = true);
 
     try {
@@ -514,7 +490,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
 
       final request = RoomRequest(
         name: name,
-        floor: int.tryParse(_floorController.text.trim()),
+        floor: _selectedFloor,
         capacity: int.tryParse(_capacityController.text.trim()),
         description: _descriptionController.text.trim(),
         isMaintenance: _isMaintenance,
@@ -591,6 +567,33 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
               onPressed: () => Navigator.of(context).pop(),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageSection() {
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+        child: Image.network(
+          _currentRoom!.imageUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          errorBuilder: (_, error, stackTrace) {
+            return Container(
+              color: AppColors.lightGrey,
+              width: double.infinity,
+              child: const Center(
+                child: Icon(
+                  Icons.broken_image,
+                  size: AppSizes.iconXl,
+                  color: AppColors.textDisabled,
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
