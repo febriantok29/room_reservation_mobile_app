@@ -1,13 +1,13 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/core/storage/secure_storage_service.dart';
-import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
-import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:rapa_track_mobile_app/app/models/auth_token.dart';
 import 'package:rapa_track_mobile_app/app/models/profile.dart';
 import 'package:rapa_track_mobile_app/app/network/route_builder.dart';
 import 'package:rapa_track_mobile_app/app/pages/login_page.dart';
 import 'package:rapa_track_mobile_app/app/services/auth_service.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:rapa_track_mobile_app/app/utils/navigation_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -131,7 +131,7 @@ class AuthenticationState {
       } catch (_) {}
     }
 
-    await forceLogout();
+    await forceLogout(showExpiredDialog: false);
   }
 
   Future<void> _revokeFcmToken() async {
@@ -144,13 +144,13 @@ class AuthenticationState {
     } catch (_) {}
   }
 
-  Future<void> forceLogout() async {
+  Future<void> forceLogout({bool showExpiredDialog = true}) async {
     await clearSession();
 
     final navigatorState = NavigationHandler.navigatorKey.currentState;
     final context = navigatorState?.context;
 
-    if (context != null && context.mounted) {
+    if (showExpiredDialog && context != null && context.mounted) {
       await showDialog(
         context: context,
         barrierDismissible: false,
