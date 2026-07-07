@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/models/base_model.dart';
 
 enum NotificationType {
+  reservationCreated,
   reservationApproved,
   reservationRejected,
   reservationCancelled,
@@ -13,6 +14,8 @@ enum NotificationType {
 
   String get displayName {
     switch (this) {
+      case NotificationType.reservationCreated:
+        return 'Reservasi Baru';
       case NotificationType.reservationApproved:
         return 'Reservasi Disetujui';
       case NotificationType.reservationRejected:
@@ -30,6 +33,8 @@ enum NotificationType {
 
   IconData get icon {
     switch (this) {
+      case NotificationType.reservationCreated:
+        return Icons.event_note;
       case NotificationType.reservationApproved:
         return Icons.check_circle;
       case NotificationType.reservationRejected:
@@ -47,6 +52,8 @@ enum NotificationType {
 
   Color get color {
     switch (this) {
+      case NotificationType.reservationCreated:
+        return Colors.blue;
       case NotificationType.reservationApproved:
         return Colors.green;
       case NotificationType.reservationRejected:
@@ -64,6 +71,9 @@ enum NotificationType {
 
   static NotificationType fromString(String type) {
     switch (type.toLowerCase()) {
+      case 'reservation_created':
+      case 'reservation_pending':
+        return NotificationType.reservationCreated;
       case 'reservation_approved':
         return NotificationType.reservationApproved;
       case 'reservation_rejected':
@@ -78,6 +88,38 @@ enum NotificationType {
         return NotificationType.general;
     }
   }
+}
+
+class NotificationPayload {
+  final NotificationType type;
+  final String? reservationId;
+  final String? complaintId;
+
+  const NotificationPayload({
+    required this.type,
+    this.reservationId,
+    this.complaintId,
+  });
+
+  factory NotificationPayload.fromFcmData(Map<String, dynamic> data) {
+    return NotificationPayload(
+      type: NotificationType.fromString(data['type']?.toString() ?? ''),
+      reservationId: data['reservation_id']?.toString(),
+      complaintId: data['complaint_id']?.toString(),
+    );
+  }
+
+  factory NotificationPayload.fromLocalPayload(String? raw) {
+    final parts = (raw ?? '').split('|');
+    return NotificationPayload(
+      type: NotificationType.fromString(parts.isNotEmpty ? parts[0] : ''),
+      reservationId: parts.length > 1 && parts[1].isNotEmpty ? parts[1] : null,
+      complaintId: parts.length > 2 && parts[2].isNotEmpty ? parts[2] : null,
+    );
+  }
+
+  String toLocalPayload() =>
+      '${type.name}|${reservationId ?? ''}|${complaintId ?? ''}';
 }
 
 class NotificationModel extends BaseModel {
@@ -152,6 +194,12 @@ class NotificationModel extends BaseModel {
       'updated_at': updatedAt?.toIso8601String(),
     };
   }
+
+  NotificationPayload toPayload() => NotificationPayload(
+        type: type,
+        reservationId: data?['reservation_id']?.toString(),
+        complaintId: data?['complaint_id']?.toString(),
+      );
 
   NotificationModel copyWith({
     String? id,
