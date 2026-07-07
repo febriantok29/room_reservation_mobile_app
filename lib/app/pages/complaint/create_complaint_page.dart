@@ -89,6 +89,7 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Buat Keluhan'),
         backgroundColor: AppColors.primary,

@@ -8,6 +8,7 @@ import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:rapa_track_mobile_app/app/ui_items/app_snackbar.dart';
 import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
+import 'package:rapa_track_mobile_app/app/widgets/form_items.dart';
 
 class CreateReservationWizardPage extends StatefulWidget {
   final Profile currentUser;
@@ -99,6 +100,7 @@ class _CreateReservationWizardPageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Buat Reservasi Baru'), elevation: 0),
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
@@ -272,127 +274,113 @@ class _CreateReservationWizardPageState
   }
 
   Widget _buildUserSelectorCard() {
-    return Card(
-      elevation: AppSizes.elevationSm,
-      child: InkWell(
-        onTap: _showUserSelector,
-        borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSizes.lg),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppSizes.md),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-                ),
-                child: const Icon(
-                  Icons.person,
-                  color: AppColors.primary,
-                  size: AppSizes.iconMd,
-                ),
-              ),
-              const SizedBox(width: AppSizes.lg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Reservasi untuk',
-                      style: TextStyle(
-                        fontSize: AppSizes.fontXs,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: AppSizes.xs),
-                    Text(
-                      _selectedUser?.name ?? 'Pilih Karyawan',
-                      style: TextStyle(
-                        fontSize: AppSizes.fontMd,
-                        fontWeight: _selectedUser != null
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                        color: _selectedUser != null
-                            ? AppColors.textPrimary
-                            : AppColors.textDisabled,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.arrow_forward_ios,
-                size: AppSizes.iconXs,
-                color: AppColors.textDisabled,
-              ),
-            ],
+    return SoftCard(
+      onTap: _showUserSelector,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSizes.md),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+            ),
+            child: const Icon(
+              Icons.person,
+              color: AppColors.primary,
+              size: AppSizes.iconMd,
+            ),
           ),
-        ),
+          const SizedBox(width: AppSizes.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Reservasi untuk',
+                  style: TextStyle(
+                    fontSize: AppSizes.fontXs,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSizes.xs),
+                Text(
+                  _selectedUser?.name ?? 'Pilih Karyawan',
+                  style: TextStyle(
+                    fontSize: AppSizes.fontMd,
+                    fontWeight: _selectedUser != null
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                    color: _selectedUser != null
+                        ? AppColors.textPrimary
+                        : AppColors.textDisabled,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.arrow_forward_ios,
+            size: AppSizes.iconXs,
+            color: AppColors.textDisabled,
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildDateSelectorCard() {
-    return Card(
-      elevation: AppSizes.elevationSm,
-      child: InkWell(
-        onTap: _selectDate,
-        borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSizes.lg),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppSizes.md),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-                ),
-                child: const Icon(
-                  Icons.calendar_today,
-                  color: AppColors.primary,
-                  size: AppSizes.iconMd,
-                ),
-              ),
-              const SizedBox(width: AppSizes.lg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Tanggal',
-                      style: TextStyle(
-                        fontSize: AppSizes.fontXs,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: AppSizes.xs),
-                    Text(
-                      _selectedDate != null
-                          ? DateFormatter.longDate(_selectedDate!)
-                          : 'Pilih Tanggal',
-                      style: TextStyle(
-                        fontSize: AppSizes.fontMd,
-                        fontWeight: _selectedDate != null
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                        color: _selectedDate != null
-                            ? AppColors.textPrimary
-                            : AppColors.textDisabled,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.arrow_forward_ios,
-                size: AppSizes.iconXs,
-                color: AppColors.textDisabled,
-              ),
-            ],
+    return SoftCard(
+      onTap: _selectDate,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSizes.md),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+            ),
+            child: const Icon(
+              Icons.calendar_today,
+              color: AppColors.primary,
+              size: AppSizes.iconMd,
+            ),
           ),
-        ),
+          const SizedBox(width: AppSizes.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Tanggal',
+                  style: TextStyle(
+                    fontSize: AppSizes.fontXs,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSizes.xs),
+                Text(
+                  _selectedDate != null
+                      ? DateFormatter.longDate(_selectedDate!)
+                      : 'Pilih Tanggal',
+                  style: TextStyle(
+                    fontSize: AppSizes.fontMd,
+                    fontWeight: _selectedDate != null
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                    color: _selectedDate != null
+                        ? AppColors.textPrimary
+                        : AppColors.textDisabled,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.arrow_forward_ios,
+            size: AppSizes.iconXs,
+            color: AppColors.textDisabled,
+          ),
+        ],
       ),
     );
   }
@@ -400,50 +388,41 @@ class _CreateReservationWizardPageState
   Widget _buildStartTimeCard() {
     final isEnabled = _selectedDate != null;
 
-    return Card(
-      elevation: AppSizes.elevationSm,
-      color: isEnabled ? null : AppColors.background,
-      child: InkWell(
-        onTap: isEnabled ? _selectStartTime : null,
-        borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSizes.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return SoftCard(
+      color: isEnabled ? AppColors.white : AppColors.background,
+      onTap: isEnabled ? _selectStartTime : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.access_time,
-                    color: isEnabled
-                        ? AppColors.primary
-                        : AppColors.textDisabled,
-                    size: AppSizes.iconSm,
-                  ),
-                  const SizedBox(width: AppSizes.sm),
-                  const Text(
-                    'Mulai',
-                    style: TextStyle(
-                      fontSize: AppSizes.fontXs,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
+              Icon(
+                Icons.access_time,
+                color: isEnabled ? AppColors.primary : AppColors.textDisabled,
+                size: AppSizes.iconSm,
               ),
-              const SizedBox(height: AppSizes.sm),
-              Text(
-                _startTime != null ? _formatTime(_startTime!) : '--:--',
+              const SizedBox(width: AppSizes.sm),
+              const Text(
+                'Mulai',
                 style: TextStyle(
-                  fontSize: AppSizes.fontXxl,
-                  fontWeight: FontWeight.bold,
-                  color: _startTime != null && isEnabled
-                      ? AppColors.textPrimary
-                      : AppColors.textDisabled,
+                  fontSize: AppSizes.fontXs,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: AppSizes.sm),
+          Text(
+            _startTime != null ? _formatTime(_startTime!) : '--:--',
+            style: TextStyle(
+              fontSize: AppSizes.fontXxl,
+              fontWeight: FontWeight.bold,
+              color: _startTime != null && isEnabled
+                  ? AppColors.textPrimary
+                  : AppColors.textDisabled,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -451,50 +430,41 @@ class _CreateReservationWizardPageState
   Widget _buildEndTimeCard() {
     final isEnabled = _selectedDate != null && _startTime != null;
 
-    return Card(
-      elevation: AppSizes.elevationSm,
-      color: isEnabled ? null : AppColors.background,
-      child: InkWell(
-        onTap: isEnabled ? _selectEndTime : null,
-        borderRadius: BorderRadius.circular(AppSizes.radiusSm),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSizes.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return SoftCard(
+      color: isEnabled ? AppColors.white : AppColors.background,
+      onTap: isEnabled ? _selectEndTime : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.access_time,
-                    color: isEnabled
-                        ? AppColors.primary
-                        : AppColors.textDisabled,
-                    size: AppSizes.iconSm,
-                  ),
-                  const SizedBox(width: AppSizes.sm),
-                  const Text(
-                    'Selesai',
-                    style: TextStyle(
-                      fontSize: AppSizes.fontXs,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
+              Icon(
+                Icons.access_time,
+                color: isEnabled ? AppColors.primary : AppColors.textDisabled,
+                size: AppSizes.iconSm,
               ),
-              const SizedBox(height: AppSizes.sm),
-              Text(
-                _endTime != null ? _formatTime(_endTime!) : '--:--',
+              const SizedBox(width: AppSizes.sm),
+              const Text(
+                'Selesai',
                 style: TextStyle(
-                  fontSize: AppSizes.fontXxl,
-                  fontWeight: FontWeight.bold,
-                  color: _endTime != null && isEnabled
-                      ? AppColors.textPrimary
-                      : AppColors.textDisabled,
+                  fontSize: AppSizes.fontXs,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: AppSizes.sm),
+          Text(
+            _endTime != null ? _formatTime(_endTime!) : '--:--',
+            style: TextStyle(
+              fontSize: AppSizes.fontXxl,
+              fontWeight: FontWeight.bold,
+              color: _endTime != null && isEnabled
+                  ? AppColors.textPrimary
+                  : AppColors.textDisabled,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -789,193 +759,151 @@ class _CreateReservationWizardPageState
   }
 
   Widget _buildPurposeField() {
-    return Card(
-      elevation: AppSizes.elevationSm,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSizes.lg),
-        child: TextField(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionLabel('Tujuan Rapat'),
+        SoftTextField(
           controller: _purposeController,
+          hint: 'Contoh: Rapat koordinasi tim marketing Q2 2026',
           maxLines: 4,
           maxLength: 500,
-          decoration: const InputDecoration(
-            labelText: 'Tujuan/Agenda Rapat',
-            hintText: 'Contoh: Rapat koordinasi tim marketing Q2 2026',
-            border: OutlineInputBorder(),
-            filled: true,
-            fillColor: AppColors.white,
-            prefixIcon: Icon(Icons.description),
-            helperText: 'Jelaskan tujuan penggunaan ruangan',
-          ),
+          textCapitalization: TextCapitalization.sentences,
+          helperText: 'Jelaskan tujuan penggunaan ruangan',
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildVisitorCountCard() {
     final maxCapacity = _selectedRoom?.capacity ?? 100;
 
-    return Card(
-      elevation: AppSizes.elevationSm,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSizes.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.people, color: AppColors.primary),
-                SizedBox(width: AppSizes.sm),
-                Text(
-                  'Jumlah Peserta',
-                  style: TextStyle(
-                    fontSize: AppSizes.fontMd,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSizes.lg),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton.filled(
-                  onPressed: _visitorCount > 1
-                      ? () => setState(() {
-                          _visitorCount--;
-                          _visitorCountController.text = '$_visitorCount';
-                        })
-                      : null,
-                  icon: const Icon(Icons.remove),
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                  ),
-                ),
-                SizedBox(
-                  width: 80,
-                  child: TextField(
-                    controller: _visitorCountController,
-                    keyboardType: TextInputType.number,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: AppSizes.fontXxl,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(
-                        vertical: AppSizes.sm,
-                      ),
-                      isDense: true,
-                    ),
-                    onChanged: (value) {
-                      final parsed = int.tryParse(value);
-                      if (parsed != null && parsed >= 1) {
-                        final clamped = parsed.clamp(1, maxCapacity);
-                        setState(() => _visitorCount = clamped.toInt());
-                        if (clamped != parsed) {
-                          _visitorCountController.text = '$clamped';
-                          _visitorCountController.selection =
-                              TextSelection.fromPosition(
-                                TextPosition(
-                                  offset: _visitorCountController.text.length,
-                                ),
-                              );
-                        }
-                      }
-                    },
-                    onSubmitted: (value) {
-                      final parsed = int.tryParse(value) ?? 1;
-                      final clamped = parsed.clamp(1, maxCapacity);
-                      setState(() => _visitorCount = clamped.toInt());
-                      _visitorCountController.text = '$clamped';
-                    },
-                  ),
-                ),
-                IconButton.filled(
-                  onPressed: _visitorCount < maxCapacity
-                      ? () => setState(() {
-                          _visitorCount++;
-                          _visitorCountController.text = '$_visitorCount';
-                        })
-                      : null,
-                  icon: const Icon(Icons.add),
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                  ),
-                ),
-              ],
-            ),
-            if (_selectedRoom?.capacity != null) ...[
-              const SizedBox(height: AppSizes.sm),
-              Center(
-                child: Text(
-                  'Kapasitas maksimal: ${_selectedRoom!.capacity} orang',
-                  style: const TextStyle(
-                    fontSize: AppSizes.fontXs,
-                    color: AppColors.textSecondary,
-                  ),
+    return SoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.people, color: AppColors.primary),
+              SizedBox(width: AppSizes.sm),
+              Text(
+                'Jumlah Peserta',
+                style: TextStyle(
+                  fontSize: AppSizes.fontMd,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: AppSizes.lg),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton.filled(
+                onPressed: _visitorCount > 1
+                    ? () => setState(() {
+                        _visitorCount--;
+                        _visitorCountController.text = '$_visitorCount';
+                      })
+                    : null,
+                icon: const Icon(Icons.remove),
+                style: IconButton.styleFrom(backgroundColor: AppColors.primary),
+              ),
+              SizedBox(
+                width: 80,
+                child: TextField(
+                  controller: _visitorCountController,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: AppSizes.fontXxl,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(vertical: AppSizes.sm),
+                    isDense: true,
+                  ),
+                  onChanged: (value) {
+                    final parsed = int.tryParse(value);
+                    if (parsed != null && parsed >= 1) {
+                      final clamped = parsed.clamp(1, maxCapacity);
+                      setState(() => _visitorCount = clamped.toInt());
+                      if (clamped != parsed) {
+                        _visitorCountController.text = '$clamped';
+                        _visitorCountController.selection =
+                            TextSelection.fromPosition(
+                              TextPosition(
+                                offset: _visitorCountController.text.length,
+                              ),
+                            );
+                      }
+                    }
+                  },
+                  onSubmitted: (value) {
+                    final parsed = int.tryParse(value) ?? 1;
+                    final clamped = parsed.clamp(1, maxCapacity);
+                    setState(() => _visitorCount = clamped.toInt());
+                    _visitorCountController.text = '$clamped';
+                  },
+                ),
+              ),
+              IconButton.filled(
+                onPressed: _visitorCount < maxCapacity
+                    ? () => setState(() {
+                        _visitorCount++;
+                        _visitorCountController.text = '$_visitorCount';
+                      })
+                    : null,
+                icon: const Icon(Icons.add),
+                style: IconButton.styleFrom(backgroundColor: AppColors.primary),
+              ),
+            ],
+          ),
+          if (_selectedRoom?.capacity != null) ...[
+            const SizedBox(height: AppSizes.sm),
+            Center(
+              child: Text(
+                'Kapasitas maksimal: ${_selectedRoom!.capacity} orang',
+                style: const TextStyle(
+                  fontSize: AppSizes.fontXs,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildMealOptionsCard() {
-    return Card(
-      elevation: AppSizes.elevationSm,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSizes.lg,
-              AppSizes.lg,
-              AppSizes.lg,
-              AppSizes.xs,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionLabel('Kebutuhan Konsumsi'),
+        Row(
+          children: [
+            Expanded(
+              child: CheckCard(
+                label: 'Snack',
+                icon: Icons.cookie_outlined,
+                isSelected: _withSnack,
+                onTap: () => setState(() => _withSnack = !_withSnack),
+              ),
             ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.restaurant_menu,
-                  color: AppColors.primary,
-                  size: AppSizes.iconSm,
-                ),
-                const SizedBox(width: AppSizes.sm),
-                const Text(
-                  'Kebutuhan Konsumsi',
-                  style: TextStyle(
-                    fontSize: AppSizes.fontMd,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+            const SizedBox(width: AppSizes.md),
+            Expanded(
+              child: CheckCard(
+                label: 'Makan Siang',
+                icon: Icons.lunch_dining_outlined,
+                isSelected: _withLunch,
+                onTap: () => setState(() => _withLunch = !_withLunch),
+              ),
             ),
-          ),
-          CheckboxListTile(
-            title: const Text('Snack'),
-            subtitle: const Text('Tambahkan snack untuk peserta'),
-            value: _withSnack,
-            activeColor: AppColors.primary,
-            onChanged: (v) => setState(() => _withSnack = v ?? false),
-            controlAffinity: ListTileControlAffinity.leading,
-            contentPadding: const EdgeInsets.symmetric(horizontal: AppSizes.lg),
-          ),
-          const Divider(height: 1, indent: AppSizes.lg, endIndent: AppSizes.lg),
-          CheckboxListTile(
-            title: const Text('Makan Siang'),
-            subtitle: const Text('Tambahkan makan siang untuk peserta'),
-            value: _withLunch,
-            activeColor: AppColors.primary,
-            onChanged: (v) => setState(() => _withLunch = v ?? false),
-            controlAffinity: ListTileControlAffinity.leading,
-            contentPadding: const EdgeInsets.symmetric(horizontal: AppSizes.lg),
-          ),
-          const SizedBox(height: AppSizes.sm),
-        ],
-      ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -1007,70 +935,66 @@ class _CreateReservationWizardPageState
           ),
           const SizedBox(height: AppSizes.xl),
 
-          Card(
-            elevation: AppSizes.elevationMd,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSizes.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_isAdmin && _selectedUser != null) ...[
-                    _buildReviewItem(
-                      icon: Icons.person,
-                      label: 'Reservasi untuk',
-                      value: _selectedUser!.name,
-                    ),
-                    const Divider(height: AppSizes.xl),
-                  ],
-
+          SoftCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_isAdmin && _selectedUser != null) ...[
                   _buildReviewItem(
-                    icon: Icons.calendar_today,
-                    label: 'Tanggal',
-                    value: _selectedDate != null
-                        ? DateFormatter.longDate(_selectedDate!)
-                        : '-',
+                    icon: Icons.person,
+                    label: 'Reservasi untuk',
+                    value: _selectedUser!.name,
                   ),
                   const Divider(height: AppSizes.xl),
-
-                  _buildReviewItem(
-                    icon: Icons.access_time,
-                    label: 'Waktu',
-                    value: _startTime != null && _endTime != null
-                        ? '${_formatTime(_startTime!)} - ${_formatTime(_endTime!)}'
-                        : '-',
-                  ),
-                  const Divider(height: AppSizes.xl),
-
-                  _buildReviewItem(
-                    icon: Icons.meeting_room,
-                    label: 'Ruangan',
-                    value: _selectedRoom?.name ?? '-',
-                  ),
-                  const Divider(height: AppSizes.xl),
-
-                  _buildReviewItem(
-                    icon: Icons.people,
-                    label: 'Jumlah Peserta',
-                    value: '$_visitorCount orang',
-                  ),
-                  const Divider(height: AppSizes.xl),
-
-                  _buildReviewItem(
-                    icon: Icons.description,
-                    label: 'Tujuan',
-                    value: _purposeController.text.isEmpty
-                        ? '(Belum diisi)'
-                        : _purposeController.text,
-                  ),
-                  const Divider(height: AppSizes.xl),
-
-                  _buildReviewItem(
-                    icon: Icons.restaurant_menu,
-                    label: 'Konsumsi',
-                    value: meals.isEmpty ? 'Tidak ada' : meals,
-                  ),
                 ],
-              ),
+
+                _buildReviewItem(
+                  icon: Icons.calendar_today,
+                  label: 'Tanggal',
+                  value: _selectedDate != null
+                      ? DateFormatter.longDate(_selectedDate!)
+                      : '-',
+                ),
+                const Divider(height: AppSizes.xl),
+
+                _buildReviewItem(
+                  icon: Icons.access_time,
+                  label: 'Waktu',
+                  value: _startTime != null && _endTime != null
+                      ? '${_formatTime(_startTime!)} - ${_formatTime(_endTime!)}'
+                      : '-',
+                ),
+                const Divider(height: AppSizes.xl),
+
+                _buildReviewItem(
+                  icon: Icons.meeting_room,
+                  label: 'Ruangan',
+                  value: _selectedRoom?.name ?? '-',
+                ),
+                const Divider(height: AppSizes.xl),
+
+                _buildReviewItem(
+                  icon: Icons.people,
+                  label: 'Jumlah Peserta',
+                  value: '$_visitorCount orang',
+                ),
+                const Divider(height: AppSizes.xl),
+
+                _buildReviewItem(
+                  icon: Icons.description,
+                  label: 'Tujuan',
+                  value: _purposeController.text.isEmpty
+                      ? '(Belum diisi)'
+                      : _purposeController.text,
+                ),
+                const Divider(height: AppSizes.xl),
+
+                _buildReviewItem(
+                  icon: Icons.restaurant_menu,
+                  label: 'Konsumsi',
+                  value: meals.isEmpty ? 'Tidak ada' : meals,
+                ),
+              ],
             ),
           ),
 
@@ -1079,10 +1003,10 @@ class _CreateReservationWizardPageState
           Container(
             padding: const EdgeInsets.all(AppSizes.md),
             decoration: BoxDecoration(
-              color: AppColors.warning.withValues(alpha: 0.1),
+              color: AppColors.white,
               borderRadius: BorderRadius.circular(AppSizes.radiusSm),
               border: Border.all(
-                color: AppColors.warning.withValues(alpha: 0.3),
+                color: AppColors.warning.withValues(alpha: 0.8),
               ),
             ),
             child: const Row(
@@ -1090,16 +1014,13 @@ class _CreateReservationWizardPageState
                 Icon(
                   Icons.info_outline,
                   color: AppColors.warning,
-                  size: AppSizes.iconSm,
+                  size: AppSizes.iconMd,
                 ),
                 SizedBox(width: AppSizes.md),
                 Expanded(
                   child: Text(
                     'Reservasi Anda akan menunggu persetujuan admin sebelum dapat digunakan.',
-                    style: TextStyle(
-                      fontSize: AppSizes.fontXs,
-                      color: AppColors.warning,
-                    ),
+                    style: TextStyle(color: AppColors.warning),
                   ),
                 ),
               ],
