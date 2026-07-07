@@ -9,6 +9,7 @@ class Room extends BaseModel {
   final num? capacity;
   final String? description;
   final bool? isMaintenance;
+  final String? rawImageUrl;
   final List<RoomFacility>? facilities;
 
   Room({
@@ -18,6 +19,7 @@ class Room extends BaseModel {
     this.capacity,
     this.description,
     this.isMaintenance,
+    this.rawImageUrl,
     this.facilities,
     super.createdBy,
     super.updatedBy,
@@ -48,6 +50,7 @@ class Room extends BaseModel {
       floor: int.tryParse('${json['floor'] ?? ''}'),
       capacity: json['capacity'],
       description: json['description']?.toString(),
+      rawImageUrl: json['image_url']?.toString(),
       isMaintenance: isMaintenanceValue,
       facilities: facilities,
     );
@@ -64,6 +67,12 @@ class Room extends BaseModel {
   }
 
   String get imageUrl {
+    String? imageUrl = rawImageUrl;
+
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      return imageUrl;
+    }
+
     final roomId = id?.hashCode ?? name?.hashCode ?? 0;
     final random = Random(roomId);
     final backgroundColor = (random.nextInt(0xFFFFFF) + 0x1000000)
@@ -72,7 +81,10 @@ class Room extends BaseModel {
         .toUpperCase();
     const textColor = 'FFFFFF';
 
-    return 'https://placehold.co/600x400/$backgroundColor/$textColor/png?text=${Uri.encodeComponent(name ?? 'Room')}&font=roboto';
+    imageUrl =
+        'https://placehold.co/600x400/$backgroundColor/$textColor/png?text=${Uri.encodeComponent(name ?? 'Room')}&font=roboto';
+
+    return imageUrl;
   }
 
   Room copyWith({

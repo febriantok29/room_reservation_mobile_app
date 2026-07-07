@@ -53,10 +53,9 @@ class _RoomReservationAppState extends State<RoomReservationApp> {
       ],
       supportedLocales: const [Locale('id', 'ID')],
       locale: const Locale('id', 'ID'),
-      theme: ThemeData(
-        useMaterial3: false, // Reverts your design system to Material 2
-      ),
-      // theme: AppTheme.light,
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(useMaterial3: false),
+
       home: const SplashScreenPage(),
     );
   }
@@ -66,8 +65,6 @@ class _RoomReservationAppState extends State<RoomReservationApp> {
       await SystemChrome.setPreferredOrientations([
         DeviceOrientation.portraitUp,
       ]);
-
-      await Future.delayed(const Duration(seconds: 2));
 
       await initializeDateFormatting('id_ID', null);
 

@@ -319,7 +319,7 @@ class _HomePageState extends State<HomePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          user.firstName ?? 'Pengguna',
+          user.name,
           style: const TextStyle(
             fontSize: AppSizes.fontMd,
             fontWeight: FontWeight.bold,
