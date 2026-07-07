@@ -9,6 +9,7 @@ import 'package:rapa_track_mobile_app/app/pages/login_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/splash_screen_page.dart';
 import 'package:rapa_track_mobile_app/app/states/authentication_state.dart';
 import 'package:rapa_track_mobile_app/app/utils/navigation_handler.dart';
+import 'package:rapa_track_mobile_app/app/utils/notification_handler.dart';
 import 'package:rapa_track_mobile_app/firebase_options.dart';
 
 @pragma('vm:entry-point')
@@ -22,6 +23,7 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  await NotificationHandlerUtil.initialize();
 
   runApp(const RoomReservationApp());
 }
@@ -69,6 +71,7 @@ class _RoomReservationAppState extends State<RoomReservationApp> {
       await initializeDateFormatting('id_ID', null);
 
       await authenticationState.initialize();
+      await NotificationHandlerUtil.handleInitialMessage();
 
       if (!mounted) return;
 

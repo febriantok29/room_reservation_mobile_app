@@ -13,12 +13,12 @@ class NotificationService extends DataListService<NotificationModel> {
   /// Get list of notifications
   Future<List<NotificationModel>> getNotificationList({
     bool? isRead,
-    int? perPage,
+    int perPage = 50,
     int? page,
   }) async {
     final queries = <String, dynamic>{
       if (isRead != null) 'is_read': isRead,
-      if (perPage != null) 'per_page': perPage,
+      'per_page': perPage,
       if (page != null) 'page': page,
     };
 

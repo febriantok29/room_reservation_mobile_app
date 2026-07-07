@@ -15,8 +15,8 @@ class AuthenticationState {
   static const String keySavedUsername = 'AuthRequest.SavedUsername';
   static const String keyTokenData = 'AuthRequest.TokenData';
 
-  final int? _accessTokenTtl = null;
-  final int? _refreshTokenTtl = null;
+  final int _accessTokenTtl = 9000;
+  final int _refreshTokenTtl = 9000;
 
   static AuthenticationState? _instance;
 
@@ -54,6 +54,7 @@ class AuthenticationState {
 
       try {
         await refreshUser();
+        await _registerFcmToken();
       } catch (_) {
         await clearSession();
       }
@@ -74,6 +75,7 @@ class AuthenticationState {
     await prefs.setString(keySavedUsername, credential);
 
     await refreshUser();
+    await _registerFcmToken();
     return _user != null;
   }
 
@@ -87,7 +89,8 @@ class AuthenticationState {
     if (_token?.refreshToken == null) return;
 
     if (_refreshFuture != null) {
-      return _refreshFuture;
+      await _refreshFuture;
+      return;
     }
 
     _refreshFuture = _doRefreshToken();
@@ -132,6 +135,16 @@ class AuthenticationState {
     }
 
     await forceLogout(showExpiredDialog: false);
+  }
+
+  Future<void> _registerFcmToken() async {
+    try {
+      await FirebaseMessaging.instance.requestPermission();
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null && token.isNotEmpty) {
+        await _service.updateFcmToken(token);
+      }
+    } catch (_) {}
   }
 
   Future<void> _revokeFcmToken() async {
