@@ -7,6 +7,9 @@ import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:rapa_track_mobile_app/app/ui_items/cards/reservation_card.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/filter_icon_button.dart';
+import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
+import 'package:rapa_track_mobile_app/app/widgets/filter_bottom_sheet.dart';
 
 class ReservationListPage extends StatefulWidget {
   final Profile user;
@@ -21,9 +24,18 @@ class _ReservationListPageState extends State<ReservationListPage> {
   final _reservationService = ReservationService();
 
   ReservationStatus? _filterStatus;
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
   List<Reservation> _reservations = [];
   bool _isLoading = false;
   String? _error;
+
+  bool get _hasActiveFilters =>
+      _filterStatus != null || _dateFrom != null || _dateTo != null;
+
+  int get _activeFilterCount =>
+      (_filterStatus != null ? 1 : 0) +
+      ((_dateFrom != null || _dateTo != null) ? 1 : 0);
 
   @override
   void initState() {
@@ -39,6 +51,8 @@ class _ReservationListPageState extends State<ReservationListPage> {
     try {
       final result = await _reservationService.getReservationList(
         status: _filterStatus?.name,
+        dateFrom: _dateFrom != null ? DateFormatter.apiDate(_dateFrom!) : null,
+        dateTo: _dateTo != null ? DateFormatter.apiDate(_dateTo!) : null,
       );
       if (mounted) setState(() => _reservations = result.reservations);
     } catch (e) {
@@ -48,10 +62,120 @@ class _ReservationListPageState extends State<ReservationListPage> {
     }
   }
 
-  void _setFilter(ReservationStatus? status) {
-    if (_filterStatus == status) return;
-    setState(() => _filterStatus = status);
+  void _clearFilters() {
+    setState(() {
+      _filterStatus = null;
+      _dateFrom = null;
+      _dateTo = null;
+    });
     _loadReservations();
+  }
+
+  Future<void> _showFilterSheet() async {
+    ReservationStatus? tempStatus = _filterStatus;
+    DateTime? tempFrom = _dateFrom;
+    DateTime? tempTo = _dateTo;
+
+    await FilterBottomSheet.show(
+      context: context,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (_, setSheetState) {
+          Future<void> pickDate({required bool isFrom}) async {
+            final now = DateTime.now();
+            final picked = await showDatePicker(
+              context: sheetContext,
+              initialDate: isFrom
+                  ? (tempFrom ?? now)
+                  : (tempTo ?? tempFrom ?? now),
+              firstDate: isFrom
+                  ? DateTime(now.year - 1)
+                  : (tempFrom ?? DateTime(now.year - 1)),
+              lastDate: DateTime(now.year + 1, 12, 31),
+              locale: const Locale('id', 'ID'),
+              helpText: isFrom ? 'Pilih Tanggal Awal' : 'Pilih Tanggal Akhir',
+              cancelText: 'Batal',
+              confirmText: 'OK',
+            );
+            if (picked == null) return;
+            setSheetState(() {
+              if (isFrom) {
+                tempFrom = picked;
+                if (tempTo != null && tempTo!.isBefore(picked)) tempTo = null;
+              } else {
+                tempTo = picked;
+              }
+            });
+          }
+
+          return FilterBottomSheet(
+            title: 'Filter Reservasi',
+            onReset: () => setSheetState(() {
+              tempStatus = null;
+              tempFrom = null;
+              tempTo = null;
+            }),
+            onApply: () {
+              setState(() {
+                _filterStatus = tempStatus;
+                _dateFrom = tempFrom;
+                _dateTo = tempTo;
+              });
+              _loadReservations();
+              Navigator.of(sheetContext).pop();
+            },
+            children: [
+              FilterSection(
+                label: 'Status',
+                child: Wrap(
+                  spacing: AppSizes.sm,
+                  runSpacing: AppSizes.sm,
+                  children: [
+                    FilterPill(
+                      label: 'Semua',
+                      isSelected: tempStatus == null,
+                      onTap: () => setSheetState(() => tempStatus = null),
+                    ),
+                    ...ReservationStatus.values.map(
+                      (s) => FilterPill(
+                        label: s.displayName,
+                        isSelected: tempStatus == s,
+                        onTap: () => setSheetState(() => tempStatus = s),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              FilterSection(
+                label: 'Rentang Tanggal',
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: FilterDateField(
+                        label: 'Dari',
+                        valueText: tempFrom != null
+                            ? DateFormatter.shortDate(tempFrom!)
+                            : null,
+                        onTap: () => pickDate(isFrom: true),
+                      ),
+                    ),
+                    const SizedBox(width: AppSizes.md),
+                    Expanded(
+                      child: FilterDateField(
+                        label: 'Sampai',
+                        valueText: tempTo != null
+                            ? DateFormatter.shortDate(tempTo!)
+                            : null,
+                        onTap: () => pickDate(isFrom: false),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -65,6 +189,12 @@ class _ReservationListPageState extends State<ReservationListPage> {
         backgroundColor: AppColors.primary,
         foregroundColor: AppColors.white,
         elevation: 0,
+        actions: [
+          FilterIconButton(
+            activeCount: _activeFilterCount,
+            onPressed: _showFilterSheet,
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -74,7 +204,6 @@ class _ReservationListPageState extends State<ReservationListPage> {
               backgroundColor: AppColors.border,
               minHeight: 2,
             ),
-          _buildFilterRow(),
           if (_error != null) _buildErrorBanner(),
           Expanded(child: _buildBody()),
         ],
@@ -87,78 +216,6 @@ class _ReservationListPageState extends State<ReservationListPage> {
           style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w600),
         ),
         backgroundColor: AppColors.primary,
-      ),
-    );
-  }
-
-  Widget _buildFilterRow() {
-    final statuses = ReservationStatus.values;
-
-    return Container(
-      color: AppColors.white,
-      padding: const EdgeInsets.fromLTRB(
-        AppSizes.md,
-        AppSizes.sm,
-        AppSizes.md,
-        AppSizes.sm,
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _buildFilterChip(null, 'Semua', Icons.list_outlined),
-            const SizedBox(width: AppSizes.xs),
-            ...statuses.map(
-              (s) => Padding(
-                padding: const EdgeInsets.only(right: AppSizes.xs),
-                child: _buildFilterChip(s, s.displayName, s.icon),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(ReservationStatus? status, String label, IconData icon) {
-    final isSelected = _filterStatus == status;
-    final chipColor = status?.color ?? AppColors.textSecondary;
-
-    return GestureDetector(
-      onTap: () => _setFilter(status),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSizes.sm,
-          vertical: AppSizes.xs,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected ? chipColor.withAlpha(25) : AppColors.white,
-          borderRadius: BorderRadius.circular(AppSizes.radiusXxl),
-          border: Border.all(
-            color: isSelected ? chipColor : AppColors.border,
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 13,
-              color: isSelected ? chipColor : AppColors.textSecondary,
-            ),
-            const SizedBox(width: AppSizes.xxs),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: AppSizes.fontXs,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected ? chipColor : AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -226,7 +283,7 @@ class _ReservationListPageState extends State<ReservationListPage> {
   }
 
   Widget _buildEmptyState() {
-    final isFiltered = _filterStatus != null;
+    final isFiltered = _hasActiveFilters;
 
     return Center(
       child: Padding(
@@ -251,7 +308,7 @@ class _ReservationListPageState extends State<ReservationListPage> {
             const SizedBox(height: AppSizes.sm),
             Text(
               isFiltered
-                  ? 'Tidak ada reservasi dengan status "${_filterStatus?.displayName}"'
+                  ? 'Tidak ada reservasi yang cocok dengan filter'
                   : (widget.user.isAdmin
                       ? 'Belum ada reservasi yang dibuat oleh pengguna'
                       : 'Anda belum memiliki reservasi.\nBuat reservasi pertama Anda!'),
@@ -264,7 +321,7 @@ class _ReservationListPageState extends State<ReservationListPage> {
             if (isFiltered) ...[
               const SizedBox(height: AppSizes.lg),
               OutlinedButton.icon(
-                onPressed: () => _setFilter(null),
+                onPressed: _clearFilters,
                 icon: const Icon(Icons.clear, size: AppSizes.iconSm),
                 label: const Text('Hapus Filter'),
                 style: OutlinedButton.styleFrom(

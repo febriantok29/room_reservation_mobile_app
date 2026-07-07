@@ -7,7 +7,9 @@ import 'package:rapa_track_mobile_app/app/pages/reservation/create_reservation_w
 import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/filter_icon_button.dart';
 import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
+import 'package:rapa_track_mobile_app/app/widgets/filter_bottom_sheet.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 
 class CalendarPage extends StatefulWidget {
@@ -102,17 +104,92 @@ class _CalendarPageState extends State<CalendarPage> {
     _calendarController.view = view;
   }
 
-  void _toggleFilter(ReservationStatus status) {
-    setState(() {
-      if (_filterStatuses.contains(status)) {
-        _filterStatuses.remove(status);
-      } else {
-        _filterStatuses.add(status);
-      }
-    });
-  }
+  Future<void> _showFilterSheet() async {
+    CalendarView tempView = _currentView;
+    final tempStatuses = Set<ReservationStatus>.from(_filterStatuses);
 
-  void _clearFilters() => setState(() => _filterStatuses.clear());
+    const viewOptions = <CalendarView, String>{
+      CalendarView.month: 'Bulan',
+      CalendarView.week: 'Minggu',
+      CalendarView.day: 'Hari',
+      CalendarView.schedule: 'Jadwal',
+    };
+
+    const statuses = [
+      ReservationStatus.pending,
+      ReservationStatus.approved,
+      ReservationStatus.completed,
+      ReservationStatus.rejected,
+      ReservationStatus.cancelled,
+    ];
+
+    await FilterBottomSheet.show(
+      context: context,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (_, setSheetState) => FilterBottomSheet(
+          title: 'Filter Kalender',
+          onReset: () => setSheetState(() {
+            tempView = CalendarView.month;
+            tempStatuses.clear();
+          }),
+          onApply: () {
+            setState(() {
+              _filterStatuses
+                ..clear()
+                ..addAll(tempStatuses);
+            });
+            if (tempView != _currentView) _changeView(tempView);
+            Navigator.of(sheetContext).pop();
+          },
+          children: [
+            FilterSection(
+              label: 'Tampilan',
+              child: Wrap(
+                spacing: AppSizes.sm,
+                runSpacing: AppSizes.sm,
+                children: viewOptions.entries
+                    .map(
+                      (entry) => FilterPill(
+                        label: entry.value,
+                        isSelected: tempView == entry.key,
+                        onTap: () => setSheetState(() => tempView = entry.key),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+            FilterSection(
+              label: 'Status Reservasi',
+              child: Wrap(
+                spacing: AppSizes.sm,
+                runSpacing: AppSizes.sm,
+                children: [
+                  FilterPill(
+                    label: 'Semua',
+                    isSelected: tempStatuses.isEmpty,
+                    onTap: () => setSheetState(tempStatuses.clear),
+                  ),
+                  ...statuses.map(
+                    (s) => FilterPill(
+                      label: s.displayName,
+                      isSelected: tempStatuses.contains(s),
+                      onTap: () => setSheetState(() {
+                        if (tempStatuses.contains(s)) {
+                          tempStatuses.remove(s);
+                        } else {
+                          tempStatuses.add(s);
+                        }
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -128,8 +205,6 @@ class _CalendarPageState extends State<CalendarPage> {
               minHeight: 2,
             ),
           if (_error != null) _buildErrorBanner(),
-          _buildFilterRow(),
-          const Divider(height: 1),
           Expanded(child: _buildCalendar()),
         ],
       ),
@@ -173,156 +248,11 @@ class _CalendarPageState extends State<CalendarPage> {
           onPressed: _goToToday,
           tooltip: 'Hari Ini',
         ),
-        PopupMenuButton<CalendarView>(
-          icon: const Icon(Icons.view_module_outlined),
-          tooltip: 'Tampilan',
-          onSelected: _changeView,
-          itemBuilder: (_) => [
-            _viewMenuItem(
-              CalendarView.month,
-              Icons.calendar_month_outlined,
-              'Bulan',
-            ),
-            _viewMenuItem(
-              CalendarView.week,
-              Icons.view_week_outlined,
-              'Minggu',
-            ),
-            _viewMenuItem(CalendarView.day, Icons.view_day_outlined, 'Hari'),
-            _viewMenuItem(
-              CalendarView.schedule,
-              Icons.list_alt_outlined,
-              'Jadwal',
-            ),
-          ],
+        FilterIconButton(
+          activeCount: _filterStatuses.length,
+          onPressed: _showFilterSheet,
         ),
       ],
-    );
-  }
-
-  PopupMenuItem<CalendarView> _viewMenuItem(
-    CalendarView view,
-    IconData icon,
-    String label,
-  ) {
-    final isSelected = _currentView == view;
-    return PopupMenuItem(
-      value: view,
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: AppSizes.iconSm,
-            color: isSelected ? AppColors.primary : AppColors.textSecondary,
-          ),
-          const SizedBox(width: AppSizes.md),
-          Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? AppColors.primary : AppColors.textPrimary,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-          if (isSelected) ...[
-            const Spacer(),
-            const Icon(
-              Icons.check,
-              size: AppSizes.iconSm,
-              color: AppColors.primary,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterRow() {
-    const statuses = [
-      ReservationStatus.pending,
-      ReservationStatus.approved,
-      ReservationStatus.completed,
-      ReservationStatus.rejected,
-      ReservationStatus.cancelled,
-    ];
-
-    final allSelected = _filterStatuses.isEmpty;
-
-    return Container(
-      color: AppColors.white,
-      padding: const EdgeInsets.fromLTRB(
-        AppSizes.md,
-        AppSizes.sm,
-        AppSizes.md,
-        AppSizes.sm,
-      ),
-      child: Wrap(
-        spacing: AppSizes.xs,
-        runSpacing: AppSizes.xs,
-        children: [
-          _buildChip(
-            label: 'Semua',
-            icon: Icons.all_inclusive,
-            isSelected: allSelected,
-            color: AppColors.primary,
-            onTap: _clearFilters,
-          ),
-          ...statuses.map(
-            (s) => _buildChip(
-              label: s.displayName,
-              icon: s.icon,
-              isSelected: _filterStatuses.contains(s),
-              color: s.color,
-              onTap: () => _toggleFilter(s),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChip({
-    required String label,
-    required IconData icon,
-    required bool isSelected,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSizes.sm,
-          vertical: AppSizes.xs,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withAlpha(25) : AppColors.white,
-          borderRadius: BorderRadius.circular(AppSizes.radiusXxl),
-          border: Border.all(
-            color: isSelected ? color : AppColors.border,
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 13,
-              color: isSelected ? color : AppColors.textSecondary,
-            ),
-            const SizedBox(width: AppSizes.xxs),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: AppSizes.fontXs,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected ? color : AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
