@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/enums/reservation_status.dart';
 import 'package:rapa_track_mobile_app/app/models/profile.dart';
 import 'package:rapa_track_mobile_app/app/models/reservation.dart';
+import 'package:rapa_track_mobile_app/app/pages/reservation/reservation_modal_bottom_sheet.dart';
 import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
@@ -215,6 +216,15 @@ class _ReservationCardState extends State<ReservationCard> {
           ),
         ));
       }
+    }
+
+    if (_r.canBeRescheduledBy(widget.user)) {
+      buttons.add(_actionButton(
+        label: 'Jadwal Ulang',
+        icon: Icons.edit_calendar_outlined,
+        color: AppColors.primary,
+        onPressed: _openReschedule,
+      ));
     }
 
     final showCancel = _status.canBeCancelled &&
@@ -468,6 +478,16 @@ class _ReservationCardState extends State<ReservationCard> {
         ),
       );
     }
+  }
+
+  Future<void> _openReschedule() async {
+    final result = await ReservationModalBottomSheet.show(
+      context: context,
+      user: widget.user,
+      reservation: _r,
+    );
+
+    if (result == true) widget.onRefresh?.call();
   }
 
   void _showDetail() {
