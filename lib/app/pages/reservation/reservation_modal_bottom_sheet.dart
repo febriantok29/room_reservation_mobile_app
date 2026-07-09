@@ -142,8 +142,7 @@ class _ReservationModalBottomSheetState
           children: [
             _buildHeader(),
             _buildErrorMessage(),
-            // Tampilkan user selector hanya jika admin
-            if (_isAdmin) _buildUserSelector(),
+            if (_isAdmin && !_isEditMode) _buildUserSelector(),
             _buildDateTimeSelectors(),
             _buildRoomSelector(),
             _buildVisitorCounter(),
