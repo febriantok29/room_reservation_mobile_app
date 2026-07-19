@@ -9,6 +9,9 @@ class Profile extends BaseModel {
   DateTime? dateOfBirth;
   bool isActive;
   UserRole? role;
+  String? divisionId;
+  String? divisionName;
+  String? divisionCode;
 
   Profile({
     super.id,
@@ -19,6 +22,9 @@ class Profile extends BaseModel {
     this.dateOfBirth,
     this.isActive = true,
     this.role,
+    this.divisionId,
+    this.divisionName,
+    this.divisionCode,
     super.createdBy,
     super.updatedBy,
     super.deletedBy,
@@ -51,6 +57,7 @@ class Profile extends BaseModel {
     }
 
     final isAdmin = json['is_admin'] == true;
+    final division = json['division'];
 
     final profile = Profile(
       employeeId: json['employee_id']?.toString(),
@@ -62,6 +69,9 @@ class Profile extends BaseModel {
       )?.toLocal(),
       isActive: json['is_active'] != false,
       role: isAdmin ? UserRole.admin : UserRole.user,
+      divisionId: json['division_id']?.toString(),
+      divisionName: division is Map ? division['name']?.toString() : null,
+      divisionCode: division is Map ? division['code']?.toString() : null,
     );
 
     profile.setCommonFieldsFromJson(json);
@@ -79,4 +89,11 @@ class Profile extends BaseModel {
   }
 
   bool get isAdmin => role == UserRole.admin;
+
+  String get divisionLabel {
+    if (divisionCode != null && divisionName != null) {
+      return '$divisionCode — $divisionName';
+    }
+    return divisionName ?? '-';
+  }
 }
