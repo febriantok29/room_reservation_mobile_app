@@ -10,7 +10,7 @@
 
 
     <application
-        android:label="room_reservation_mobile_app"
+        android:label="RapaTrack"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
