@@ -8,6 +8,7 @@ import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:rapa_track_mobile_app/app/ui_items/app_snackbar.dart';
 import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
+import 'package:rapa_track_mobile_app/app/utils/validators.dart';
 import 'package:rapa_track_mobile_app/app/widgets/form_items.dart';
 
 class CreateReservationWizardPage extends StatefulWidget {
@@ -1199,12 +1200,11 @@ class _CreateReservationWizardPageState
         return true;
 
       case 2:
-        if (_purposeController.text.trim().isEmpty) {
-          AppSnackBar.show(
-            context,
-            'Silakan isi tujuan/agenda rapat',
-            type: SnackBarType.error,
-          );
+        final purposeError = Validators.required(
+          'Tujuan/agenda rapat',
+        )(_purposeController.text);
+        if (purposeError != null) {
+          AppSnackBar.show(context, purposeError, type: SnackBarType.error);
           return false;
         }
         if (_visitorCount < 1) {
