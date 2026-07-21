@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/models/notification_model.dart';
 import 'package:rapa_track_mobile_app/app/models/profile.dart';
+import 'package:rapa_track_mobile_app/app/pages/notification/notification_detail_page.dart';
 import 'package:rapa_track_mobile_app/app/services/notification_service.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:rapa_track_mobile_app/app/ui_items/app_snackbar.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/status_badge.dart';
 import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
 import 'package:rapa_track_mobile_app/app/utils/notification_handler.dart';
 
@@ -260,16 +262,39 @@ class _NotificationListPageState extends State<NotificationListPage> {
           ),
         ],
         const SizedBox(height: AppSizes.sm),
-        Text(
-          notification.createdAt != null
-              ? DateFormatter.timeAgo(notification.createdAt!)
-              : '-',
-          style: const TextStyle(
-            fontSize: AppSizes.fontXs,
-            color: AppColors.textDisabled,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                notification.createdAt != null
+                    ? DateFormatter.timeAgo(notification.createdAt!)
+                    : '-',
+                style: const TextStyle(
+                  fontSize: AppSizes.fontXs,
+                  color: AppColors.textDisabled,
+                ),
+              ),
+            ),
+            StatusBadge(
+              text: notification.type.displayName,
+              color: notification.type.color,
+              height: AppSizes.xl,
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _buildStateIcon(IconData icon, Color color) {
+    return Container(
+      width: AppSizes.avatarXl + AppSizes.xl,
+      height: AppSizes.avatarXl + AppSizes.xl,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, size: AppSizes.iconXl, color: color),
     );
   }
 
@@ -278,11 +303,7 @@ class _NotificationListPageState extends State<NotificationListPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.notifications_none,
-            size: AppSizes.iconXl,
-            color: AppColors.lightGrey,
-          ),
+          _buildStateIcon(Icons.notifications_none, AppColors.lightGrey),
           const SizedBox(height: AppSizes.lg),
           const Text(
             'Tidak Ada Notifikasi',
@@ -311,11 +332,7 @@ class _NotificationListPageState extends State<NotificationListPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.filter_list_off,
-            size: AppSizes.iconXl,
-            color: AppColors.lightGrey,
-          ),
+          _buildStateIcon(Icons.filter_list_off, AppColors.lightGrey),
           const SizedBox(height: AppSizes.lg),
           const Text(
             'Tidak Ada Hasil',
@@ -355,11 +372,7 @@ class _NotificationListPageState extends State<NotificationListPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.error_outline,
-            size: AppSizes.iconXl,
-            color: AppColors.error,
-          ),
+          _buildStateIcon(Icons.error_outline, AppColors.error),
           const SizedBox(height: AppSizes.lg),
           const Text(
             'Terjadi Kesalahan',
@@ -400,6 +413,17 @@ class _NotificationListPageState extends State<NotificationListPage> {
         _loadUnreadCount();
       } catch (_) {}
     }
+
+    if (notification.type == NotificationType.general) {
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => NotificationDetailPage(notification: notification),
+        ),
+      );
+      return;
+    }
+
     NotificationHandlerUtil.navigate(notification.toPayload());
   }
 
