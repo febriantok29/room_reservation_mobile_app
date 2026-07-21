@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:open_filex/open_filex.dart';
+import 'package:open_file/open_file.dart';
 import 'package:rapa_track_mobile_app/app/models/profile.dart';
 import 'package:rapa_track_mobile_app/app/models/room.dart';
 import 'package:rapa_track_mobile_app/app/pages/report/report_definitions.dart';
@@ -115,7 +115,7 @@ class _ReportDetailPageState extends State<ReportDetailPage> {
         filters: _buildFilters(),
         format: format,
       );
-      await OpenFilex.open(file.path);
+      await OpenFile.open(file.path);
     } catch (e) {
       if (mounted) _showErrorDialog('Gagal mengunduh laporan: $e');
     } finally {

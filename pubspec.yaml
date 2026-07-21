@@ -34,7 +34,7 @@ dependencies:
     sdk: flutter
 
   http: ^1.5.0
-  flutter_secure_storage: ^9.2.2
+  flutter_secure_storage: ^10.3.1
   shared_preferences: ^2.5.3
   intl: ^0.20.2
   jwt_decoder: ^2.0.1
@@ -46,12 +46,12 @@ dependencies:
   syncfusion_flutter_calendar: ^28.1.38
   image_picker: ^1.1.2
   path_provider: ^2.1.5
-  open_filex: ^4.7.0
+  open_file: ^4.0.0
 
   haleyora_package:
     git:
       url: https://github.com/febriantok29/haleyora_package.git
-      ref: 72f0eae90be87f79c959d0732224b05ceb5d705a
+      ref: dev
 
 dev_dependencies:
   flutter_test:
