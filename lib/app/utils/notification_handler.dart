@@ -4,7 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:rapa_track_mobile_app/app/models/notification_model.dart';
 import 'package:rapa_track_mobile_app/app/pages/complaint/complaint_detail_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/complaint/complaint_list_page.dart';
-import 'package:rapa_track_mobile_app/app/pages/notification/notification_list_page.dart';
+import 'package:rapa_track_mobile_app/app/pages/notification/notification_detail_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/reservation/reservation_detail_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/reservation/reservation_list_page.dart';
 import 'package:rapa_track_mobile_app/app/states/authentication_state.dart';
@@ -51,7 +51,11 @@ class NotificationHandlerUtil {
     final notification = message.notification;
     if (notification == null) return;
 
-    final payload = NotificationPayload.fromFcmData(message.data);
+    final payload = NotificationPayload.fromFcmData(
+      message.data,
+      title: notification.title,
+      body: notification.body,
+    );
 
     await _localNotifications.show(
       message.hashCode,
@@ -76,7 +80,13 @@ class NotificationHandlerUtil {
   }
 
   static void _onBackgroundTap(RemoteMessage message) {
-    navigate(NotificationPayload.fromFcmData(message.data));
+    navigate(
+      NotificationPayload.fromFcmData(
+        message.data,
+        title: message.notification?.title,
+        body: message.notification?.body,
+      ),
+    );
   }
 
   static void navigate(NotificationPayload payload) {
@@ -101,7 +111,15 @@ class NotificationHandlerUtil {
             ? ComplaintDetailPage(complaintId: payload.complaintId!, user: user)
             : ComplaintListPage(user: user);
       case NotificationType.general:
-        page = NotificationListPage(user: user);
+        page = NotificationDetailPage(
+          notification: NotificationModel(
+            title: payload.title,
+            body: payload.body,
+            type: payload.type,
+            data: payload.data,
+            createdAt: DateTime.now(),
+          ),
+        );
     }
 
     navigatorState.push(MaterialPageRoute(builder: (_) => page));
