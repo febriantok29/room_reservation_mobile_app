@@ -94,32 +94,64 @@ class NotificationPayload {
   final NotificationType type;
   final String? reservationId;
   final String? complaintId;
+  final String? title;
+  final String? body;
+  final Map<String, dynamic>? data;
 
   const NotificationPayload({
     required this.type,
     this.reservationId,
     this.complaintId,
+    this.title,
+    this.body,
+    this.data,
   });
 
-  factory NotificationPayload.fromFcmData(Map<String, dynamic> data) {
+  factory NotificationPayload.fromFcmData(
+    Map<String, dynamic> data, {
+    String? title,
+    String? body,
+  }) {
     return NotificationPayload(
       type: NotificationType.fromString(data['type']?.toString() ?? ''),
       reservationId: data['reservation_id']?.toString(),
       complaintId: data['complaint_id']?.toString(),
+      title: title,
+      body: body,
+      data: data,
     );
   }
 
   factory NotificationPayload.fromLocalPayload(String? raw) {
-    final parts = (raw ?? '').split('|');
-    return NotificationPayload(
-      type: NotificationType.fromString(parts.isNotEmpty ? parts[0] : ''),
-      reservationId: parts.length > 1 && parts[1].isNotEmpty ? parts[1] : null,
-      complaintId: parts.length > 2 && parts[2].isNotEmpty ? parts[2] : null,
-    );
+    if (raw == null || raw.isEmpty) {
+      return const NotificationPayload(type: NotificationType.general);
+    }
+
+    try {
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      return NotificationPayload(
+        type: NotificationType.fromString('${json['type'] ?? ''}'),
+        reservationId: json['reservation_id']?.toString(),
+        complaintId: json['complaint_id']?.toString(),
+        title: json['title']?.toString(),
+        body: json['body']?.toString(),
+        data: json['data'] is Map
+            ? Map<String, dynamic>.from(json['data'] as Map)
+            : null,
+      );
+    } catch (_) {
+      return const NotificationPayload(type: NotificationType.general);
+    }
   }
 
-  String toLocalPayload() =>
-      '${type.name}|${reservationId ?? ''}|${complaintId ?? ''}';
+  String toLocalPayload() => jsonEncode({
+        'type': type.name,
+        'reservation_id': reservationId,
+        'complaint_id': complaintId,
+        'title': title,
+        'body': body,
+        'data': data,
+      });
 }
 
 class NotificationModel extends BaseModel {
@@ -199,6 +231,9 @@ class NotificationModel extends BaseModel {
         type: type,
         reservationId: data?['reservation_id']?.toString(),
         complaintId: data?['complaint_id']?.toString(),
+        title: title,
+        body: body,
+        data: data,
       );
 
   NotificationModel copyWith({
