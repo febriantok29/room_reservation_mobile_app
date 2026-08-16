@@ -1192,11 +1192,19 @@ class _CreateReservationWizardPageState
 
       AppSnackBar.show(
         context,
-        'Reservasi berhasil dibuat! Menunggu persetujuan admin.',
+        _isAdmin
+            ? 'Reservasi berhasil dibuat dan langsung disetujui.'
+            : 'Reservasi berhasil dibuat! Menunggu persetujuan admin.',
         type: SnackBarType.success,
       );
 
-      Navigator.of(context).pop(true);
+      // Tutup keyboard & tunggu animasinya selesai sebelum pop. Jika pop terjadi
+      // saat keyboard masih menutup, viewport berubah saat halaman kalender
+      // (Syncfusion) di-build ulang → assertion crash.
+      FocusScope.of(context).unfocus();
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+
+      if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
 
