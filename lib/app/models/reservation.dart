@@ -11,6 +11,8 @@ class Reservation extends BaseModel {
   final DateTime? endTime;
   final int? visitorCount;
   final String? purpose;
+  final bool withSnack;
+  final bool withLunch;
 
   ReservationStatus status;
 
@@ -25,6 +27,8 @@ class Reservation extends BaseModel {
     this.endTime,
     this.visitorCount,
     this.purpose,
+    this.withSnack = false,
+    this.withLunch = false,
     this.status = ReservationStatus.pending,
     super.createdBy,
     super.updatedBy,
@@ -56,6 +60,8 @@ class Reservation extends BaseModel {
       endTime: DateTime.tryParse('${json['end_time'] ?? ''}')?.toLocal(),
       visitorCount: int.tryParse('${json['visitor_count'] ?? 0}') ?? 0,
       purpose: json['purpose']?.toString(),
+      withSnack: json['with_snack'] == true,
+      withLunch: json['with_lunch'] == true,
       status: ReservationStatusExtension.fromString(rawStatus),
       room: room,
       user: user,
@@ -104,6 +110,8 @@ class Reservation extends BaseModel {
     DateTime? endTime,
     int? visitorCount,
     String? purpose,
+    bool? withSnack,
+    bool? withLunch,
     ReservationStatus? status,
     Room? room,
     Profile? user,
@@ -120,6 +128,8 @@ class Reservation extends BaseModel {
       endTime: endTime ?? this.endTime,
       visitorCount: visitorCount ?? this.visitorCount,
       purpose: purpose ?? this.purpose,
+      withSnack: withSnack ?? this.withSnack,
+      withLunch: withLunch ?? this.withLunch,
       status: status ?? this.status,
       createdBy: createdBy ?? this.createdBy,
       updatedBy: updatedBy ?? this.updatedBy,
@@ -137,6 +147,8 @@ class Reservation extends BaseModel {
       'end_time': endTime?.toUtc().toIso8601String(),
       'purpose': purpose,
       'visitor_count': visitorCount,
+      'with_snack': withSnack,
+      'with_lunch': withLunch,
     };
   }
 
@@ -151,6 +163,8 @@ class Reservation extends BaseModel {
     }
     if (purpose != null) data['purpose'] = purpose;
     if (visitorCount != null) data['visitor_count'] = visitorCount;
+    data['with_snack'] = withSnack;
+    data['with_lunch'] = withLunch;
     return data;
   }
 }
