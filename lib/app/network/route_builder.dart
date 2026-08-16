@@ -128,6 +128,16 @@ class RouteBuilder extends ApiClient {
         }
       }
 
+      // Untuk error internal server (kode pendek dari s_error_logs),
+      // pastikan kode pelacakan selalu terlihat oleh user.
+      if (statusCode >= 500 &&
+          errorCode is String &&
+          errorCode.isNotEmpty &&
+          errorCode != 'INTERNAL_SERVER_ERROR' &&
+          !responseMessage.contains(errorCode)) {
+        responseMessage = '$responseMessage (Kode: $errorCode)';
+      }
+
       return responseMessage;
     }
 
