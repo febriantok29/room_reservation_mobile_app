@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:rapa_track_mobile_app/app/models/profile.dart';
 import 'package:rapa_track_mobile_app/app/models/requests/room_request.dart';
 import 'package:rapa_track_mobile_app/app/models/room.dart';
@@ -42,6 +45,10 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
   bool _isMaintenance = false;
   bool _isSubmitting = false;
   bool _isDeleting = false;
+
+  File? _imageFile;
+
+  bool _imageRemoved = false;
 
   final List<RoomFacility> _selectedFacilities = [];
 
@@ -116,9 +123,11 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                   _buildFloorSection(),
                   if (_floorError != null) _buildFloorError(),
                   const SizedBox(height: AppSizes.xl),
-                  if (_currentRoom?.imageUrl != null) ...[
+                  if (widget.editable || _currentRoom?.hasImage == true) ...[
                     const SectionLabel('Gambar Ruangan'),
-                    _buildImageSection(),
+                    widget.editable
+                        ? _buildImageEditorSection()
+                        : _buildImageSection(),
                     const SizedBox(height: AppSizes.xl),
                   ],
                   const SectionLabel('Fasilitas'),
@@ -146,6 +155,15 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                             : _confirmDelete,
                       ),
                     ],
+                    const SizedBox(height: AppSizes.xxl),
+                  ] else if (!_isNewRoom) ...[
+                    const SizedBox(height: AppSizes.xl),
+                    AppButton(
+                      text: 'Edit Ruangan',
+                      isFullWidth: true,
+                      icon: Icons.edit_outlined,
+                      onPressed: _navigateToEdit,
+                    ),
                     const SizedBox(height: AppSizes.xxl),
                   ],
                 ],
@@ -450,7 +468,10 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
 
   Future<bool> _checkDuplicateName(String name) async {
     try {
-      final rooms = await _service.getRoomList();
+      final rooms = await _service.getRoomList(
+        search: name,
+        perPage: 50,
+      );
       final lowerName = name.toLowerCase().trim();
       return rooms.any((room) {
         return room.name?.toLowerCase() == lowerName &&
@@ -516,10 +537,20 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
           ? 'memperbarui ruangan'
           : 'menambahkan ruangan';
 
+      String? roomId = _currentRoom?.id;
+
       if (_currentRoom != null) {
         await _service.updateRoom(roomId: _currentRoom.id!, request: request);
       } else {
-        await _service.createRoom(request: request);
+        final created = await _service.createRoom(request: request);
+        roomId = created.id;
+      }
+
+      if (_imageFile != null && roomId != null) {
+        await _service.uploadImage(
+          roomId: roomId,
+          image: _imageFile!,
+        );
       }
 
       if (mounted) {
@@ -543,6 +574,15 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     }
   }
 
+  Future<void> _navigateToEdit() async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => RoomDetailPage(user: widget.user, room: _currentRoom),
+      ),
+    );
+    if (changed == true && mounted) Navigator.of(context).pop(true);
+  }
+
   Future<void> _confirmDelete() async {
     final confirmed = await ConfirmDialog.show(
       context,
@@ -558,7 +598,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
     setState(() => _isDeleting = true);
 
     try {
-      await _service.deleteRoom(_currentRoom!.id!);
+      await _service.deleteRoom(_currentRoom.id!);
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
@@ -617,29 +657,281 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
   }
 
   Widget _buildImageSection() {
+    final url = _currentRoom?.imageUrl;
+
     return AspectRatio(
       aspectRatio: 16 / 9,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppSizes.radiusLg),
-        child: Image.network(
-          _currentRoom!.imageUrl,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          errorBuilder: (_, error, stackTrace) {
-            return Container(
-              color: AppColors.lightGrey,
-              width: double.infinity,
-              child: const Center(
-                child: Icon(
-                  Icons.broken_image,
-                  size: AppSizes.iconXl,
-                  color: AppColors.textDisabled,
+        child: url != null
+            ? Image.network(
+                url,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                errorBuilder: (_, error, stackTrace) {
+                  return _buildImagePlaceholder(
+                    Icons.broken_image,
+                    'Gambar tidak dapat dimuat',
+                  );
+                },
+              )
+            : _buildImagePlaceholder(
+                Icons.meeting_room_outlined,
+                'Belum ada foto ruangan',
+              ),
+      ),
+    );
+  }
+
+  Widget _buildImageEditorSection() {
+    final hasExistingImage =
+        !_imageRemoved && _currentRoom?.hasImage == true && !_isNewRoom;
+    final canDelete = _imageFile != null || hasExistingImage;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AspectRatio(
+          aspectRatio: 16 / 9,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _imageFile != null
+                    ? Image.file(
+                        _imageFile!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                      )
+                    : (hasExistingImage
+                          ? Image.network(
+                              _currentRoom!.imageUrl!,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              errorBuilder: (_, error, stackTrace) {
+                                return _buildImagePlaceholder(
+                                  Icons.broken_image,
+                                  'Gambar tidak dapat dimuat',
+                                );
+                              },
+                            )
+                          : _buildImagePlaceholder(
+                              Icons.meeting_room_outlined,
+                              'Belum ada foto ruangan',
+                            )),
+                if (canDelete)
+                  Positioned(
+                    top: AppSizes.sm,
+                    right: AppSizes.sm,
+                    child: GestureDetector(
+                      onTap: _isSubmitting ? null : _removeImage,
+                      child: Container(
+                        padding: const EdgeInsets.all(AppSizes.xs),
+                        decoration: const BoxDecoration(
+                          color: AppColors.error,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: AppSizes.iconXs,
+                          color: AppColors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSizes.md),
+        OutlinedButton.icon(
+          onPressed: _isSubmitting ? null : _showImageSourceSheet,
+          icon: const Icon(
+            Icons.photo_camera_outlined,
+            size: AppSizes.iconSm,
+          ),
+          label: const Text('Ganti Foto'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            side: const BorderSide(color: AppColors.border),
+            padding: const EdgeInsets.symmetric(vertical: AppSizes.sm),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showImageSourceSheet() async {
+    final hasExistingImage =
+        !_imageRemoved && _currentRoom?.hasImage == true && !_isNewRoom;
+    final canDelete = _imageFile != null || hasExistingImage;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppSizes.radiusLg)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSizes.md,
+            AppSizes.sm,
+            AppSizes.md,
+            AppSizes.md,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: AppSizes.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(AppSizes.radiusXxl),
+                  ),
                 ),
               ),
-            );
-          },
+              _buildSheetOption(
+                icon: Icons.camera_alt_outlined,
+                label: 'Ambil dari Kamera',
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              _buildSheetOption(
+                icon: Icons.photo_library_outlined,
+                label: 'Pilih dari Galeri',
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              if (canDelete)
+                _buildSheetOption(
+                  icon: Icons.delete_outline,
+                  label: 'Hapus Foto',
+                  color: AppColors.error,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _removeImage();
+                  },
+                ),
+              const SizedBox(height: AppSizes.xs),
+              OutlinedButton(
+                onPressed: () => Navigator.of(sheetContext).pop(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textSecondary,
+                  side: const BorderSide(color: AppColors.border),
+                  padding: const EdgeInsets.symmetric(vertical: AppSizes.md),
+                ),
+                child: const Text('Batal'),
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _buildSheetOption({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color? color,
+  }) {
+    final effectiveColor = color ?? AppColors.textPrimary;
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppSizes.sm,
+        vertical: AppSizes.xs,
+      ),
+      leading: Icon(icon, color: color ?? AppColors.primary),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontSize: AppSizes.fontSm,
+          fontWeight: FontWeight.w500,
+          color: effectiveColor,
+        ),
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+      ),
+      onTap: onTap,
+    );
+  }
+
+  Widget _buildImagePlaceholder(IconData icon, String label) {
+    return Container(
+      color: AppColors.lightGrey,
+      width: double.infinity,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: AppSizes.iconXl, color: AppColors.textDisabled),
+            const SizedBox(height: AppSizes.sm),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: AppSizes.fontXs,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 35,
+      );
+      if (picked != null && mounted) {
+        setState(() => _imageFile = File(picked.path));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _removeImage() async {
+    setState(() => _imageFile = null);
+
+    if (_isNewRoom) return;
+
+    if (!_currentRoom!.hasImage) return;
+
+    final roomId = _currentRoom.id;
+    if (roomId == null) return;
+
+    try {
+      await _service.deleteImage(roomId);
+      if (mounted) {
+        setState(() => _imageRemoved = true);
+        _showStatusDialog(
+          title: 'Berhasil',
+          message: 'Foto ruangan berhasil dihapus.',
+          icon: Icons.check_circle,
+          iconColor: AppColors.success,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showStatusDialog(
+          title: 'Gagal Menghapus Foto',
+          message: 'Terjadi kesalahan: $e',
+        );
+      }
+    }
   }
 }
