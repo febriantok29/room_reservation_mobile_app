@@ -3,6 +3,7 @@ import 'package:rapa_track_mobile_app/app/enums/reservation_status.dart';
 import 'package:rapa_track_mobile_app/app/models/base_model.dart';
 import 'package:rapa_track_mobile_app/app/models/profile.dart';
 import 'package:rapa_track_mobile_app/app/models/room.dart';
+import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
 
 class Reservation extends BaseModel {
   final String? userId;
@@ -143,8 +144,8 @@ class Reservation extends BaseModel {
   Map<String, dynamic> toCreateJson() {
     return {
       'room_id': roomId,
-      'start_time': startTime?.toUtc().toIso8601String(),
-      'end_time': endTime?.toUtc().toIso8601String(),
+      'start_time': DateFormatter.toIsoOrNull(startTime),
+      'end_time': DateFormatter.toIsoOrNull(endTime),
       'purpose': purpose,
       'visitor_count': visitorCount,
       'with_snack': withSnack,
@@ -155,12 +156,8 @@ class Reservation extends BaseModel {
   Map<String, dynamic> toUpdateJson() {
     final data = <String, dynamic>{};
     if (roomId != null) data['room_id'] = roomId;
-    if (startTime != null) {
-      data['start_time'] = startTime!.toUtc().toIso8601String();
-    }
-    if (endTime != null) {
-      data['end_time'] = endTime!.toUtc().toIso8601String();
-    }
+    if (startTime != null) data['start_time'] = DateFormatter.toIsoOrNull(startTime);
+    if (endTime != null) data['end_time'] = DateFormatter.toIsoOrNull(endTime);
     if (purpose != null) data['purpose'] = purpose;
     if (visitorCount != null) data['visitor_count'] = visitorCount;
     data['with_snack'] = withSnack;

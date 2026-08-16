@@ -5,6 +5,7 @@ import 'package:rapa_track_mobile_app/app/models/reservation.dart';
 import 'package:rapa_track_mobile_app/app/models/room.dart';
 import 'package:rapa_track_mobile_app/app/network/route_builder.dart';
 import 'package:rapa_track_mobile_app/app/services/data_list_service.dart';
+import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
 
 class ReservationService extends DataListService<Reservation> {
   @override
@@ -85,8 +86,8 @@ class ReservationService extends DataListService<Reservation> {
   }) async {
     final body = <String, dynamic>{
       'room_id': roomId,
-      'start_time': startTime.toUtc().toIso8601String(),
-      'end_time': endTime.toUtc().toIso8601String(),
+      'start_time': DateFormatter.toIso(startTime),
+      'end_time': DateFormatter.toIso(endTime),
       'purpose': purpose,
       'visitor_count': visitorCount,
       if (userId != null) 'user_id': userId,
@@ -118,8 +119,8 @@ class ReservationService extends DataListService<Reservation> {
   }) async {
     final body = <String, dynamic>{
       if (roomId != null) 'room_id': roomId,
-      if (startTime != null) 'start_time': startTime.toUtc().toIso8601String(),
-      if (endTime != null) 'end_time': endTime.toUtc().toIso8601String(),
+      if (startTime != null) 'start_time': DateFormatter.toIsoOrNull(startTime),
+      if (endTime != null) 'end_time': DateFormatter.toIsoOrNull(endTime),
       if (purpose != null) 'purpose': purpose,
       if (visitorCount != null) 'visitor_count': visitorCount,
       if (withSnack != null) 'with_snack': withSnack,

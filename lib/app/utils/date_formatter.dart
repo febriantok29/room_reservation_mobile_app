@@ -124,6 +124,11 @@ class DateFormatter {
     return date.toUtc().toIso8601String();
   }
 
+  /// Format DateTime nullable ke ISO string (null tetap null)
+  static String? toIsoOrNull(DateTime? date) {
+    return date == null ? null : toIso(date);
+  }
+
   static String formatTimeOfDay(TimeOfDay time) {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
