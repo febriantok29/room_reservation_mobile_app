@@ -9,6 +9,8 @@ enum NotificationType {
   reservationRejected,
   reservationCancelled,
   reservationReminder,
+  reservationSubmitted,
+  reservationCompleted,
   complaintResponse,
   general;
 
@@ -24,6 +26,10 @@ enum NotificationType {
         return 'Reservasi Dibatalkan';
       case NotificationType.reservationReminder:
         return 'Pengingat Reservasi';
+      case NotificationType.reservationSubmitted:
+        return 'Reservasi Diajukan';
+      case NotificationType.reservationCompleted:
+        return 'Reservasi Selesai';
       case NotificationType.complaintResponse:
         return 'Tanggapan Keluhan';
       case NotificationType.general:
@@ -43,6 +49,10 @@ enum NotificationType {
         return Icons.event_busy;
       case NotificationType.reservationReminder:
         return Icons.notifications_active;
+      case NotificationType.reservationSubmitted:
+        return Icons.send;
+      case NotificationType.reservationCompleted:
+        return Icons.task_alt;
       case NotificationType.complaintResponse:
         return Icons.feedback;
       case NotificationType.general:
@@ -62,6 +72,10 @@ enum NotificationType {
         return Colors.orange;
       case NotificationType.reservationReminder:
         return Colors.blue;
+      case NotificationType.reservationSubmitted:
+        return Colors.indigo;
+      case NotificationType.reservationCompleted:
+        return Colors.teal;
       case NotificationType.complaintResponse:
         return Colors.purple;
       case NotificationType.general:
@@ -82,6 +96,10 @@ enum NotificationType {
         return NotificationType.reservationCancelled;
       case 'reservation_reminder':
         return NotificationType.reservationReminder;
+      case 'reservation_submitted':
+        return NotificationType.reservationSubmitted;
+      case 'reservation_completed':
+        return NotificationType.reservationCompleted;
       case 'complaint_response':
         return NotificationType.complaintResponse;
       default:
@@ -195,6 +213,22 @@ class NotificationModel extends BaseModel {
       } catch (_) {
         data = null;
       }
+    }
+
+    // ponytail: backend format() flattens data fields to top-level, no 'data' key
+    if (data == null) {
+      final flat = <String, dynamic>{};
+      for (final key in [
+        'reservation_id',
+        'complaint_id',
+        'room_name',
+        'status',
+        'start_time',
+        'end_time',
+      ]) {
+        if (json[key] != null) flat[key] = json[key];
+      }
+      if (flat.isNotEmpty) data = flat;
     }
 
     final notification = NotificationModel(
