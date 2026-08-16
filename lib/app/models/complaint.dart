@@ -77,7 +77,7 @@ class Complaint extends BaseModel {
   final String? facilityId;
   final String? title;
   final String? description;
-  final String? photoPath;
+  final String? photoUrl;
   final ComplaintStatus status;
   final String? resolutionNotes;
   final DateTime? resolvedAt;
@@ -97,7 +97,7 @@ class Complaint extends BaseModel {
     this.facilityId,
     this.title,
     this.description,
-    this.photoPath,
+    this.photoUrl,
     this.status = ComplaintStatus.open,
     this.resolutionNotes,
     this.resolvedAt,
@@ -150,7 +150,7 @@ class Complaint extends BaseModel {
       facilityId: json['facility_id']?.toString(),
       title: json['title']?.toString(),
       description: json['description']?.toString(),
-      photoPath: json['photo_path']?.toString(),
+      photoUrl: json['photo_url']?.toString(),
       status: ComplaintStatus.fromString(rawStatus),
       resolutionNotes: json['resolution_notes']?.toString(),
       resolvedAt: DateTime.tryParse('${json['resolved_at'] ?? ''}')?.toLocal(),
