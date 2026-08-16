@@ -4,6 +4,7 @@ import 'package:rapa_track_mobile_app/app/models/requests/room_request.dart';
 import 'package:rapa_track_mobile_app/app/models/room.dart';
 import 'package:rapa_track_mobile_app/app/network/route_builder.dart';
 import 'package:rapa_track_mobile_app/app/services/data_list_service.dart';
+import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
 
 class RoomService extends DataListService<Room> {
   @override
@@ -27,8 +28,8 @@ class RoomService extends DataListService<Room> {
       if (floor != null) 'floor': floor,
       if (minCapacity != null) 'min_capacity': minCapacity,
       if (availableOnly != null) 'available_only': availableOnly,
-      if (startTime != null) 'start_time': startTime.toUtc().toIso8601String(),
-      if (endTime != null) 'end_time': endTime.toUtc().toIso8601String(),
+      if (startTime != null) 'start_time': DateFormatter.toIsoOrNull(startTime),
+      if (endTime != null) 'end_time': DateFormatter.toIsoOrNull(endTime),
       if (facilityIds != null && facilityIds.isNotEmpty)
         'facility_ids': facilityIds,
       if (perPage != null) 'per_page': perPage,
