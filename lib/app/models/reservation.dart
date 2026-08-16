@@ -88,6 +88,14 @@ class Reservation extends BaseModel {
   String get statusDescription => status.description;
   String get statusColorHex => status.colorHex;
 
+  bool canBeRescheduledBy(Profile currentUser) {
+    final isOwner = userId != null && userId == currentUser.id;
+    if (!isOwner && !currentUser.isAdmin) return false;
+    if (status != ReservationStatus.pending) return false;
+    if (startTime == null) return false;
+    return startTime!.isAfter(DateTime.now());
+  }
+
   Reservation copyWith({
     String? id,
     String? userId,
