@@ -76,11 +76,8 @@ class _CreateReservationWizardPageState
     super.initState();
 
     if (widget.initialDate != null) {
-      _selectedDate = DateTime(
-        widget.initialDate!.year,
-        widget.initialDate!.month,
-        widget.initialDate!.day,
-      );
+      // Skip forward if the incoming date lands on a weekend (booking is Mon-Fri only).
+      _selectedDate = _nextWeekday(widget.initialDate!);
     }
 
     if (widget.initialRoom != null) {
@@ -607,13 +604,13 @@ class _CreateReservationWizardPageState
                       top: Radius.circular(AppSizes.radiusSm),
                     ),
                   ),
-                  child: room.imageUrl.isNotEmpty
+                  child: room.hasImage
                       ? ClipRRect(
                           borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(AppSizes.radiusSm),
                           ),
                           child: Image.network(
-                            room.imageUrl,
+                            room.imageUrl!,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) =>
                                 _buildRoomPlaceholder(),
@@ -1186,6 +1183,23 @@ class _CreateReservationWizardPageState
           );
           return false;
         }
+        if (_isWeekend(_selectedDate!)) {
+          AppSnackBar.show(
+            context,
+            'Pemesanan hanya tersedia Senin-Jumat',
+            type: SnackBarType.error,
+          );
+          return false;
+        }
+        if (_minuteOfDay(_startTime!) < _openMinute ||
+            _minuteOfDay(_endTime!) > _closeMinute) {
+          AppSnackBar.show(
+            context,
+            'Pemesanan hanya tersedia pukul 08:00-17:00',
+            type: SnackBarType.error,
+          );
+          return false;
+        }
         return true;
 
       case 1:
@@ -1265,6 +1279,23 @@ class _CreateReservationWizardPageState
     }
   }
 
+  // Operating window: bookings only Mon-Fri, 08:00-17:00 (mirrors backend CSP constraints).
+  static const int _openMinute = 8 * 60; // 08:00
+  static const int _closeMinute = 17 * 60; // 17:00
+
+  bool _isWeekend(DateTime d) =>
+      d.weekday == DateTime.saturday || d.weekday == DateTime.sunday;
+
+  DateTime _nextWeekday(DateTime d) {
+    var day = DateTime(d.year, d.month, d.day);
+    while (_isWeekend(day)) {
+      day = day.add(const Duration(days: 1));
+    }
+    return day;
+  }
+
+  int _minuteOfDay(TimeOfDay t) => t.hour * 60 + t.minute;
+
   Future<void> _selectDate() async {
     final now = DateTime.now();
     final firstDate = DateTime(now.year, now.month, now.day);
@@ -1272,9 +1303,10 @@ class _CreateReservationWizardPageState
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate ?? firstDate,
+      initialDate: _nextWeekday(_selectedDate ?? firstDate),
       firstDate: firstDate,
       lastDate: lastDate,
+      selectableDayPredicate: (d) => !_isWeekend(d),
       locale: const Locale('id', 'ID'),
       helpText: 'Pilih Tanggal',
       cancelText: 'Batal',
@@ -1335,6 +1367,17 @@ class _CreateReservationWizardPageState
         }
       }
 
+      final startMod = _minuteOfDay(picked);
+      if (startMod < _openMinute || startMod >= _closeMinute) {
+        if (!mounted) return;
+        AppSnackBar.show(
+          context,
+          'Pemesanan hanya tersedia pukul 08:00-17:00',
+          type: SnackBarType.error,
+        );
+        return;
+      }
+
       setState(() {
         _startTime = picked;
         if (_endTime != null && !_isTimeAfter(_endTime!, picked)) {
@@ -1378,6 +1421,16 @@ class _CreateReservationWizardPageState
         AppSnackBar.show(
           context,
           'Waktu selesai harus setelah waktu mulai',
+          type: SnackBarType.error,
+        );
+        return;
+      }
+
+      if (_minuteOfDay(picked) > _closeMinute) {
+        if (!mounted) return;
+        AppSnackBar.show(
+          context,
+          'Pemesanan hanya tersedia pukul 08:00-17:00',
           type: SnackBarType.error,
         );
         return;

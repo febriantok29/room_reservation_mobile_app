@@ -216,6 +216,16 @@ class _UserSelectorSectionState extends State<UserSelectorSection> {
                             ),
                           ),
                         ],
+                        if (user.divisionLabel != '-') ...[
+                          const SizedBox(height: 4.0),
+                          Text(
+                            user.divisionLabel,
+                            style: TextStyle(
+                              fontSize: 14.0,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

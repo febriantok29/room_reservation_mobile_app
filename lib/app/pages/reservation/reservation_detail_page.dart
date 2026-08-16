@@ -201,10 +201,22 @@ class _ReservationDetailPageState extends State<ReservationDetailPage> {
             _buildRow(Icons.location_on_outlined, 'Lokasi', r.room!.location),
           _buildRow(Icons.schedule_outlined, 'Waktu', r.formattedRange),
           _buildRow(Icons.group_outlined, 'Jumlah Tamu', '${r.visitorCount ?? 0} orang'),
+          if (r.withSnack || r.withLunch)
+            _buildRow(
+              Icons.restaurant_outlined,
+              'Fasilitas Tambahan',
+              [
+                if (r.withSnack) 'Snack',
+                if (r.withLunch) 'Makan Siang',
+              ].join(', '),
+            ),
           if (r.purpose != null && r.purpose!.isNotEmpty)
             _buildRow(Icons.description_outlined, 'Keperluan', r.purpose!),
-          if (r.user != null)
+          if (r.user != null) ...[
             _buildRow(Icons.person_outline, 'Pemohon', r.user!.name),
+            if (r.user!.divisionLabel != '-')
+              _buildRow(Icons.apartment_outlined, 'Divisi', r.user!.divisionLabel),
+          ],
           if (r.createdAt != null)
             _buildRow(
               Icons.access_time_outlined,
