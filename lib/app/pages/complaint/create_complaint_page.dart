@@ -797,9 +797,7 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
       final picker = ImagePicker();
       final picked = await picker.pickImage(
         source: source,
-        maxWidth: 1920,
-        maxHeight: 1080,
-        imageQuality: 85,
+        imageQuality: 35,
       );
       if (picked != null && mounted) {
         setState(() => _photoFile = File(picked.path));

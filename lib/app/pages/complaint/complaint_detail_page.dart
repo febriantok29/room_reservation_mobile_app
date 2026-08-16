@@ -237,16 +237,19 @@ class _ComplaintDetailPageState extends State<ComplaintDetailPage> {
               'Reservasi',
               c.reservation!.formattedRange,
             ),
-          if (c.reporter != null)
+          if (c.reporter != null) ...[
             _buildRow(Icons.person_outline, 'Pelapor', c.reporter!.name),
+            if (c.reporter!.divisionLabel != '-')
+              _buildRow(Icons.apartment_outlined, 'Divisi', c.reporter!.divisionLabel),
+          ],
           if (c.createdAt != null)
             _buildRow(
               Icons.access_time_outlined,
               'Dilaporkan',
               '${c.createdAt!.day}/${c.createdAt!.month}/${c.createdAt!.year}',
-              isLast: c.photoPath == null,
+              isLast: c.photoUrl == null,
             ),
-          if (c.photoPath != null)
+          if (c.photoUrl != null)
             _buildRow(
               Icons.photo_outlined,
               'Foto',
