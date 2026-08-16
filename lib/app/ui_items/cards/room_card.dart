@@ -25,21 +25,33 @@ class RoomCard extends StatelessWidget {
             height: 160,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppSizes.radiusXs),
-              image: DecorationImage(
-                image: NetworkImage(room.imageUrl),
-                fit: BoxFit.cover,
-                onError: (_, __) => Container(
-                  color: AppColors.shimmer,
-                  child: const Center(
+              image: room.hasImage
+                  ? DecorationImage(
+                      image: NetworkImage(room.imageUrl!),
+                      fit: BoxFit.cover,
+                      onError: (_, __) => Container(
+                        color: AppColors.shimmer,
+                        child: const Center(
+                          child: Icon(
+                            Icons.image_not_supported_outlined,
+                            color: AppColors.textSecondary,
+                            size: AppSizes.iconLg,
+                          ),
+                        ),
+                      ),
+                    )
+                  : null,
+              color: room.hasImage ? null : AppColors.shimmer,
+            ),
+            child: room.hasImage
+                ? null
+                : const Center(
                     child: Icon(
-                      Icons.image_not_supported_outlined,
+                      Icons.meeting_room_outlined,
                       color: AppColors.textSecondary,
                       size: AppSizes.iconLg,
                     ),
                   ),
-                ),
-              ),
-            ),
           ),
           const SizedBox(height: AppSizes.md),
 
