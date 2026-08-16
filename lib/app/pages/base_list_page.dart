@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/repositories/data_list_repository.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/app_grid_layout.dart';
 import 'package:rapa_track_mobile_app/app/ui_items/filter_icon_button.dart';
 
 /// Generic base page untuk list dengan infinite scroll dan dynamic filter
@@ -39,6 +40,13 @@ class BaseListPage<T> extends StatefulWidget {
   })?
   onFetchData;
 
+  /// Grid item builder. Jika di-set, konten dirender sebagai grid
+  /// (via [AppGridLayout]) alih-alih list vertikal.
+  final Widget Function(T item)? gridItemBuilder;
+
+  /// Konfigurasi grid: jumlah kolom.
+  final int gridCrossAxisCount;
+
   const BaseListPage({
     super.key,
     required this.pageTitle,
@@ -52,6 +60,8 @@ class BaseListPage<T> extends StatefulWidget {
     this.onFilterPressed,
     this.activeFilterCount = 0,
     this.onFetchData,
+    this.gridItemBuilder,
+    this.gridCrossAxisCount = 2,
   });
 
   @override
@@ -63,6 +73,14 @@ class _BaseListPageState<T> extends State<BaseListPage<T>> {
   String? _errorMessage;
 
   Map<String, dynamic>? _currentFilters;
+
+  bool _showGrid = true;
+
+  bool get _canToggleGrid => widget.gridItemBuilder != null;
+
+  void _toggleViewMode() {
+    setState(() => _showGrid = !_showGrid);
+  }
 
   @override
   void initState() {
@@ -143,6 +161,15 @@ class _BaseListPageState<T> extends State<BaseListPage<T>> {
         foregroundColor: AppColors.white,
         elevation: 0,
         actions: [
+          if (_canToggleGrid)
+            IconButton(
+              icon: Icon(
+                _showGrid ? Icons.view_list_outlined : Icons.grid_view_outlined,
+                color: AppColors.white,
+              ),
+              tooltip: _showGrid ? 'Tampilan List' : 'Tampilan Grid',
+              onPressed: _toggleViewMode,
+            ),
           if (widget.onFilterPressed != null)
             FilterIconButton(
               activeCount: widget.activeFilterCount,
@@ -151,13 +178,7 @@ class _BaseListPageState<T> extends State<BaseListPage<T>> {
         ],
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [AppColors.primary.withAlpha(26), AppColors.white],
-          ),
-        ),
+        color: AppColors.background,
         child: Column(
           children: [
             if (widget.customFilterBuilder != null) _buildFilterSection(),
@@ -264,55 +285,77 @@ class _BaseListPageState<T> extends State<BaseListPage<T>> {
     // List content
     return RefreshIndicator(
       onRefresh: () => _fetchData(filters: _currentFilters, isRefresh: true),
-      child: ListView.separated(
-        padding: const EdgeInsets.all(AppSizes.lg),
-        itemCount: _buildListItemCount(),
-        separatorBuilder: (_, __) => const SizedBox(height: AppSizes.md),
-        itemBuilder: (context, index) {
-          // Load more trigger (pada item terakhir)
-          if (index == widget.repository.data.length) {
-            if (_errorMessage != null) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSizes.lg),
-                child: Column(
-                  children: [
-                    Text(
-                      'Gagal memuat data selanjutnya',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: AppSizes.sm),
-                    TextButton(
-                      onPressed: () => _fetchData(
-                        filters: _currentFilters,
-                        isRefresh: false,
-                      ),
-                      child: const Text('Coba Lagi'),
-                    ),
-                  ],
-                ),
-              );
-            }
+      child: (_showGrid && widget.gridItemBuilder != null)
+          ? _buildGridContent()
+          : ListView.separated(
+              padding: const EdgeInsets.all(AppSizes.lg),
+              itemCount: _buildListItemCount(),
+              separatorBuilder: (_, __) => const SizedBox(height: AppSizes.md),
+              itemBuilder: (context, index) {
+                // Load more trigger (pada item terakhir)
+                if (index == widget.repository.data.length) {
+                  return _buildLoadMoreFooter();
+                }
 
-            // Trigger load more via callback bukan pixel checking
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted &&
-                  !widget.repository.isFetching &&
-                  widget.repository.hasMoreData) {
-                _fetchData(filters: _currentFilters, isRefresh: false);
-              }
-            });
+                final item = widget.repository.data[index];
+                return widget.itemBuilder(item);
+              },
+            ),
+    );
+  }
 
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSizes.lg),
-              child: Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+  Widget _buildGridContent() {
+    final itemCount = widget.repository.data.length;
+    final hasFooter = widget.repository.hasMoreData || _errorMessage != null;
+
+    return AppGridLayout(
+      crossAxisCount: widget.gridCrossAxisCount,
+      itemCount: itemCount,
+      padding: const EdgeInsets.all(AppSizes.lg),
+      footer: hasFooter ? _buildLoadMoreFooter() : null,
+      itemBuilder: (context, index) {
+        final item = widget.repository.data[index];
+        return widget.gridItemBuilder!(item);
+      },
+    );
+  }
+
+  Widget _buildLoadMoreFooter() {
+    if (_errorMessage != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSizes.lg),
+        child: Column(
+          children: [
+            Text(
+              'Gagal memuat data selanjutnya',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: AppSizes.sm),
+            TextButton(
+              onPressed: () => _fetchData(
+                filters: _currentFilters,
+                isRefresh: false,
               ),
-            );
-          }
+              child: const Text('Coba Lagi'),
+            ),
+          ],
+        ),
+      );
+    }
 
-          final item = widget.repository.data[index];
-          return widget.itemBuilder(item);
-        },
+    // Trigger load more via callback bukan pixel checking
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          !widget.repository.isFetching &&
+          widget.repository.hasMoreData) {
+        _fetchData(filters: _currentFilters, isRefresh: false);
+      }
+    });
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSizes.lg),
+      child: Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
       ),
     );
   }

@@ -348,15 +348,13 @@ class SoftTextField extends StatelessWidget {
             helperText: helperText,
             counterText: '',
             filled: true,
-            fillColor: readOnly || !enabled
-                ? AppColors.background
-                : AppColors.white,
+            fillColor: AppColors.white,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: AppSizes.lg,
               vertical: AppSizes.md,
             ),
-            border: _border(),
-            enabledBorder: _border(),
+            border: _border(color: AppColors.border),
+            enabledBorder: _border(color: AppColors.border),
             focusedBorder: _border(color: AppColors.primary, width: 1.5),
             errorBorder: _border(color: AppColors.error),
             focusedErrorBorder: _border(color: AppColors.error, width: 1.5),
