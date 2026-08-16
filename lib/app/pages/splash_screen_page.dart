@@ -17,9 +17,13 @@ class SplashScreenPage extends StatelessWidget {
             child: ListView(
               shrinkWrap: true,
               children: [
-                AspectRatio(
-                  aspectRatio: 11 / 3,
-                  child: Icon(Icons.meeting_room, size: 48),
+                SizedBox(
+                  width: 140,
+                  height: 140,
+                  child: Image.asset(
+                    'assets/bi/logo.jpg',
+                    fit: BoxFit.contain,
+                  ),
                 ),
                 const Center(
                   child: Padding(

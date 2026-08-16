@@ -47,6 +47,7 @@ class _RoomReservationAppState extends State<RoomReservationApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'RapaTrack',
       navigatorKey: NavigationHandler.navigatorKey,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
