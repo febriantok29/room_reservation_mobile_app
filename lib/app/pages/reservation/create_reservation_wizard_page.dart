@@ -302,17 +302,27 @@ class _CreateReservationWizardPageState
                 ),
                 const SizedBox(height: AppSizes.xs),
                 Text(
-                  _selectedUser?.name ?? 'Pilih Karyawan',
+                  _selectedUser?.name ?? 'Diri Sendiri (${widget.currentUser.name})',
                   style: TextStyle(
                     fontSize: AppSizes.fontMd,
                     fontWeight: _selectedUser != null
                         ? FontWeight.w600
-                        : FontWeight.normal,
+                        : FontWeight.w500,
                     color: _selectedUser != null
                         ? AppColors.textPrimary
-                        : AppColors.textDisabled,
+                        : AppColors.textSecondary,
                   ),
                 ),
+                if (_selectedUser == null) ...[
+                  const SizedBox(height: AppSizes.xxs),
+                  const Text(
+                    'Ketuk untuk reservasi atas nama karyawan lain',
+                    style: TextStyle(
+                      fontSize: AppSizes.fontXs,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1100,14 +1110,6 @@ class _CreateReservationWizardPageState
           AppSnackBar.show(
             context,
             'Silakan pilih waktu selesai',
-            type: SnackBarType.error,
-          );
-          return false;
-        }
-        if (_isAdmin && _selectedUser == null) {
-          AppSnackBar.show(
-            context,
-            'Silakan pilih karyawan untuk reservasi',
             type: SnackBarType.error,
           );
           return false;
