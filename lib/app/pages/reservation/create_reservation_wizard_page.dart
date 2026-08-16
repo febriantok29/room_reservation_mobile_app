@@ -502,224 +502,93 @@ class _CreateReservationWizardPageState
   }
 
   Widget _buildStep2RoomSelection() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(AppSizes.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Pilih Ruangan',
-                  style: TextStyle(
-                    fontSize: AppSizes.fontXxl,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: AppSizes.sm),
-                const Text(
-                  'Ruangan tersedia untuk waktu yang dipilih',
-                  style: TextStyle(
-                    fontSize: AppSizes.fontSm,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSizes.lg,
+            AppSizes.lg,
+            AppSizes.lg,
+            AppSizes.sm,
           ),
-          Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _selectedRoom == null
-                    ? _buildRoomSelectorPlaceholder()
-                    : _buildSelectedRoomCard(),
+              const Text(
+                'Pilih Ruangan',
+                style: TextStyle(
+                  fontSize: AppSizes.fontXxl,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: AppSizes.xs),
+              const Text(
+                'Ketuk ruangan yang tersedia untuk memilih',
+                style: TextStyle(
+                  fontSize: AppSizes.fontSm,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ],
           ),
-        ],
-      ),
+        ),
+        if (_startDateTime != null && _endDateTime != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSizes.lg,
+              0,
+              AppSizes.lg,
+              AppSizes.sm,
+            ),
+            child: _buildStep2SummaryBar(),
+          ),
+        Expanded(
+          child: RoomSelectorSection(
+            startDateTime: _startDateTime,
+            endDateTime: _endDateTime,
+            selectedRoomId: _selectedRoom?.id,
+            onRoomSelected: (room) => setState(() => _selectedRoom = room),
+            expand: true,
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildRoomSelectorPlaceholder() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildStep2SummaryBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSizes.md,
+        vertical: AppSizes.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.info.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+        border: Border.all(color: AppColors.info.withValues(alpha: 0.3)),
+      ),
+      child: Row(
         children: [
           const Icon(
-            Icons.meeting_room_outlined,
-            size: 80,
-            color: AppColors.lightGrey,
+            Icons.event_available,
+            size: AppSizes.iconSm,
+            color: AppColors.info,
           ),
-          const SizedBox(height: AppSizes.lg),
-          const Text(
-            'Belum ada ruangan dipilih',
-            style: TextStyle(
-              fontSize: AppSizes.fontLg,
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: AppSizes.sm),
-          const Text(
-            'Ketuk tombol di bawah untuk memilih',
-            style: TextStyle(fontSize: AppSizes.fontSm, color: AppColors.grey),
-          ),
-          const SizedBox(height: AppSizes.xl),
-          ElevatedButton.icon(
-            onPressed: _showRoomSelector,
-            icon: const Icon(Icons.add),
-            label: const Text('Pilih Ruangan'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSizes.xl,
-                vertical: AppSizes.md,
+          const SizedBox(width: AppSizes.sm),
+          Expanded(
+            child: Text(
+              '${DateFormatter.shortDate(_selectedDate!)} • '
+              '${_formatTime(_startTime!)} - ${_formatTime(_endTime!)}',
+              style: const TextStyle(
+                fontSize: AppSizes.fontXs,
+                color: AppColors.info,
+                fontWeight: FontWeight.w600,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSelectedRoomCard() {
-    final room = _selectedRoom!;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg),
-      child: Column(
-        children: [
-          Card(
-            elevation: AppSizes.elevationMd,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  height: 160,
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(AppSizes.radiusSm),
-                    ),
-                  ),
-                  child: room.hasImage
-                      ? ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(AppSizes.radiusSm),
-                          ),
-                          child: Image.network(
-                            room.imageUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                _buildRoomPlaceholder(),
-                          ),
-                        )
-                      : _buildRoomPlaceholder(),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(AppSizes.lg),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        room.name ?? 'Ruangan',
-                        style: const TextStyle(
-                          fontSize: AppSizes.fontXl,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: AppSizes.sm),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.location_on,
-                            size: AppSizes.iconXs,
-                            color: AppColors.textSecondary,
-                          ),
-                          const SizedBox(width: AppSizes.xs),
-                          Text(
-                            room.location,
-                            style: const TextStyle(
-                              fontSize: AppSizes.fontSm,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(width: AppSizes.lg),
-                          const Icon(
-                            Icons.people,
-                            size: AppSizes.iconXs,
-                            color: AppColors.textSecondary,
-                          ),
-                          const SizedBox(width: AppSizes.xs),
-                          Text(
-                            'Kapasitas: ${room.capacity ?? 0} orang',
-                            style: const TextStyle(
-                              fontSize: AppSizes.fontSm,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (room.description != null &&
-                          room.description!.isNotEmpty) ...[
-                        const SizedBox(height: AppSizes.md),
-                        Text(
-                          room.description!,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.darkGrey,
-                          ),
-                        ),
-                      ],
-                      if (room.facilities != null &&
-                          room.facilities!.isNotEmpty) ...[
-                        const SizedBox(height: AppSizes.md),
-                        Wrap(
-                          spacing: AppSizes.sm,
-                          runSpacing: AppSizes.sm,
-                          children: room.facilities!
-                              .map(
-                                (f) => Chip(
-                                  label: Text(
-                                    f.name,
-                                    style: const TextStyle(fontSize: 11),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: AppSizes.sm,
-                                    vertical: 0,
-                                  ),
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSizes.lg),
-          OutlinedButton.icon(
-            onPressed: _showRoomSelector,
-            icon: const Icon(Icons.swap_horiz),
-            label: const Text('Ganti Ruangan'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRoomPlaceholder() {
-    return const Center(
-      child: Icon(
-        Icons.meeting_room,
-        size: AppSizes.avatarXl,
-        color: AppColors.textDisabled,
       ),
     );
   }
@@ -746,7 +615,7 @@ class _CreateReservationWizardPageState
             ),
           ),
           const SizedBox(height: AppSizes.xl),
-          _buildPurposeField(),
+          _buildPurposeCard(),
           const SizedBox(height: AppSizes.lg),
           _buildVisitorCountCard(),
           const SizedBox(height: AppSizes.lg),
@@ -756,25 +625,42 @@ class _CreateReservationWizardPageState
     );
   }
 
-  Widget _buildPurposeField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionLabel('Tujuan Rapat'),
-        SoftTextField(
-          controller: _purposeController,
-          hint: 'Contoh: Rapat koordinasi tim marketing Q2 2026',
-          maxLines: 4,
-          maxLength: 500,
-          textCapitalization: TextCapitalization.sentences,
-          helperText: 'Jelaskan tujuan penggunaan ruangan',
-        ),
-      ],
+  Widget _buildPurposeCard() {
+    return SoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.description_outlined, color: AppColors.primary),
+              SizedBox(width: AppSizes.md),
+              Text(
+                'Tujuan Rapat',
+                style: TextStyle(
+                  fontSize: AppSizes.fontMd,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSizes.md),
+          SoftTextField(
+            controller: _purposeController,
+            hint: 'Contoh: Rapat koordinasi tim marketing Q2 2026',
+            maxLines: 3,
+            maxLength: 500,
+            textCapitalization: TextCapitalization.sentences,
+            helperText: 'Jelaskan tujuan penggunaan ruangan',
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildVisitorCountCard() {
     final maxCapacity = _selectedRoom?.capacity ?? 100;
+    final exceedsCapacity = _selectedRoom?.capacity != null &&
+        _visitorCount > _selectedRoom!.capacity!;
 
     return SoftCard(
       child: Column(
@@ -793,6 +679,16 @@ class _CreateReservationWizardPageState
               ),
             ],
           ),
+          if (_selectedRoom?.capacity != null) ...[
+            const SizedBox(height: AppSizes.xs),
+            Text(
+              'Kapasitas ruangan: ${_selectedRoom!.capacity} orang',
+              style: const TextStyle(
+                fontSize: AppSizes.fontXs,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
           const SizedBox(height: AppSizes.lg),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -858,15 +754,33 @@ class _CreateReservationWizardPageState
               ),
             ],
           ),
-          if (_selectedRoom?.capacity != null) ...[
+          if (exceedsCapacity) ...[
             const SizedBox(height: AppSizes.sm),
-            Center(
-              child: Text(
-                'Kapasitas maksimal: ${_selectedRoom!.capacity} orang',
-                style: const TextStyle(
-                  fontSize: AppSizes.fontXs,
-                  color: AppColors.textSecondary,
-                ),
+            Container(
+              padding: const EdgeInsets.all(AppSizes.sm),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppSizes.radiusSm),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: AppColors.error,
+                    size: AppSizes.iconSm,
+                  ),
+                  const SizedBox(width: AppSizes.sm),
+                  Expanded(
+                    child: Text(
+                      'Melebihi kapasitas ruangan (${_selectedRoom!.capacity} orang)',
+                      style: const TextStyle(
+                        fontSize: AppSizes.fontXs,
+                        color: AppColors.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -876,32 +790,47 @@ class _CreateReservationWizardPageState
   }
 
   Widget _buildMealOptionsCard() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionLabel('Kebutuhan Konsumsi'),
-        Row(
-          children: [
-            Expanded(
-              child: CheckCard(
-                label: 'Snack',
-                icon: Icons.cookie_outlined,
-                isSelected: _withSnack,
-                onTap: () => setState(() => _withSnack = !_withSnack),
+    return SoftCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.restaurant_menu, color: AppColors.primary),
+              SizedBox(width: AppSizes.md),
+              Text(
+                'Kebutuhan Konsumsi',
+                style: TextStyle(
+                  fontSize: AppSizes.fontMd,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-            const SizedBox(width: AppSizes.md),
-            Expanded(
-              child: CheckCard(
-                label: 'Makan Siang',
-                icon: Icons.lunch_dining_outlined,
-                isSelected: _withLunch,
-                onTap: () => setState(() => _withLunch = !_withLunch),
+            ],
+          ),
+          const SizedBox(height: AppSizes.md),
+          Row(
+            children: [
+              Expanded(
+                child: CheckCard(
+                  label: 'Snack',
+                  icon: Icons.cookie_outlined,
+                  isSelected: _withSnack,
+                  onTap: () => setState(() => _withSnack = !_withSnack),
+                ),
               ),
-            ),
-          ],
-        ),
-      ],
+              const SizedBox(width: AppSizes.md),
+              Expanded(
+                child: CheckCard(
+                  label: 'Makan Siang',
+                  icon: Icons.lunch_dining_outlined,
+                  isSelected: _withLunch,
+                  onTap: () => setState(() => _withLunch = !_withLunch),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1450,26 +1379,6 @@ class _CreateReservationWizardPageState
     );
 
     if (selectedUser != null) setState(() => _selectedUser = selectedUser);
-  }
-
-  Future<void> _showRoomSelector() async {
-    if (_startDateTime == null || _endDateTime == null) {
-      AppSnackBar.show(
-        context,
-        'Silakan pilih tanggal & waktu terlebih dahulu',
-        type: SnackBarType.warning,
-      );
-      return;
-    }
-
-    final selectedRoom = await RoomSelectorSection.showBottomSheet(
-      context: context,
-      startDateTime: _startDateTime,
-      endDateTime: _endDateTime,
-      selectedRoomId: _selectedRoom?.id,
-    );
-
-    if (selectedRoom != null) setState(() => _selectedRoom = selectedRoom);
   }
 
   String _formatTime(TimeOfDay time) => DateFormatter.formatTimeOfDay(time);
