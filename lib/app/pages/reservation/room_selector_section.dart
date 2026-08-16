@@ -5,7 +5,9 @@ import 'package:rapa_track_mobile_app/app/models/room.dart';
 import 'package:rapa_track_mobile_app/app/models/room_facility.dart';
 import 'package:rapa_track_mobile_app/app/services/facility_service.dart';
 import 'package:rapa_track_mobile_app/app/services/room_service.dart';
-import 'package:rapa_track_mobile_app/app/ui_items/room_facility_chips.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
+import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/cards/room_row_card.dart';
 import 'package:rapa_track_mobile_app/app/ui_items/room_facility_filter.dart';
 
 class RoomSelectorSection extends StatefulWidget {
@@ -13,11 +15,20 @@ class RoomSelectorSection extends StatefulWidget {
   final DateTime? endDateTime;
   final String? selectedRoomId;
 
+  /// Callback saat ruangan dipilih. Jika di-set, widget dipakai inline
+  /// (tidak pop Navigator) — cocok untuk wizard.
+  final void Function(Room room)? onRoomSelected;
+
+  /// Jika true, widget mengisi tinggi penuh (dipakai inline di wizard).
+  final bool expand;
+
   const RoomSelectorSection({
     super.key,
     this.startDateTime,
     this.endDateTime,
     this.selectedRoomId,
+    this.onRoomSelected,
+    this.expand = false,
   });
 
   @override
@@ -58,6 +69,7 @@ class RoomSelectorSection extends StatefulWidget {
             startDateTime: startDateTime,
             endDateTime: endDateTime,
             selectedRoomId: selectedRoomId,
+            expand: true,
           ),
         ),
       ),
@@ -159,27 +171,46 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
 
   @override
   Widget build(BuildContext context) {
+    final content = Column(
+      mainAxisSize: widget.expand ? MainAxisSize.max : MainAxisSize.min,
+      children: [
+        _buildSearchField(),
+        if (_availableFacilities.isNotEmpty) ...[
+          const SizedBox(height: AppSizes.sm),
+          RoomFacilityFilter(
+            availableFacilities: _availableFacilities,
+            selectedFacilityIds: _selectedFacilityIds,
+            onChanged: _onFacilityFilterChanged,
+          ),
+          const SizedBox(height: AppSizes.sm),
+        ],
+        Expanded(child: _buildContent()),
+      ],
+    );
+
+    if (widget.expand) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSizes.lg,
+          0,
+          AppSizes.lg,
+          AppSizes.lg,
+        ),
+        child: content,
+      );
+    }
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
+      padding: const EdgeInsets.fromLTRB(
+        AppSizes.lg,
+        AppSizes.sm,
+        AppSizes.lg,
+        AppSizes.md,
+      ),
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.8,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildSearchField(),
-          if (_availableFacilities.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            RoomFacilityFilter(
-              availableFacilities: _availableFacilities,
-              selectedFacilityIds: _selectedFacilityIds,
-              onChanged: _onFacilityFilterChanged,
-            ),
-            const SizedBox(height: 8),
-          ],
-          Expanded(child: _buildContent()),
-        ],
-      ),
+      child: content,
     );
   }
 
@@ -196,9 +227,9 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
           if (snapshot.hasError) {
             return _buildRefreshableState(
               icon: Icons.error_outline,
-              iconColor: Colors.red.shade300,
+              iconColor: AppColors.error,
               message: snapshot.error.toString(),
-              messageColor: Colors.red.shade700,
+              messageColor: AppColors.error,
             );
           }
 
@@ -207,11 +238,11 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
           if (rooms.isEmpty) {
             return _buildRefreshableState(
               icon: Icons.meeting_room_outlined,
-              iconColor: Colors.grey.shade400,
+              iconColor: AppColors.textDisabled,
               message: _searchKeyword.isNotEmpty
                   ? 'Tidak ada ruangan dengan kata kunci "$_searchKeyword"'
                   : 'Tidak ada ruangan tersedia',
-              messageColor: Colors.grey.shade600,
+              messageColor: AppColors.textSecondary,
             );
           }
 
@@ -244,23 +275,47 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
 
   Widget _buildSearchField() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
+      padding: const EdgeInsets.only(bottom: AppSizes.md),
       child: TextField(
         controller: _searchController,
         decoration: InputDecoration(
           hintText: 'Cari ruangan...',
-          prefixIcon: const Icon(Icons.search),
+          hintStyle: const TextStyle(
+            fontSize: AppSizes.fontSm,
+            color: AppColors.textDisabled,
+          ),
+          prefixIcon: const Icon(
+            Icons.search,
+            size: AppSizes.iconSm,
+            color: AppColors.grey,
+          ),
           suffixIcon: _searchKeyword.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.clear),
+                  icon: const Icon(Icons.clear, size: AppSizes.iconSm),
                   onPressed: () {
                     _searchController.clear();
                     _onSearchChanged('');
                   },
                 )
               : null,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.0)),
-          contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
+          filled: true,
+          fillColor: AppColors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+            borderSide: const BorderSide(color: AppColors.primary),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: AppSizes.md,
+            vertical: AppSizes.sm,
+          ),
         ),
         onChanged: _onSearchChanged,
       ),
@@ -281,24 +336,24 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(AppSizes.lg),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon, size: 64, color: iconColor),
-                    const SizedBox(height: 16),
+                    Icon(icon, size: AppSizes.iconXl, color: iconColor),
+                    const SizedBox(height: AppSizes.md),
                     Text(
                       message,
                       textAlign: TextAlign.center,
                       style: TextStyle(color: messageColor),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSizes.sm),
                     Text(
                       'Tarik ke bawah untuk refresh',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 12,
+                        color: AppColors.textDisabled,
+                        fontSize: AppSizes.fontXs,
                       ),
                     ),
                   ],
@@ -314,73 +369,25 @@ class _RoomSelectorSectionState extends State<RoomSelectorSection> {
   Widget _buildRoomList(List<Room> rooms) {
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
-      shrinkWrap: true,
+      padding: const EdgeInsets.only(bottom: AppSizes.md),
       itemCount: rooms.length,
       itemBuilder: (_, index) {
         final room = rooms[index];
         final isSelected = room.id == widget.selectedRoomId;
-        final facilities = room.facilities ?? [];
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8.0),
-          color: isSelected ? Colors.blue.shade50 : null,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8.0),
-            side: isSelected
-                ? BorderSide(color: Theme.of(context).primaryColor, width: 2)
-                : BorderSide.none,
-          ),
-          child: InkWell(
+        return Padding(
+          padding: const EdgeInsets.only(bottom: AppSizes.sm),
+          child: RoomRowCard(
+            room: room,
+            isSelected: isSelected,
+            showChevron: false,
             onTap: () {
-              Navigator.of(context).pop(room);
+              if (widget.onRoomSelected != null) {
+                widget.onRoomSelected!(room);
+              } else {
+                Navigator.of(context).pop(room);
+              }
             },
-            borderRadius: BorderRadius.circular(8.0),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          room.name ?? 'Ruangan',
-                          style: const TextStyle(
-                            fontSize: 16.0,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      if (isSelected)
-                        Icon(
-                          Icons.check_circle,
-                          color: Theme.of(context).primaryColor,
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4.0),
-                  Text(
-                    room.location,
-                    style: TextStyle(
-                      fontSize: 14.0,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                  if (room.capacity != null) ...[
-                    const SizedBox(height: 4.0),
-                    Text(
-                      'Kapasitas: ${room.capacity} orang',
-                      style: const TextStyle(fontSize: 14.0),
-                    ),
-                  ],
-                  if (facilities.isNotEmpty) ...[
-                    const SizedBox(height: 8.0),
-                    RoomFacilityChips(facilities: facilities),
-                  ],
-                ],
-              ),
-            ),
           ),
         );
       },
