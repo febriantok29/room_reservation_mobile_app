@@ -54,7 +54,6 @@ class AuthenticationState {
 
       try {
         await refreshUser();
-        await _registerFcmToken();
       } catch (_) {
         await clearSession();
       }
@@ -75,7 +74,6 @@ class AuthenticationState {
     await prefs.setString(keySavedUsername, credential);
 
     await refreshUser();
-    await _registerFcmToken();
     return _user != null;
   }
 
@@ -83,6 +81,10 @@ class AuthenticationState {
     if (!hasToken) return;
 
     _user = await _service.getMe();
+    if (_user != null) {
+      // Register/refresh FCM token di background agar tidak menunda loading profil.
+      _registerFcmToken();
+    }
   }
 
   Future<void> refreshToken() async {
