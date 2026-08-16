@@ -92,6 +92,8 @@ class _ReservationCardState extends State<ReservationCard> {
           if (widget.user.isAdmin && _r.user != null) ...[
             const SizedBox(height: AppSizes.xxs),
             _buildInfoRow(Icons.person_outline, _r.user!.name),
+            if (_r.user!.divisionLabel != '-')
+              _buildInfoRow(Icons.apartment_outlined, _r.user!.divisionLabel),
           ],
           _buildActionRow(),
         ],
@@ -606,12 +608,19 @@ class _ReservationCardState extends State<ReservationCard> {
               'Keperluan',
               _r.purpose!,
             ),
-          if (_r.user != null)
+          if (_r.user != null) ...[
             _buildSheetRow(
               Icons.person_outline,
               'Pemohon',
               _r.user!.name,
             ),
+            if (_r.user!.divisionLabel != '-')
+              _buildSheetRow(
+                Icons.apartment_outlined,
+                'Divisi',
+                _r.user!.divisionLabel,
+              ),
+          ],
           const SizedBox(height: AppSizes.lg),
           const Text(
             'Alur Status',
