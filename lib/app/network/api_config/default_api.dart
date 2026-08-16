@@ -2,7 +2,8 @@ import 'package:haleyora_package/haleyora_package.dart';
 
 const _apiHost = String.fromEnvironment(
   'API_HOST',
-  defaultValue: "100.81.20.37,192.168.100.69",
+  defaultValue: "100.119.36.125:8000",
+  // "100.81.20.37,192.168.100.69,192.168.100.9:8000,192.168.50.39:8000",
 );
 const _apiProtocol = String.fromEnvironment(
   'API_PROTOCOL',
@@ -41,6 +42,8 @@ class DefaultApiRoutes extends ApiEndpoints {
     'Room.update': 'rooms/:id',
     'Room.delete': 'rooms/:id',
     'Room.availability': 'rooms/:id/availability',
+    'Room.image': 'rooms/:id/image',
+    'Room.deleteImage': 'rooms/:id/image',
     'Facility.list': 'facilities',
     'Facility.detail': 'facilities/:id',
     'Facility.create': 'facilities',

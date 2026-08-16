@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:rapa_track_mobile_app/app/models/requests/room_request.dart';
 import 'package:rapa_track_mobile_app/app/models/room.dart';
 import 'package:rapa_track_mobile_app/app/network/route_builder.dart';
@@ -115,6 +117,34 @@ class RoomService extends DataListService<Room> {
   Future<void> deleteRoom(String roomId) =>
       RouteBuilder('Room.delete', params: {'id': roomId}).delete();
 
+  Future<RoomImageResult> uploadImage({
+    required String roomId,
+    required File image,
+  }) async {
+    final response = await RouteBuilder(
+      'Room.image',
+      params: {'id': roomId},
+    ).uploadSingleFile(
+      fileFieldName: 'image',
+      file: image,
+    );
+
+    final data = _readSuccessPayload(response);
+
+    if (data is! Map<String, dynamic>) {
+      throw 'Format respons upload gambar tidak valid';
+    }
+
+    return RoomImageResult(
+      imageUrl: data['image_url']?.toString(),
+      sizeBytes: int.tryParse('${data['size_bytes'] ?? ''}'),
+      wasCompressed: data['was_compressed'] == true,
+    );
+  }
+
+  Future<void> deleteImage(String roomId) =>
+      RouteBuilder('Room.deleteImage', params: {'id': roomId}).delete();
+
   dynamic _readSuccessPayload(dynamic response) {
     if (response is! Map<String, dynamic>) {
       throw 'Format respons room API tidak valid';
@@ -131,6 +161,18 @@ class RoomService extends DataListService<Room> {
     final data = response['data'];
     return data;
   }
+}
+
+class RoomImageResult {
+  final String? imageUrl;
+  final int? sizeBytes;
+  final bool wasCompressed;
+
+  const RoomImageResult({
+    this.imageUrl,
+    this.sizeBytes,
+    this.wasCompressed = false,
+  });
 }
 
 class RoomAvailabilityResult {
