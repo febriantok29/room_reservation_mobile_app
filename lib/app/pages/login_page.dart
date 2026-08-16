@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:rapa_track_mobile_app/app/pages/change_password_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/home_page.dart';
 import 'package:rapa_track_mobile_app/app/states/authentication_state.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
@@ -246,9 +247,13 @@ class _LoginPageState extends State<LoginPage> {
       final isLoggedIn = await authState.login(credential, password);
 
       if (isLoggedIn && mounted) {
+        final nextPage = authState.user?.mustChangePassword == true
+            ? const ChangePasswordPage()
+            : const HomePage();
+
         Navigator.of(
           context,
-        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
+        ).pushReplacement(MaterialPageRoute(builder: (_) => nextPage));
       }
     } catch (e) {
       setState(() {

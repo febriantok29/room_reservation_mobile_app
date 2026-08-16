@@ -8,6 +8,7 @@ class Profile extends BaseModel {
   String? lastName;
   DateTime? dateOfBirth;
   bool isActive;
+  bool mustChangePassword;
   UserRole? role;
   String? divisionId;
   String? divisionName;
@@ -21,6 +22,7 @@ class Profile extends BaseModel {
     this.lastName,
     this.dateOfBirth,
     this.isActive = true,
+    this.mustChangePassword = false,
     this.role,
     this.divisionId,
     this.divisionName,
@@ -68,6 +70,7 @@ class Profile extends BaseModel {
         '${json['date_of_birth'] ?? ''}',
       )?.toLocal(),
       isActive: json['is_active'] != false,
+      mustChangePassword: json['must_change_password'] == true,
       role: isAdmin ? UserRole.admin : UserRole.user,
       divisionId: json['division_id']?.toString(),
       divisionName: division is Map ? division['name']?.toString() : null,
