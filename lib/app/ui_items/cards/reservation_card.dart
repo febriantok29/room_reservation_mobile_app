@@ -229,8 +229,7 @@ class _ReservationCardState extends State<ReservationCard> {
       ));
     }
 
-    final showCancel = _status.canBeCancelled &&
-        !(widget.user.isAdmin && _status == ReservationStatus.pending);
+    final showCancel = _status.canBeCancelled && !widget.user.isAdmin;
 
     if (showCancel) {
       buttons.add(_actionButton(

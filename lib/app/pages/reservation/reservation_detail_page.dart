@@ -364,8 +364,7 @@ class _ReservationDetailPageState extends State<ReservationDetailPage> {
       ));
     }
 
-    final canCancel = r.status.canBeCancelled &&
-        !(widget.user.isAdmin && r.status == ReservationStatus.pending);
+    final canCancel = r.status.canBeCancelled && !widget.user.isAdmin;
     if (canCancel) {
       if (buttons.isNotEmpty) buttons.add(const SizedBox(height: AppSizes.sm));
       buttons.add(_actionButton(
