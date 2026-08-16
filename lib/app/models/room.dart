@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:rapa_track_mobile_app/app/models/base_model.dart';
 import 'package:rapa_track_mobile_app/app/models/room_facility.dart';
 
@@ -66,26 +64,14 @@ class Room extends BaseModel {
     return 'Lantai $floor';
   }
 
-  String get imageUrl {
-    String? imageUrl = rawImageUrl;
-
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      return imageUrl;
-    }
-
-    final roomId = id?.hashCode ?? name?.hashCode ?? 0;
-    final random = Random(roomId);
-    final backgroundColor = (random.nextInt(0xFFFFFF) + 0x1000000)
-        .toRadixString(16)
-        .substring(1)
-        .toUpperCase();
-    const textColor = 'FFFFFF';
-
-    imageUrl =
-        'https://placehold.co/600x400/$backgroundColor/$textColor/png?text=${Uri.encodeComponent(name ?? 'Room')}&font=roboto';
-
-    return imageUrl;
+  /// URL gambar ruangan, atau null jika belum ada foto.
+  String? get imageUrl {
+    final url = rawImageUrl;
+    if (url == null || url.isEmpty) return null;
+    return url;
   }
+
+  bool get hasImage => imageUrl != null;
 
   Room copyWith({
     String? id,
