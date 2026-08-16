@@ -117,10 +117,25 @@ class _LoginPageState extends State<LoginPage> {
     return [
       TextFormField(
         controller: _credentialController,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: 'No. Induk Pegawai / Email',
-          prefixIcon: Icon(Icons.person),
-          border: OutlineInputBorder(),
+          prefixIcon: const Icon(Icons.person),
+          filled: true,
+          fillColor: AppColors.white,
+          border: const OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(AppSizes.radiusMd)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+            borderSide: const BorderSide(
+              color: AppColors.borderFocused,
+              width: AppSizes.borderWidthThick,
+            ),
+          ),
         ),
         keyboardType: TextInputType.emailAddress,
         textInputAction: TextInputAction.next,
@@ -140,7 +155,22 @@ class _LoginPageState extends State<LoginPage> {
         decoration: InputDecoration(
           labelText: 'Password',
           prefixIcon: const Icon(Icons.lock),
-          border: const OutlineInputBorder(),
+          filled: true,
+          fillColor: AppColors.white,
+          border: const OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(AppSizes.radiusMd)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+            borderSide: const BorderSide(
+              color: AppColors.borderFocused,
+              width: AppSizes.borderWidthThick,
+            ),
+          ),
           suffixIcon: IconButton(
             icon: Icon(
               _obscurePassword ? Icons.visibility : Icons.visibility_off,
@@ -162,25 +192,29 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildLoginButton() {
-    Widget content = Text('Login');
+    Widget content = const Text('Login');
 
     if (_isLoading) {
       content = const SizedBox(
         height: 20,
         width: 20,
-        child: CircularProgressIndicator(strokeWidth: 2),
+        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.white),
       );
     }
 
     return ElevatedButton.icon(
-      icon: Icon(Icons.login_rounded),
+      icon: const Icon(Icons.login_rounded),
       label: content,
       onPressed: _isLoading ? null : _login,
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 16),
         textStyle: const TextStyle(fontSize: 16),
-        backgroundColor: AppColors.white,
-        foregroundColor: AppColors.primary,
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.white,
+        disabledBackgroundColor: AppColors.primary.withAlpha(128),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+        ),
       ),
     );
   }
