@@ -2,7 +2,7 @@ import 'package:haleyora_package/haleyora_package.dart';
 
 const _apiHost = String.fromEnvironment(
   'API_HOST',
-  defaultValue: '192.168.100.9:8000',
+  defaultValue: "100.81.20.37,192.168.100.69",
 );
 const _apiProtocol = String.fromEnvironment(
   'API_PROTOCOL',
@@ -20,7 +20,7 @@ class DefaultApi extends ApiConfig {
   String? get prefix => 'api';
 
   @override
-  List<String> get hosts => [_apiHost];
+  List<String> get hosts => _apiHost.split(',');
 
   @override
   String? get version => 'v1';
@@ -65,5 +65,13 @@ class DefaultApiRoutes extends ApiEndpoints {
     'Notification.markRead': 'notifications/:id/read',
     'Notification.markAllRead': 'notifications/read-all',
     'Notification.delete': 'notifications/:id',
+    'Report.complaints': 'reports/complaints',
+    'Report.usage': 'reports/usage',
+    'Report.userActivity': 'reports/user-activity',
+    'Report.scheduleHistory': 'reports/schedule-history',
+    'Report.periodic': 'reports/periodic',
+    'Report.divisionActivity': 'reports/division-activity',
+    'Report.maintenance': 'reports/maintenance',
+    'Report.divisionUsage': 'reports/division-usage',
   };
 }

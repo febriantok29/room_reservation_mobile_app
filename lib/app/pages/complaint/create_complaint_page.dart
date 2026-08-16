@@ -10,6 +10,7 @@ import 'package:rapa_track_mobile_app/app/services/facility_service.dart';
 import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
+import 'package:rapa_track_mobile_app/app/utils/validators.dart';
 
 class CreateComplaintPage extends StatefulWidget {
   final Profile user;
@@ -363,15 +364,10 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
             border: OutlineInputBorder(),
             counterText: '',
           ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Judul keluhan tidak boleh kosong';
-            }
-            if (value.trim().length < 5) {
-              return 'Judul minimal 5 karakter';
-            }
-            return null;
-          },
+          validator: Validators.compose([
+            Validators.required('Judul keluhan'),
+            Validators.minLength(5, 'Judul'),
+          ]),
         ),
       ],
     );
@@ -400,15 +396,10 @@ class _CreateComplaintPageState extends State<CreateComplaintPage> {
             border: OutlineInputBorder(),
             helperText: 'Minimal 10 karakter',
           ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Deskripsi tidak boleh kosong';
-            }
-            if (value.trim().length < 10) {
-              return 'Deskripsi minimal 10 karakter';
-            }
-            return null;
-          },
+          validator: Validators.compose([
+            Validators.required('Deskripsi'),
+            Validators.minLength(10, 'Deskripsi'),
+          ]),
         ),
       ],
     );

@@ -8,6 +8,7 @@ import 'package:rapa_track_mobile_app/app/services/room_service.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 import 'package:rapa_track_mobile_app/app/ui_items/app_button.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/confirm_dialog.dart';
 import 'package:rapa_track_mobile_app/app/widgets/form_items.dart';
 
 class RoomDetailPage extends StatefulWidget {
@@ -40,6 +41,7 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
   String? _floorError;
   bool _isMaintenance = false;
   bool _isSubmitting = false;
+  bool _isDeleting = false;
 
   final List<RoomFacility> _selectedFacilities = [];
 
@@ -131,6 +133,19 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
                       isLoading: _isSubmitting,
                       onPressed: _isSubmitting ? null : _submit,
                     ),
+                    if (!_isNewRoom) ...[
+                      const SizedBox(height: AppSizes.md),
+                      AppButton(
+                        text: 'Hapus Ruangan',
+                        isFullWidth: true,
+                        isOutlined: true,
+                        color: AppColors.error,
+                        isLoading: _isDeleting,
+                        onPressed: _isSubmitting || _isDeleting
+                            ? null
+                            : _confirmDelete,
+                      ),
+                    ],
                     const SizedBox(height: AppSizes.xxl),
                   ],
                 ],
@@ -525,6 +540,35 @@ class _RoomDetailPageState extends State<RoomDetailPage> {
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final confirmed = await ConfirmDialog.show(
+      context,
+      icon: Icons.delete_outline,
+      iconColor: AppColors.error,
+      title: 'Hapus Ruangan',
+      message:
+          'Apakah Anda yakin ingin menghapus ruangan "${_currentRoom!.name}"? Tindakan ini tidak dapat dibatalkan.',
+      confirmLabel: 'Hapus',
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeleting = true);
+
+    try {
+      await _service.deleteRoom(_currentRoom!.id!);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        _showStatusDialog(
+          title: 'Gagal Menghapus',
+          message: 'Terjadi kesalahan: $e',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
     }
   }
 

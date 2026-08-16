@@ -3,8 +3,11 @@ import 'package:rapa_track_mobile_app/app/enums/reservation_status.dart';
 import 'package:rapa_track_mobile_app/app/models/profile.dart';
 import 'package:rapa_track_mobile_app/app/pages/calendar/calendar_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/complaint/complaint_list_page.dart';
+import 'package:rapa_track_mobile_app/app/pages/facility/facility_management_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/login_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/notification/notification_list_page.dart';
+import 'package:rapa_track_mobile_app/app/pages/profile/profile_page.dart';
+import 'package:rapa_track_mobile_app/app/pages/report/report_list_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/reservation/create_reservation_wizard_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/reservation/reservation_list_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/room/room_list_page.dart';
@@ -13,6 +16,7 @@ import 'package:rapa_track_mobile_app/app/services/reservation_service.dart';
 import 'package:rapa_track_mobile_app/app/states/authentication_state.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/confirm_dialog.dart';
 import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
 import 'package:rapa_track_mobile_app/app/utils/navigation_handler.dart';
 
@@ -82,59 +86,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _confirmLogout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.logout,
-              size: AppSizes.iconXl,
-              color: AppColors.error,
-            ),
-            const SizedBox(height: AppSizes.md),
-            const Text(
-              'Keluar',
-              style: TextStyle(
-                fontSize: AppSizes.fontLg,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: AppSizes.sm),
-            const Text(
-              'Apakah Anda yakin ingin keluar dari aplikasi?',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppSizes.fontSm,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: AppSizes.lg),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('Batal'),
-                  ),
-                ),
-                const SizedBox(width: AppSizes.md),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.error,
-                      foregroundColor: AppColors.white,
-                    ),
-                    child: const Text('Keluar'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+    final confirmed = await ConfirmDialog.show(
+      context,
+      icon: Icons.logout,
+      iconColor: AppColors.error,
+      title: 'Keluar',
+      message: 'Apakah Anda yakin ingin keluar dari aplikasi?',
+      confirmLabel: 'Keluar',
     );
     if (confirmed == true) {
       await AuthenticationState().logout();
@@ -271,7 +229,6 @@ class _HomePageState extends State<HomePage> {
         AppSizes.lg,
         AppSizes.sm,
       ),
-      padding: const EdgeInsets.all(AppSizes.md),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(AppSizes.radiusMd),
@@ -283,12 +240,28 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          _buildUserAvatar(user),
-          const SizedBox(width: AppSizes.md),
-          Expanded(child: _buildUserInfo(user)),
-        ],
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+          onTap: () => _navigateToProfile(user),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSizes.md),
+            child: Row(
+              children: [
+                _buildUserAvatar(user),
+                const SizedBox(width: AppSizes.md),
+                Expanded(child: _buildUserInfo(user)),
+                const Icon(
+                  Icons.chevron_right,
+                  color: AppColors.textDisabled,
+                  size: AppSizes.iconSm,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -349,7 +322,11 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(height: AppSizes.xxs),
         Text(
-          DateFormatter.fullDate(DateTime.now()),
+          user.divisionName != null
+              ? user.divisionLabel
+              : DateFormatter.fullDate(DateTime.now()),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             fontSize: AppSizes.fontXs,
             color: AppColors.textSecondary,
@@ -357,6 +334,12 @@ class _HomePageState extends State<HomePage> {
         ),
       ],
     );
+  }
+
+  void _navigateToProfile(Profile user) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => ProfilePage(user: user)));
   }
 
   Widget _buildQuickActionsSection(Profile user) {
@@ -410,6 +393,22 @@ class _HomePageState extends State<HomePage> {
         color: AppColors.error,
         onTap: () => _navigateToComplaintList(user),
       ),
+      if (user.isAdmin) ...[
+        _QuickAction(
+          icon: Icons.devices_other_outlined,
+          label: 'Kelola Fasilitas',
+          description: 'Tambah, ubah, dan hapus master fasilitas',
+          color: AppColors.primaryDark,
+          onTap: _navigateToFacilityManagement,
+        ),
+        _QuickAction(
+          icon: Icons.summarize_outlined,
+          label: 'Laporan',
+          description: 'Preview dan unduh laporan PDF/Excel',
+          color: AppColors.primary,
+          onTap: _navigateToReportList,
+        ),
+      ],
     ];
 
     return Card(
@@ -643,6 +642,18 @@ class _HomePageState extends State<HomePage> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => ComplaintListPage(user: user)));
+  }
+
+  void _navigateToFacilityManagement() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const FacilityManagementPage()),
+    );
+  }
+
+  void _navigateToReportList() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ReportListPage()));
   }
 
   void _navigateToNotifications(Profile user) {
