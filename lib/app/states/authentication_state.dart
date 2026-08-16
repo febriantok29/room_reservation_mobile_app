@@ -121,7 +121,11 @@ class AuthenticationState {
       return;
     }
 
-    _token = refreshedToken;
+    _token = AuthToken(
+      accessToken: refreshedToken.accessToken,
+      refreshToken: refreshedToken.refreshToken ?? currentRefreshToken,
+      expiresAt: refreshedToken.expiresAt,
+    );
     await _secureStorage.writeJson(keyTokenData, _token!.toJson());
   }
 
