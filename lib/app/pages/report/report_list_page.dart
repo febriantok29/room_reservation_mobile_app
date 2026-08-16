@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:rapa_track_mobile_app/app/pages/report/report_definitions.dart';
 import 'package:rapa_track_mobile_app/app/pages/report/report_detail_page.dart';
+import 'package:rapa_track_mobile_app/app/pages/report/report_filter_options_cache.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
 
-class ReportListPage extends StatelessWidget {
+class ReportListPage extends StatefulWidget {
   const ReportListPage({super.key});
+
+  @override
+  State<ReportListPage> createState() => _ReportListPageState();
+}
+
+class _ReportListPageState extends State<ReportListPage> {
+  final _filterOptionsCache = ReportFilterOptionsCache();
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +55,10 @@ class ReportListPage extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppSizes.radiusMd),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => ReportDetailPage(definition: definition),
+              builder: (_) => ReportDetailPage(
+                definition: definition,
+                filterOptionsCache: _filterOptionsCache,
+              ),
             ),
           ),
           child: Padding(
