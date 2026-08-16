@@ -87,4 +87,14 @@ class AuthService {
       'Auth.updateFcmToken',
     ).post(body: {'fcm_token': fcmToken});
   }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await RouteBuilder('Auth.changePassword').post(body: {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+    });
+  }
 }

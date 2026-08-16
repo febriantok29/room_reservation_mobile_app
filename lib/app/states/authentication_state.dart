@@ -87,6 +87,17 @@ class AuthenticationState {
     }
   }
 
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _service.changePassword(
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+    );
+    await refreshUser();
+  }
+
   Future<void> refreshToken() async {
     if (_token?.refreshToken == null) return;
 

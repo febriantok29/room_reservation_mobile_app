@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:rapa_track_mobile_app/app/pages/change_password_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/home_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/login_page.dart';
 import 'package:rapa_track_mobile_app/app/pages/splash_screen_page.dart';
@@ -79,7 +80,14 @@ class _RoomReservationAppState extends State<RoomReservationApp> {
       final user = authenticationState.user;
       final userId = user?.id;
 
-      final initialPage = userId == null ? const LoginPage() : const HomePage();
+      final Widget initialPage;
+      if (userId == null) {
+        initialPage = const LoginPage();
+      } else if (user!.mustChangePassword == true) {
+        initialPage = const ChangePasswordPage();
+      } else {
+        initialPage = const HomePage();
+      }
 
       NavigationHandler.navigatorKey.currentState?.pushReplacement(
         MaterialPageRoute(builder: (_) => initialPage),

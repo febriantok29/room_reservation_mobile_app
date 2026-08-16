@@ -34,6 +34,7 @@ class DefaultApiRoutes extends ApiEndpoints {
     'Auth.refresh': 'auth/refresh',
     'Auth.logout': 'auth/logout',
     'Auth.me': 'auth/me',
+    'Auth.changePassword': 'auth/change-password',
     'Auth.updateFcmToken': 'auth/fcm-token',
     'Room.list': 'rooms',
     'Room.available': 'rooms/available',
