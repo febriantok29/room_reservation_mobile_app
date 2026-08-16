@@ -29,7 +29,7 @@ class NotificationHandlerUtil {
     const initSettings = InitializationSettings(android: androidSettings);
 
     await _localNotifications.initialize(
-      initSettings,
+      settings: initSettings,
       onDidReceiveNotificationResponse: _onLocalNotificationTap,
     );
 
@@ -58,10 +58,10 @@ class NotificationHandlerUtil {
     );
 
     await _localNotifications.show(
-      message.hashCode,
-      notification.title,
-      notification.body,
-      const NotificationDetails(
+      id: message.hashCode,
+      title: notification.title,
+      body: notification.body,
+      notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           _channelId,
           _channelName,
@@ -103,6 +103,8 @@ class NotificationHandlerUtil {
       case NotificationType.reservationRejected:
       case NotificationType.reservationCancelled:
       case NotificationType.reservationReminder:
+      case NotificationType.reservationSubmitted:
+      case NotificationType.reservationCompleted:
         page = payload.reservationId != null
             ? ReservationDetailPage(reservationId: payload.reservationId!, user: user)
             : ReservationListPage(user: user);
