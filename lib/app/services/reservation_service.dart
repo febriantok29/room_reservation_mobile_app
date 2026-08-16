@@ -113,6 +113,8 @@ class ReservationService extends DataListService<Reservation> {
     DateTime? endTime,
     String? purpose,
     int? visitorCount,
+    bool? withSnack,
+    bool? withLunch,
   }) async {
     final body = <String, dynamic>{
       if (roomId != null) 'room_id': roomId,
@@ -120,6 +122,8 @@ class ReservationService extends DataListService<Reservation> {
       if (endTime != null) 'end_time': endTime.toUtc().toIso8601String(),
       if (purpose != null) 'purpose': purpose,
       if (visitorCount != null) 'visitor_count': visitorCount,
+      if (withSnack != null) 'with_snack': withSnack,
+      if (withLunch != null) 'with_lunch': withLunch,
     };
 
     final response = await RouteBuilder(
@@ -247,6 +251,8 @@ class ReservationService extends DataListService<Reservation> {
       endTime: DateTime.tryParse('${json['end_time'] ?? ''}')?.toLocal(),
       visitorCount: int.tryParse('${json['visitor_count'] ?? 0}') ?? 0,
       purpose: json['purpose']?.toString(),
+      withSnack: json['with_snack'] == true,
+      withLunch: json['with_lunch'] == true,
       status: ReservationStatusExtension.fromString(rawStatus),
       room: _toRoom(json),
       user: _toProfile(json),
@@ -278,13 +284,7 @@ class ReservationService extends DataListService<Reservation> {
       return null;
     }
 
-    return Profile(
-      id: userPayload['id']?.toString(),
-      email: userPayload['email']?.toString(),
-      employeeId: userPayload['employee_id']?.toString(),
-      firstName: userPayload['first_name']?.toString(),
-      lastName: userPayload['last_name']?.toString(),
-    );
+    return Profile.fromJson(userPayload);
   }
 
   Map<String, dynamic> _readSuccessPayload(dynamic response) {
