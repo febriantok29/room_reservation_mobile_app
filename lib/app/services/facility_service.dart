@@ -1,6 +1,18 @@
 import 'package:rapa_track_mobile_app/app/models/room_facility.dart';
 import 'package:rapa_track_mobile_app/app/network/route_builder.dart';
 
+class FacilityCreateResult {
+  final int addedCount;
+  final List<String> skipped;
+  final List<RoomFacility> facilities;
+
+  const FacilityCreateResult({
+    required this.addedCount,
+    required this.skipped,
+    required this.facilities,
+  });
+}
+
 class FacilityService {
   static List<RoomFacility>? _cache;
 
@@ -75,18 +87,46 @@ class FacilityService {
   }
 
   Future<RoomFacility> createFacility({required String name}) async {
+    final result = await createFacilities([name]);
+    if (result.facilities.isEmpty) {
+      throw 'Fasilitas tidak berhasil ditambahkan';
+    }
+    return result.facilities.first;
+  }
+
+  Future<FacilityCreateResult> createFacilities(List<String> names) async {
     final response = await RouteBuilder(
       'Facility.create',
-    ).post(body: {'name': name});
+    ).post(body: {'names': names});
 
-    final payload = _readSuccessPayload(response);
-    final data = payload['data'];
+    final data = _readSuccessPayload(response);
 
-    if (data is! Map<String, dynamic>) {
-      throw 'Format data fasilitas tidak valid';
+    _cache = null;
+
+    final facilities = <RoomFacility>[];
+    final rawList = data['facilities'];
+
+    if (rawList is List) {
+      facilities.addAll(
+        rawList
+            .whereType<Map<String, dynamic>>()
+            .map((f) => RoomFacility.fromJson(f))
+            .toList(),
+      );
     }
 
-    return RoomFacility.fromJson(data);
+    final skipped = <String>[];
+    final rawSkipped = data['skipped'];
+
+    if (rawSkipped is List) {
+      skipped.addAll(rawSkipped.whereType<String>());
+    }
+
+    return FacilityCreateResult(
+      addedCount: data['added_count'] is int ? data['added_count'] as int : facilities.length,
+      skipped: skipped,
+      facilities: facilities,
+    );
   }
 
   Future<RoomFacility> updateFacility({
@@ -98,18 +138,17 @@ class FacilityService {
       params: {'id': facilityId},
     ).put(body: {'name': name});
 
-    final payload = _readSuccessPayload(response);
-    final data = payload['data'];
+    _cache = null;
 
-    if (data is! Map<String, dynamic>) {
-      throw 'Format data fasilitas tidak valid';
-    }
+    final data = _readSuccessPayload(response);
 
     return RoomFacility.fromJson(data);
   }
 
-  Future<void> deleteFacility(String facilityId) =>
-      RouteBuilder('Facility.delete', params: {'id': facilityId}).delete();
+  Future<void> deleteFacility(String facilityId) async {
+    await RouteBuilder('Facility.delete', params: {'id': facilityId}).delete();
+    _cache = null;
+  }
 
   Map<String, dynamic> _readSuccessPayload(dynamic response) {
     if (response is! Map<String, dynamic>) {
