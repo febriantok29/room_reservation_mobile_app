@@ -211,11 +211,28 @@ class _FacilityManagementPageState extends State<FacilityManagementPage> {
   }
 
   Future<void> _openForm({RoomFacility? facility}) async {
-    final result = await showDialog<bool>(
+    final result = await showDialog<_FacilityFormResult>(
       context: context,
       builder: (_) => _FacilityFormDialog(facility: facility),
     );
-    if (result == true) _refresh();
+    if (result == null) return;
+
+    _refresh();
+
+    final parts = <String>[
+      if (result.addedCount > 0) '${result.addedCount} fasilitas ditambahkan',
+      if (result.skipped.isNotEmpty)
+        '${result.skipped.length} dilewati (sudah ada)',
+    ];
+
+    if (parts.isEmpty || !mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(parts.join(', ')),
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   Future<void> _confirmDelete(RoomFacility facility) async {
@@ -284,6 +301,13 @@ class _FacilityManagementPageState extends State<FacilityManagementPage> {
   }
 }
 
+class _FacilityFormResult {
+  final int addedCount;
+  final List<String> skipped;
+
+  const _FacilityFormResult({required this.addedCount, required this.skipped});
+}
+
 class _FacilityFormDialog extends StatefulWidget {
   final RoomFacility? facility;
 
@@ -298,14 +322,42 @@ class _FacilityFormDialogState extends State<_FacilityFormDialog> {
   late final _nameController = TextEditingController(
     text: widget.facility?.name,
   );
+  final _inputController = TextEditingController();
+  final _inputFocusNode = FocusNode();
+  final List<String> _names = [];
   final _service = FacilityService();
   bool _isSubmitting = false;
   String? _errorText;
 
+  bool get _isEdit => widget.facility != null;
+
   @override
   void dispose() {
     _nameController.dispose();
+    _inputController.dispose();
+    _inputFocusNode.dispose();
     super.dispose();
+  }
+
+  void _addNamesFromInput() {
+    final parts = _inputController.text
+        .split(RegExp(r'[,\n]'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) return;
+
+    setState(() {
+      for (final part in parts) {
+        if (part.length <= 100 && !_names.contains(part)) {
+          _names.add(part);
+        }
+      }
+      _inputController.clear();
+    });
+
+    _inputFocusNode.requestFocus();
   }
 
   Future<void> _submit() async {
@@ -317,16 +369,33 @@ class _FacilityFormDialogState extends State<_FacilityFormDialog> {
     });
 
     try {
-      final name = _nameController.text.trim();
-      if (widget.facility != null) {
+      if (_isEdit) {
         await _service.updateFacility(
           facilityId: widget.facility!.id,
-          name: name,
+          name: _nameController.text.trim(),
         );
-      } else {
-        await _service.createFacility(name: name);
+        if (mounted) {
+          Navigator.of(context).pop(
+            const _FacilityFormResult(addedCount: 0, skipped: []),
+          );
+        }
+        return;
       }
-      if (mounted) Navigator.of(context).pop(true);
+
+      if (_names.isEmpty) {
+        setState(() => _errorText = 'Masukkan minimal satu nama fasilitas.');
+        return;
+      }
+
+      final result = await _service.createFacilities(_names);
+      if (mounted) {
+        Navigator.of(context).pop(
+          _FacilityFormResult(
+            addedCount: result.addedCount,
+            skipped: result.skipped,
+          ),
+        );
+      }
     } catch (e) {
       setState(() => _errorText = '$e');
     } finally {
@@ -336,76 +405,146 @@ class _FacilityFormDialogState extends State<_FacilityFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final isEdit = widget.facility != null;
+    final isEdit = _isEdit;
 
     return AlertDialog(
       contentPadding: const EdgeInsets.all(AppSizes.xl),
       content: Form(
         key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              isEdit ? 'Edit Fasilitas' : 'Tambah Fasilitas',
-              style: const TextStyle(
-                fontSize: AppSizes.fontLg,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppSizes.lg),
-            TextFormField(
-              controller: _nameController,
-              autofocus: true,
-              maxLength: 100,
-              textCapitalization: TextCapitalization.words,
-              decoration: InputDecoration(
-                labelText: 'Nama Fasilitas',
-                hintText: 'Contoh: Proyektor',
-                border: const OutlineInputBorder(),
-                counterText: '',
-                errorText: _errorText,
-              ),
-              validator: Validators.compose([
-                Validators.required('Nama fasilitas'),
-                Validators.maxLength(100, 'Nama fasilitas'),
-              ]),
-            ),
-            const SizedBox(height: AppSizes.lg),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _isSubmitting
-                        ? null
-                        : () => Navigator.of(context).pop(),
-                    child: const Text('Batal'),
-                  ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isEdit ? 'Edit Fasilitas' : 'Tambah Fasilitas',
+                style: const TextStyle(
+                  fontSize: AppSizes.fontLg,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
                 ),
-                const SizedBox(width: AppSizes.md),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _isSubmitting ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: AppColors.white,
+              ),
+              const SizedBox(height: AppSizes.lg),
+              if (isEdit)
+                TextFormField(
+                  controller: _nameController,
+                  autofocus: true,
+                  maxLength: 100,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    labelText: 'Nama Fasilitas',
+                    hintText: 'Contoh: Proyektor',
+                    border: const OutlineInputBorder(),
+                    counterText: '',
+                    errorText: _errorText,
+                  ),
+                  validator: Validators.compose([
+                    Validators.required('Nama fasilitas'),
+                    Validators.maxLength(100, 'Nama fasilitas'),
+                  ]),
+                )
+              else ...[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _inputController,
+                        focusNode: _inputFocusNode,
+                        autofocus: true,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: InputDecoration(
+                          labelText: 'Nama Fasilitas',
+                          hintText: 'Proyektor',
+                          border: const OutlineInputBorder(),
+                          errorText: _errorText,
+                        ),
+                        onSubmitted: (_) => _addNamesFromInput(),
+                        onChanged: (value) {
+                          if (value.contains(',')) _addNamesFromInput();
+                        },
+                      ),
                     ),
-                    child: _isSubmitting
-                        ? const SizedBox(
-                            width: AppSizes.iconSm,
-                            height: AppSizes.iconSm,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.white,
-                            ),
-                          )
-                        : const Text('Simpan'),
+                    const SizedBox(width: AppSizes.sm),
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSizes.xs),
+                      child: IconButton.filled(
+                        onPressed: _isSubmitting ? null : _addNamesFromInput,
+                        icon: const Icon(Icons.add, color: AppColors.white),
+                        tooltip: 'Tambah',
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: AppColors.white,
+                          minimumSize: const Size(
+                            AppSizes.buttonHeightMd,
+                            AppSizes.buttonHeightMd,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSizes.sm),
+                if (_names.isNotEmpty)
+                  Wrap(
+                    spacing: AppSizes.xs,
+                    runSpacing: AppSizes.xs,
+                    children: _names
+                        .map(
+                          (name) => InputChip(
+                            label: Text(name),
+                            onDeleted: () {
+                              setState(() => _names.remove(name));
+                            },
+                            deleteIconColor: AppColors.error,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                const SizedBox(height: AppSizes.xs),
+                const Text(
+                  'Ketik lalu tekan +, Enter, atau pisahkan dengan koma. Bisa paste banyak sekaligus (per baris). Contoh: Proyektor, Whiteboard',
+                  style: TextStyle(
+                    fontSize: AppSizes.fontXs,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],
-            ),
-          ],
+              const SizedBox(height: AppSizes.lg),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      child: const Text('Batal'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSizes.md),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _isSubmitting ? null : _submit,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.white,
+                      ),
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              width: AppSizes.iconSm,
+                              height: AppSizes.iconSm,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.white,
+                              ),
+                            )
+                          : const Text('Simpan'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
