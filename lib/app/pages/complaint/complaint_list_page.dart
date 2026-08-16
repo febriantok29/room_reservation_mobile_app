@@ -6,6 +6,7 @@ import 'package:rapa_track_mobile_app/app/pages/complaint/create_complaint_page.
 import 'package:rapa_track_mobile_app/app/repositories/complaint_list_repository.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_colors.dart';
 import 'package:rapa_track_mobile_app/app/theme/app_sizes.dart';
+import 'package:rapa_track_mobile_app/app/ui_items/cards/complaint_grid_card.dart';
 import 'package:rapa_track_mobile_app/app/utils/date_formatter.dart';
 import 'package:rapa_track_mobile_app/app/widgets/filter_bottom_sheet.dart';
 
@@ -39,6 +40,7 @@ class _ComplaintListPageState extends State<ComplaintListPage> {
       emptyTitle: 'Belum Ada Keluhan',
       emptySubtitle: 'Ada masalah dengan fasilitas ruangan?\nLaporkan di sini!',
       itemBuilder: _buildComplaintCard,
+      gridItemBuilder: _buildComplaintGridCard,
       onFilterPressed: _showFilterSheet,
       activeFilterCount: _filterStatus != null ? 1 : 0,
       floatingActionButton: FloatingActionButton.extended(
@@ -121,6 +123,13 @@ class _ComplaintListPageState extends State<ComplaintListPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildComplaintGridCard(Complaint complaint) {
+    return ComplaintGridCard(
+      complaint: complaint,
+      onTap: () => _showComplaintDetail(context, complaint),
     );
   }
 
@@ -344,15 +353,15 @@ class _ComplaintListPageState extends State<ComplaintListPage> {
                     color: AppColors.textPrimary,
                   ),
                 ),
-                if (complaint.photoPath != null &&
-                    complaint.photoPath!.isNotEmpty) ...[
+                if (complaint.photoUrl != null &&
+                    complaint.photoUrl!.isNotEmpty) ...[
                   const SizedBox(height: AppSizes.lg),
                   _buildSectionLabel('Foto:'),
                   const SizedBox(height: AppSizes.xs),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(AppSizes.radiusSm),
                     child: Image.network(
-                      complaint.photoPath!,
+                      complaint.photoUrl!,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
                         height: 120,
